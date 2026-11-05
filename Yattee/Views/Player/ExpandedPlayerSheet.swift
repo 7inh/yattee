@@ -198,6 +198,7 @@ struct ExpandedPlayerSheet: View {
             .environment(\.sheetToastLevel, SheetToastLevel(scope: .player, depth: 1))
             .presentationDetents([smallDetent, .large], selection: $onTheGoSelectedDetent)
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(.systemBackground))
             .presentationBackgroundInteraction(.enabled(upThrough: smallDetent))
         }
     }

@@ -628,8 +628,11 @@ extension ExpandedPlayerSheet {
                         .offset(y: panelDragOffset)  // Only use dismiss offset, expand is handled by height
                         // When hidden: offset panel below screen; during reveal: panelRevealOffset (negative) brings it up
                         .offset(y: !isPortraitPanelVisible ? (pinnedPanelHeight + safeAreaInsets.bottom + panelRevealOffset) : 0)
-                        .opacity(!isPortraitPanelVisible ? min(1, -panelRevealOffset / 80) : 1)
-                        .allowsHitTesting(isPortraitPanelVisible)
+                        // Keep the video geometry and details state intact, but
+                        // show only the native sheet's surface and drag handle.
+                        .opacity(isOnTheGoPresented ? 0 : (!isPortraitPanelVisible ? min(1, -panelRevealOffset / 80) : 1))
+                        .allowsHitTesting(isPortraitPanelVisible && !isOnTheGoPresented)
+                        .accessibilityHidden(isOnTheGoPresented)
                         .animation(isPanelDragging ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: panelDragOffset)
                         .animation(isPanelDragging ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: panelExpandOffset)
                         .animation(isPanelDragging ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: isPanelExpanded)
