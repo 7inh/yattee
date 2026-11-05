@@ -132,7 +132,6 @@ final class DownloadSettings {
         }
     }
 
-    #if os(iOS)
     /// Whether to allow downloads on cellular network. Default is false (WiFi only).
     var allowCellularDownloads: Bool {
         get {
@@ -144,7 +143,6 @@ final class DownloadSettings {
             defaults.set(newValue, forKey: Keys.allowCellularDownloads)
         }
     }
-    #endif
 
     /// Preferred download quality. When set to anything other than .ask,
     /// downloads will start automatically without showing the stream selection sheet.

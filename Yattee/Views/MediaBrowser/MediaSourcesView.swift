@@ -15,9 +15,6 @@ struct MediaSourcesView: View {
     @State private var pendingDeleteInstance: Instance?
     @State private var pendingDeleteSource: MediaSource?
 
-    #if os(tvOS)
-    @FocusState private var firstSourceFocused: Bool
-    #endif
 
     private var instancesManager: InstancesManager? {
         appEnvironment?.instancesManager
@@ -55,37 +52,8 @@ struct MediaSourcesView: View {
 
     var body: some View {
         Group {
-            #if os(tvOS)
-            TVSidebarDetailContainer(
-                systemImage: "server.rack",
-                title: String(localized: "sources.title")
-            ) {
-                VStack(spacing: 0) {
-                    HStack(spacing: 24) {
-                        Button {
-                            showingAddSheet = true
-                        } label: {
-                            Label(String(localized: "sources.addSource"), systemImage: "plus")
-                        }
-                        if let settings = sourcesSettings {
-                            sortAndGroupMenu(settings)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                    .focusSection()
-
-                    mediaSourcesInner
-                        .focusSection()
-                }
-            }
-            #else
             mediaSourcesInner
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "sources.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
@@ -102,26 +70,12 @@ struct MediaSourcesView: View {
                 }
             }
         }
-        #endif
-        #if os(tvOS)
-        .navigationDestination(item: $sourceToEdit) { source in
-            TVSidebarDetailContainer(systemImage: "pencil.circle", title: String(localized: "sources.editSource")) {
-                EditSourceView(source: source)
-            }
-        }
-        .navigationDestination(isPresented: $showingAddSheet) {
-            TVSidebarDetailContainer(systemImage: "plus.circle", title: String(localized: "sources.newSource")) {
-                AddSourceView()
-            }
-        }
-        #else
         .sheet(item: $sourceToEdit) { source in
             EditSourceView(source: source)
         }
         .sheet(isPresented: $showingAddSheet) {
             AddSourceView()
         }
-        #endif
         .confirmationDialog(
             deleteConfirmationMessage,
             isPresented: $showingDeleteConfirmation,
@@ -142,9 +96,7 @@ struct MediaSourcesView: View {
                 Text(accounts)
             }
         }
-        #if !os(tvOS)
         .presentationCompactAdaptation(.sheet)
-        #endif
     }
 
     @ViewBuilder
@@ -195,16 +147,6 @@ struct MediaSourcesView: View {
 
     @ViewBuilder
     private func sectionHeader(_ title: String) -> some View {
-        #if os(macOS)
-        Text(title)
-            .font(.subheadline)
-            .textCase(.uppercase)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-        #else
         Text(title)
             .fontWeight(.semibold)
             .foregroundStyle(.secondary)
@@ -212,7 +154,6 @@ struct MediaSourcesView: View {
             .padding(.horizontal, listStyle == .inset ? 32 : 16)
             .padding(.top, 16)
             .padding(.bottom, 8)
-        #endif
     }
 
     private var sourcesList: some View {
@@ -233,13 +174,6 @@ struct MediaSourcesView: View {
                     }
                 }
             )
-            #if os(tvOS)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    firstSourceFocused = true
-                }
-            }
-            #endif
     }
 
     @ViewBuilder
@@ -371,16 +305,6 @@ struct MediaSourcesView: View {
 
     @ViewBuilder
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        #if os(macOS)
-        VStack(spacing: 0) {
-            Divider()
-            LazyVStack(spacing: 0) {
-                content()
-            }
-            Divider()
-        }
-        .padding(.bottom, 12)
-        #else
         if listStyle == .inset {
             LazyVStack(spacing: 0) {
                 content()
@@ -395,7 +319,6 @@ struct MediaSourcesView: View {
             }
             .padding(.bottom, 16)
         }
-        #endif
     }
 
     // MARK: - Disabled Sources
@@ -444,11 +367,7 @@ struct MediaSourcesView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                #if os(macOS)
-                .padding(.horizontal, 16)
-                #else
                 .padding(.horizontal, listStyle == .inset ? 32 : 16)
-                #endif
                 .padding(.bottom, 16)
         }
     }
@@ -474,20 +393,10 @@ struct MediaSourcesView: View {
         isLast: Bool,
         enable: @escaping () -> Void
     ) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
 
         return SourceListRow(isLast: isLast, listStyle: listStyle) {
             Button(action: enable) {
@@ -515,11 +424,7 @@ struct MediaSourcesView: View {
                 }
                 .contentShape(Rectangle())
             }
-            #if os(macOS)
-            .buttonStyle(.plain)
-            #else
             .foregroundStyle(.primary)
-            #endif
         }
     }
 
@@ -538,15 +443,8 @@ struct MediaSourcesView: View {
             NavigationLink(value: NavigationDestination.instanceBrowse(instance)) {
                 instanceRow(instance)
             }
-            #if os(macOS)
-            .buttonStyle(.plain)
-            #else
             .foregroundStyle(.primary)
-            #endif
         }
-        #if os(tvOS)
-        .modifier(FirstRowFocusModifier(isFirst: isFirst, focus: $firstSourceFocused))
-        #endif
         .swipeActions {
             SwipeAction(symbolImage: "pencil", tint: .white, background: .orange) { reset in
                 sourceToEdit = .remoteServer(instance)
@@ -594,25 +492,14 @@ struct MediaSourcesView: View {
                 } label: {
                     mediaSourceRow(source, needsPassword: true)
                 }
-                #if os(macOS)
-                .buttonStyle(.plain)
-                #else
                 .foregroundStyle(.primary)
-                #endif
             } else {
                 NavigationLink(value: NavigationDestination.mediaBrowser(source, path: "/")) {
                     mediaSourceRow(source, needsPassword: false)
                 }
-                #if os(macOS)
-                .buttonStyle(.plain)
-                #else
                 .foregroundStyle(.primary)
-                #endif
             }
         }
-        #if os(tvOS)
-        .modifier(FirstRowFocusModifier(isFirst: isFirst, focus: $firstSourceFocused))
-        #endif
         .swipeActions {
             SwipeAction(symbolImage: "pencil", tint: .white, background: .orange) { reset in
                 sourceToEdit = .fileSource(source)
@@ -641,20 +528,10 @@ struct MediaSourcesView: View {
     }
 
     private func instanceRow(_ instance: Instance) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
         return HStack(spacing: rowSpacing) {
             Image(systemName: instance.type.systemImage)
                 .font(iconFont)
@@ -675,11 +552,9 @@ struct MediaSourcesView: View {
 
             Spacer()
 
-            #if !os(macOS)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            #endif
         }
         .contentShape(Rectangle())
     }
@@ -721,20 +596,10 @@ struct MediaSourcesView: View {
     }
 
     private func mediaSourceRow(_ source: MediaSource, needsPassword: Bool) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
         return HStack(spacing: rowSpacing) {
             Image(systemName: source.type.systemImage)
                 .font(iconFont)
@@ -759,11 +624,9 @@ struct MediaSourcesView: View {
 
             Spacer()
 
-            #if !os(macOS)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            #endif
         }
         .contentShape(Rectangle())
     }
@@ -813,20 +676,6 @@ private enum UnifiedSourceItem: Identifiable {
     }
 }
 
-#if os(tvOS)
-private struct FirstRowFocusModifier: ViewModifier {
-    let isFirst: Bool
-    var focus: FocusState<Bool>.Binding
-
-    func body(content: Content) -> some View {
-        if isFirst {
-            content.focused(focus)
-        } else {
-            content
-        }
-    }
-}
-#endif
 
 // MARK: - Preview
 

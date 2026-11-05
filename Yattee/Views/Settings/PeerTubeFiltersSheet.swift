@@ -15,22 +15,8 @@ struct PeerTubeFiltersSheet: View {
     let onApply: () -> Void
 
     var body: some View {
-        #if os(macOS)
-        // Popover content: filters apply live, click-outside dismisses.
-        filtersForm
-            .onChange(of: filters) { _, _ in onApply() }
-            .padding()
-            .frame(width: 300)
-        #else
         NavigationStack {
             filtersForm
-            #if os(tvOS)
-            .scrollClipDisabled()
-            .padding(.horizontal, 40)
-            .padding(.vertical, 40)
-            .onChange(of: filters.language) { _, _ in onApply() }
-            .onChange(of: filters.country) { _, _ in onApply() }
-            #else
             .navigationTitle(String(localized: "peertube.explore.filters"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -46,12 +32,8 @@ struct PeerTubeFiltersSheet: View {
                     }
                 }
             }
-            #endif
         }
-        #if os(iOS)
         .presentationDetents([.medium])
-        #endif
-        #endif
     }
 
     private var filtersForm: some View {

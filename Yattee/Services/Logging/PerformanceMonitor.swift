@@ -7,14 +7,8 @@
 //
 
 import Foundation
-#if os(iOS) || os(tvOS)
 import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
-#if os(iOS) || os(macOS)
 import MetricKit
-#endif
 
 /// Logs a resource sample every 5 seconds while Performance Logging is on:
 /// CPU split by area and thread, wakeups, GPU, memory, disk, the
@@ -46,9 +40,7 @@ final class PerformanceMonitor: @unchecked Sendable {
     @MainActor private var runLoopObserver: CFRunLoopObserver?
     @MainActor private var started = false
     @MainActor private var batteryReference: (date: Date, level: Float)?
-    #if os(iOS) || os(macOS)
     @MainActor private var metricSubscriber: MetricSubscriber?
-    #endif
 
     private init() {}
 
@@ -62,11 +54,9 @@ final class PerformanceMonitor: @unchecked Sendable {
         started = true
         self.appEnvironment = appEnvironment
         observeLifecycle()
-        #if os(iOS) || os(macOS)
         let subscriber = MetricSubscriber()
         MXMetricManager.shared.add(subscriber)
         metricSubscriber = subscriber
-        #endif
         if isEnabled {
             activate()
         }
@@ -89,9 +79,7 @@ final class PerformanceMonitor: @unchecked Sendable {
     private func activate() {
         PerfCounter.setEnabled(true)
         installRunLoopObserver()
-        #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
-        #endif
 
         let mainThreadPort = pthread_mach_thread_np(pthread_self())
         let background = currentlyInBackground()
@@ -147,17 +135,10 @@ final class PerformanceMonitor: @unchecked Sendable {
     @MainActor
     private func observeLifecycle() {
         let center = NotificationCenter.default
-        #if os(iOS) || os(tvOS)
         let transitions: [(Notification.Name, Bool)] = [
             (UIApplication.didEnterBackgroundNotification, true),
             (UIApplication.willEnterForegroundNotification, false),
         ]
-        #elseif os(macOS)
-        let transitions: [(Notification.Name, Bool)] = [
-            (NSApplication.didResignActiveNotification, true),
-            (NSApplication.didBecomeActiveNotification, false),
-        ]
-        #endif
         for (name, background) in transitions {
             center.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated {
@@ -277,18 +258,13 @@ final class PerformanceMonitor: @unchecked Sendable {
 
     @MainActor
     private func currentlyInBackground() -> Bool {
-        #if os(iOS) || os(tvOS)
         UIApplication.shared.applicationState == .background
-        #elseif os(macOS)
-        !NSApplication.shared.isActive
-        #endif
     }
 
     @MainActor
     private func makeContext() -> String {
         var parts: [String] = []
 
-        #if os(iOS) || os(tvOS)
         let appState: String = switch UIApplication.shared.applicationState {
         case .active: "active"
         case .inactive: "inactive"
@@ -296,9 +272,6 @@ final class PerformanceMonitor: @unchecked Sendable {
         @unknown default: "unknown"
         }
         parts.append("app \(appState)")
-        #elseif os(macOS)
-        parts.append("app \(NSApplication.shared.isActive ? "active" : "inactive")")
-        #endif
 
         if let appEnvironment {
             let state = appEnvironment.playerService.state
@@ -324,14 +297,11 @@ final class PerformanceMonitor: @unchecked Sendable {
             parts.append("low power mode")
         }
 
-        #if os(iOS)
         parts.append(batteryDescription())
-        #endif
 
         return parts.joined(separator: " | ")
     }
 
-    #if os(iOS)
     /// Battery level, and the drain rate while unplugged once it is measurable.
     @MainActor
     private func batteryDescription() -> String {
@@ -354,7 +324,6 @@ final class PerformanceMonitor: @unchecked Sendable {
         }
         return text
     }
-    #endif
 }
 
 // MARK: - Period
@@ -391,7 +360,6 @@ private struct Period {
 
 // MARK: - MetricKit
 
-#if os(iOS) || os(macOS)
 /// Logs MetricKit payloads. The system delivers them at most daily (metrics)
 /// or shortly after the event (diagnostics), usually on a later launch.
 private final class MetricSubscriber: NSObject, MXMetricManagerSubscriber {
@@ -416,4 +384,3 @@ private final class MetricSubscriber: NSObject, MXMetricManagerSubscriber {
         }
     }
 }
-#endif

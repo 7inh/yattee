@@ -5,7 +5,6 @@
 //  Haptic feedback settings (iOS only).
 //
 
-#if os(iOS)
 import CoreHaptics
 import Foundation
 import UIKit
@@ -68,4 +67,3 @@ extension SettingsManager {
         generator.impactOccurred()
     }
 }
-#endif

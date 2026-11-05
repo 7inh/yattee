@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 /// View modifier that applies user-configurable swipe actions plus fixed context-specific actions.
 struct VideoSwipeActionsModifier: ViewModifier {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -180,7 +179,6 @@ struct VideoSwipeActionsModifier: ViewModifier {
     }
 
     private func shareVideo() {
-        #if os(iOS)
         let activityVC = UIActivityViewController(
             activityItems: [appEnvironment?.shareURL(for: video) ?? video.shareURL],
             applicationActivities: nil
@@ -205,11 +203,6 @@ struct VideoSwipeActionsModifier: ViewModifier {
             }
             topVC.present(activityVC, animated: true)
         }
-        #elseif os(macOS)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString((appEnvironment?.shareURL(for: video) ?? video.shareURL).absoluteString, forType: .string)
-        #endif
     }
 
     private func startDownload() {
@@ -289,4 +282,3 @@ extension View {
         modifier(VideoSwipeActionsModifier(video: video, fixedActions: fixedActions))
     }
 }
-#endif

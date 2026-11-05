@@ -26,21 +26,10 @@ struct VideoCardView: View {
     var customDuration: String? = nil
 
     // Platform-specific fonts
-    #if os(tvOS)
-    private var titleFont: Font { isCompact ? .subheadline : .body }
-    private var authorFont: Font { isCompact ? .caption : .subheadline }
-    private var metadataFont: Font { isCompact ? .caption : .caption }
-    #elseif os(macOS)
-    private var titleFont: Font { .body }
-    private var authorFont: Font { isCompact ? .caption : .subheadline }
-    private var metadataFont: Font { isCompact ? .caption2 : .caption }
-    #else
     private var titleFont: Font { .subheadline }
     private var authorFont: Font { isCompact ? .caption2 : .caption }
     private var metadataFont: Font { isCompact ? .caption2 : .caption }
-    #endif
     
-    #if !os(tvOS)
     private var thumbnailTapAction: VideoTapAction {
         appEnvironment?.settingsManager.thumbnailTapAction ?? .playVideo
     }
@@ -48,7 +37,6 @@ struct VideoCardView: View {
     private var textAreaTapAction: VideoTapAction {
         appEnvironment?.settingsManager.textAreaTapAction ?? .openInfo
     }
-    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: isCompact ? 4 : 8) {
@@ -69,7 +57,6 @@ struct VideoCardView: View {
             watchProgress: watchProgress,
             duration: customDuration ?? video.formattedDuration
         )
-        #if !os(tvOS)
         .contentShape(Rectangle())
         .if(thumbnailTapAction != .playVideo) { view in
             view.highPriorityGesture(
@@ -78,7 +65,6 @@ struct VideoCardView: View {
                 }
             )
         }
-        #endif
     }
     
     @ViewBuilder
@@ -113,7 +99,6 @@ struct VideoCardView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        #if !os(tvOS)
         .contentShape(Rectangle())
         .if(textAreaTapAction != .playVideo) { view in
             view.highPriorityGesture(
@@ -122,10 +107,8 @@ struct VideoCardView: View {
                 }
             )
         }
-        #endif
     }
     
-    #if !os(tvOS)
     private func handleTapAction(_ action: VideoTapAction) {
         guard let env = appEnvironment else { return }
         
@@ -140,7 +123,6 @@ struct VideoCardView: View {
             break
         }
     }
-    #endif
 }
 
 // MARK: - Preview

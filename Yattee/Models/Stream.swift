@@ -140,7 +140,7 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
         let supportedVideoCodecs = ["avc1", "hvc1", "hev1", "h264", "hevc"]
 
         if isAudioOnly {
-            return true // Most audio codecs are supported
+            return isAVPlayerAudioPlayable
         }
 
         let formatSupported = supportedFormats.contains { format.lowercased().contains($0) }
@@ -291,7 +291,7 @@ extension Stream {
             resolution: nil,
             format: "m4a",
             videoCodec: nil,
-            audioCodec: "opus",
+            audioCodec: "mp4a.40.2",
             bitrate: 128_000,
             fileSize: 5_000_000,
             isAudioOnly: true,

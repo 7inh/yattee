@@ -9,7 +9,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct PlayerPanelContentView: View {
     let panelSettings: PanelSettings
@@ -187,5 +186,3 @@ struct PlayerPanelContentView: View {
         }
     }
 }
-
-#endif

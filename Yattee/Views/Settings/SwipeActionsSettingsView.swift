@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct SwipeActionsSettingsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
@@ -39,10 +38,8 @@ struct SwipeActionsSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.swipeActions.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.editMode, .constant(.active))
-        #endif
         .onAppear {
             loadSettings()
         }
@@ -82,4 +79,3 @@ struct SwipeActionsSettingsView: View {
     }
     .appEnvironment(.preview)
 }
-#endif

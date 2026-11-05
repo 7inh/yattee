@@ -17,12 +17,7 @@ struct RemoteDevicesSheet: View {
             NavigationStack {
                 RemoteControlContentView(navigationStyle: .selection($selectedDevice))
                     .navigationTitle(String(localized: "remoteControl.title"))
-                    #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                    #endif
-                    #if os(macOS)
-                    .frame(minWidth: 400, minHeight: 300)
-                    #endif
                     .toolbar {
                         sheetCloseToolbarItem { dismiss() }
                     }

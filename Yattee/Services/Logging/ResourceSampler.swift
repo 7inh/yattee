@@ -230,11 +230,6 @@ final class ResourceSampler {
     static func area(forThread name: String) -> String {
         let lower = name.lowercased()
         if name == "main" { return "ui" }
-        // mpv names its threads after their role ("core", "demux", "vo", …).
-        if ["core", "demux", "vo", "ao", "cache", "dec"].contains(lower)
-            || ["mpv", "stream.yattee.mpv", "lavf", "ffmpeg"].contains(where: lower.hasPrefix) {
-            return "playback"
-        }
         if lower.contains("auremoteio") || lower.contains("audio") || lower.contains("aqclient") {
             return "audio"
         }

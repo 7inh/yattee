@@ -49,20 +49,10 @@ struct InstanceLoginView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        #if os(tvOS)
-        TVSidebarDetailContainer(systemImage: "person.badge.key", title: String(localized: "login.title")) {
-            formContent
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .tvFullScreenCoverBackground()
-        .accessibilityIdentifier("instance.login.view")
-        #else
         NavigationStack {
             formContent
                 .navigationTitle(String(localized: "login.title"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: isOptionalStep ? "common.skip" : "common.cancel")) {
@@ -72,49 +62,20 @@ struct InstanceLoginView: View {
                 }
                 .accessibilityIdentifier("instance.login.view")
         }
-        #if os(macOS)
-        // Sized to what the form actually holds: two fields and a button leave
-        // most of a taller sheet empty, and the optional step carries two more
-        // rows than the plain one. The width is what the labels have to fit
-        // in, which matters most where this is pushed on top of the add flow's
-        // own sheet.
-        .frame(minWidth: 480, minHeight: isOptionalStep ? 400 : 300)
-        #endif
-        #endif
     }
 
     private var formContent: some View {
         Form {
             Section {
-                #if os(tvOS)
-                TVSettingsTextField(title: usernameFieldLabel, text: $username)
-                TVSettingsTextField(title: String(localized: "login.password"), text: $password, isSecure: true)
-                #elseif os(macOS)
-                LabeledContent(usernameFieldLabel) {
-                    TextField("", text: $username)
-                        .textContentType(.username)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("instance.login.usernameField")
-                }
-
-                LabeledContent(String(localized: "login.password")) {
-                    SecureField("", text: $password)
-                        .textContentType(.password)
-                        .accessibilityIdentifier("instance.login.passwordField")
-                }
-                #else
                 TextField(usernameFieldLabel, text: $username)
                     .textContentType(.username)
-                    #if os(iOS)
                     .textInputAutocapitalization(.never)
-                    #endif
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("instance.login.usernameField")
 
                 SecureField(String(localized: "login.password"), text: $password)
                     .textContentType(.password)
                     .accessibilityIdentifier("instance.login.passwordField")
-                #endif
             } header: {
                 Text(String(localized: "login.header.credentials"))
             } footer: {
@@ -145,9 +106,6 @@ struct InstanceLoginView: View {
                 }
                 .disabled(username.isEmpty || password.isEmpty || isLoading)
                 .accessibilityIdentifier("instance.login.submitButton")
-                #if os(tvOS)
-                .buttonStyle(TVSettingsButtonStyle())
-                #endif
             }
 
             if isOptionalStep {
@@ -158,21 +116,12 @@ struct InstanceLoginView: View {
                         Text(String(localized: "common.skip"))
                     }
                     .accessibilityIdentifier("instance.login.skipButton")
-                    #if os(tvOS)
-                    .buttonStyle(TVSettingsButtonStyle())
-                    #endif
                 } footer: {
                     wrappingFooter(String(localized: "login.footer.optionalStep"))
                 }
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .opaqueSettingsFormBackground()
-        #endif
         .onAppear {
             // Only ever fills an untouched field: the sheet's body runs again
             // for every keystroke, and a prefill that reasserted itself would

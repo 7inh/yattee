@@ -10,9 +10,9 @@ import Foundation
 extension SettingsManager {
     // MARK: - Subtitle Settings
 
-    /// Subtitle appearance settings for MPV.
+    /// Subtitle appearance settings for player.
     /// Stored as JSON in local UserDefaults.
-    /// NOT synced to iCloud - local-only storage since these are MPV-specific.
+    /// NOT synced to iCloud - local-only storage since these are player-specific.
     var subtitleSettings: SubtitleSettings {
         get {
             guard let data = localDefaults.data(forKey: "subtitleSettings"),
@@ -29,7 +29,7 @@ extension SettingsManager {
     }
 
     /// Static synchronous accessor for subtitle settings.
-    /// Use this from non-MainActor contexts like MPVClient.
+    /// Use this from non-MainActor contexts like player.
     /// Reads directly from UserDefaults.standard.
     nonisolated static func subtitleSettingsSync() -> SubtitleSettings {
         guard let data = UserDefaults.standard.data(forKey: "subtitleSettings"),

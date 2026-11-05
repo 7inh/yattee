@@ -91,7 +91,7 @@ extension LayoutPreset {
             fontStyle: .system,
             systemControlsMode: .seek,
             systemControlsSeekDuration: .tenSeconds,
-            volumeMode: .mpv
+            volumeMode: .inApp
         )
 
         // Gestures: tap 2x1 with seek, seek enabled, panscan with snap
@@ -182,7 +182,7 @@ extension LayoutPreset {
             fontStyle: .system,
             systemControlsMode: .seek,
             systemControlsSeekDuration: .tenSeconds,
-            volumeMode: .mpv
+            volumeMode: .inApp
         )
 
         return PlayerControlsLayout(
@@ -245,7 +245,7 @@ extension LayoutPreset {
             fontStyle: .system,
             systemControlsMode: .seek,
             systemControlsSeekDuration: .tenSeconds,
-            volumeMode: .mpv
+            volumeMode: .inApp
         )
 
         let gesturesSettings = GesturesSettings(
@@ -323,7 +323,7 @@ extension LayoutPreset {
             fontStyle: .system,
             systemControlsMode: .seek,
             systemControlsSeekDuration: .tenSeconds,
-            volumeMode: .mpv
+            volumeMode: .inApp
         )
 
         let progressBarSettings = ProgressBarSettings(

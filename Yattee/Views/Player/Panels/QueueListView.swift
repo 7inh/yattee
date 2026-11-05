@@ -106,7 +106,6 @@ enum QueuePlaybackActions {
 
 // MARK: - Queue List
 
-#if os(iOS) || os(macOS)
 
 /// List of previously played, now playing, and queued videos with reorder,
 /// remove, and load-more support.
@@ -260,13 +259,11 @@ struct QueueListView: View {
                     .id("up-next")
                 }
             }
-            #if os(iOS)
             .if(listStyle == .plain, then: { view in
                 view.listStyle(.plain)
             }, else: { view in
                 view.listStyle(.insetGrouped)
             })
-            #endif
             .onAppear {
                 // Scroll past history to the now playing section, or to the
                 // queue when that is hidden (no animation for instant positioning)
@@ -281,5 +278,3 @@ struct QueueListView: View {
         }
     }
 }
-
-#endif

@@ -39,11 +39,7 @@ struct MediaFileRow: View {
     }
 
     private static let iconTextSpacing: CGFloat = {
-        #if os(tvOS)
-        return 24
-        #else
         return 12
-        #endif
     }()
 
     var body: some View {
@@ -56,19 +52,11 @@ struct MediaFileRow: View {
     }
 
     private var iconView: some View {
-        #if os(macOS)
-        Image(systemName: file.systemImage)
-            .font(.title3)
-            .foregroundStyle(iconColor)
-            .frame(width: 28, height: 28)
-            .contentShape(Rectangle())
-        #else
         Image(systemName: file.systemImage)
             .font(.title2)
             .foregroundStyle(iconColor)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
-        #endif
     }
 
     private var textView: some View {

@@ -14,7 +14,7 @@ import Synchronization
 /// Counting is a no-op unless Performance Logging is on, so call sites can
 /// stay in hot paths:
 ///
-///     PerfCounter.count("mpv.prop.time-pos")
+///     PerfCounter.count("player.prop.time-pos")
 ///
 /// In a SwiftUI body, count evaluations with `let _ = PerfCounter.body("Name")`.
 enum PerfCounter {

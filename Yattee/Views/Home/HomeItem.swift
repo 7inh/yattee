@@ -157,11 +157,7 @@ enum HomeSectionLayout: String, CaseIterable, Sendable {
     }
 
     static var platformDefault: HomeSectionLayout {
-        #if os(tvOS)
-        return .grid
-        #else
         return .list
-        #endif
     }
 }
 
@@ -237,20 +233,12 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
 
     /// Default order for shortcuts.
     static var defaultOrder: [HomeShortcutItem] {
-        #if os(tvOS)
-        [.openURL, .remoteControl, .playlists, .bookmarks, .continueWatching, .history, .channels, .subscriptions, .mediaSources]
-        #else
         [.openURL, .remoteControl, .playlists, .bookmarks, .continueWatching, .history, .downloads, .channels, .subscriptions, .mediaSources]
-        #endif
     }
 
     /// Default visibility for all shortcuts.
     static var defaultVisibility: [HomeShortcutItem: Bool] {
-        #if os(tvOS)
-        [.openURL: true, .remoteControl: true, .playlists: true, .bookmarks: true, .continueWatching: false, .history: true, .channels: true, .subscriptions: false, .mediaSources: false]
-        #else
         [.openURL: true, .remoteControl: true, .playlists: false, .bookmarks: true, .continueWatching: false, .history: true, .downloads: false, .channels: false, .subscriptions: false, .mediaSources: false]
-        #endif
     }
 
     /// SF Symbol icon name.
@@ -466,20 +454,12 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
 
     /// Default order for sections.
     static var defaultOrder: [HomeSectionItem] {
-        #if os(tvOS)
-        [.continueWatching, .feed, .bookmarks, .history, .remoteServers, .fileSources]
-        #else
         [.continueWatching, .feed, .bookmarks, .history, .downloads, .remoteServers, .fileSources]
-        #endif
     }
 
     /// Default visibility for sections (only continue watching on by default).
     static var defaultVisibility: [HomeSectionItem: Bool] {
-        #if os(tvOS)
-        [.continueWatching: true, .feed: false, .bookmarks: false, .history: false, .remoteServers: false, .fileSources: false]
-        #else
         [.continueWatching: true, .feed: false, .bookmarks: false, .history: false, .downloads: false, .remoteServers: false, .fileSources: false]
-        #endif
     }
 
     /// SF Symbol icon name.

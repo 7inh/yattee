@@ -27,11 +27,7 @@ struct MiniPlayerEditorView: View {
             addButtonSection
         }
         .navigationTitle(String(localized: "settings.playerControls.miniPlayer"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #elseif os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .onAppear {
             syncLocalState()
@@ -287,11 +283,7 @@ struct MiniPlayerButtonConfigurationView: View {
                 }
             }
             .navigationTitle(config.buttonType.displayName)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #elseif os(macOS)
-            .formStyle(.grouped)
-            #endif
             .opaqueSettingsFormBackground()
             .onAppear {
                 syncFromConfiguration(config)
@@ -347,7 +339,6 @@ struct MiniPlayerButtonConfigurationView: View {
                 updateSettings(.seek(SeekSettings(seconds: Int(seekSeconds), direction: newValue)))
             }
 
-            #if !os(tvOS)
             HStack {
                 Text(String(localized: "settings.playerControls.seek.seconds"))
                 Spacer()
@@ -363,7 +354,6 @@ struct MiniPlayerButtonConfigurationView: View {
             .onChange(of: seekSeconds) { _, newValue in
                 updateSettings(.seek(SeekSettings(seconds: Int(newValue), direction: seekDirection)))
             }
-            #endif
 
             // Quick presets
             HStack {

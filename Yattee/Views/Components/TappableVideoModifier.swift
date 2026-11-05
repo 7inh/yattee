@@ -54,18 +54,7 @@ struct TappableVideoModifier: ViewModifier {
     func body(content: Content) -> some View {
         Button {
             dismissKeyboard()
-            #if os(tvOS)
-            let tapAction = appEnvironment?.settingsManager.tvOSVideoTapAction ?? .openInfo
-            if tapAction == .openInfo {
-                appEnvironment?.navigationCoordinator.navigate(
-                    to: .video(.loaded(video), queueContext: queueContext)
-                )
-            } else {
-                checkPasswordAndPlay()
-            }
-            #else
             checkPasswordAndPlay()
-            #endif
         } label: {
             content
                 .contentShape(Rectangle())
@@ -114,9 +103,7 @@ struct TappableVideoModifier: ViewModifier {
     
     /// Dismisses the iOS software keyboard before playing video
     private func dismissKeyboard() {
-        #if os(iOS)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #endif
     }
     
     // MARK: - Password Check & Playback

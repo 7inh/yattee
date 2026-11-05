@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 
-#if !os(tvOS)
 
 /// Per-video download progress for efficient SwiftUI observation.
 /// Views can observe individual video progress without triggering re-renders for all videos.
@@ -121,16 +120,12 @@ final class DownloadManager: NSObject {
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
 
-        #if os(iOS)
         let allowCellular = downloadSettings?.allowCellularDownloads ?? false
         config.allowsCellularAccess = allowCellular
         LoggingService.shared.logDownload(
             "[Downloads] Session setup",
             details: "allowsCellularAccess: \(allowCellular), hasSettings: \(downloadSettings != nil)"
         )
-        #else
-        config.allowsCellularAccess = true
-        #endif
 
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
@@ -166,7 +161,6 @@ final class DownloadManager: NSObject {
         }
     }
 
-    #if os(iOS)
     /// Refreshes the URLSession configuration when cellular settings change.
     /// Call this after the user toggles the "Allow Downloads on Cellular" setting.
     func refreshCellularAccessSetting() {
@@ -226,7 +220,6 @@ final class DownloadManager: NSObject {
         // 6. Restart downloads on new session
         await startNextDownloadIfNeeded()
     }
-    #endif
 
     /// Suspends until the delegate reports `session` invalidated, or a timeout passes.
     private func waitForInvalidation(of session: URLSession, timeout: TimeInterval = 5) async {
@@ -1231,25 +1224,3 @@ final class DownloadManager: NSObject {
         return newURL
     }
 }
-
-#else
-// tvOS stub - downloads not supported
-@Observable
-@MainActor
-final class DownloadManager {
-    private(set) var activeDownloads: [Download] = []
-    private(set) var completedDownloads: [Download] = []
-    private(set) var storageUsed: Int64 = 0
-    var maxConcurrentDownloads: Int { 2 }
-
-    func getAvailableStorage() -> Int64 { 0 }
-    func isDownloaded(_ videoID: VideoID) -> Bool { false }
-    func isDownloading(_ videoID: VideoID) -> Bool { false }
-    func download(for videoID: VideoID) -> Download? { nil }
-    func localURL(for videoID: VideoID) -> URL? { nil }
-    func videoAndStream(for download: Download) -> (video: Video, stream: Stream, audioStream: Stream?, captionURL: URL?, dislikeCount: Int?)? { nil }
-    func setToastManager(_ manager: ToastManager) {}
-    func setDownloadSettings(_ settings: DownloadSettings) {}
-    func downloadsDirectory() -> URL { URL(fileURLWithPath: NSTemporaryDirectory()) }
-}
-#endif

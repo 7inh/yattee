@@ -53,18 +53,11 @@ struct ToastOverlayView: View {
     }
 
     private var topPadding: CGFloat {
-        #if os(iOS)
         // Sheets start below the status bar
         if depth > 0 { return 16 }
         // In player scope (sheet), only need minimal padding since safe area is handled by sheet
         // In main scope, account for Dynamic Island / notch
         return scope == .player ? 8 : 60
-        #elseif os(macOS)
-        return 16
-        #elseif os(tvOS)
-        // TV safe area
-        return 60
-        #endif
     }
 }
 

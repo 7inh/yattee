@@ -6,18 +6,14 @@
 //
 
 import SwiftUI
-#if !os(tvOS)
 import UniformTypeIdentifiers
-#endif
 
 // MARK: - Export File Wrapper
 
-#if !os(tvOS)
 private struct ExportFile: Identifiable {
     let id = UUID()
     let url: URL
 }
-#endif
 
 /// Pending preset creation request
 private struct PendingPresetCreation: Equatable {
@@ -51,7 +47,6 @@ struct PresetSelectorView: View {
     @State private var trackedActivePresetID: UUID?
 
     // Import/Export state
-    #if !os(tvOS)
     @State private var showingImportPicker = false
     @State private var isImporting = false
     @State private var importError: String?
@@ -59,23 +54,17 @@ struct PresetSelectorView: View {
     @State private var importedPresetName: String?
     @State private var showingImportSuccess = false
     @State private var exportFile: ExportFile?
-    #endif
 
     var body: some View {
         presetList
             .opaqueSettingsFormBackground()
             .navigationTitle(String(localized: "settings.playerControls.presets"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar { toolbarContent }
             .sheet(isPresented: $showCreateSheet) { createPresetSheet }
             .sheet(item: $presetToRename) { preset in renamePresetSheet(preset) }
-            #if os(iOS)
             .sheet(isPresented: $showingImportPicker) { importPickerSheet }
             .sheet(item: $exportFile) { file in ShareSheet(items: [file.url]) }
-            #endif
-            #if !os(tvOS)
             .alert(
                 String(localized: "settings.playerControls.import.error.title"),
                 isPresented: $showingImportError
@@ -96,7 +85,6 @@ struct PresetSelectorView: View {
                     Text(String(localized: "settings.playerControls.import.success.message \(name)"))
                 }
             }
-            #endif
             .task(id: pendingCreation) {
                 guard let creation = pendingCreation else { return }
                 let basePreset = creation.basePresetID.flatMap { id in
@@ -180,9 +168,7 @@ struct PresetSelectorView: View {
             },
             onRename: { presetToRename = preset },
             onExport: {
-                #if !os(tvOS)
                 exportPreset(preset)
-                #endif
             },
             onDelete: {
                 Task { await viewModel.deletePreset(preset) }
@@ -193,7 +179,6 @@ struct PresetSelectorView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        #if !os(tvOS)
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button {
@@ -223,18 +208,6 @@ struct PresetSelectorView: View {
                 )
             }
         }
-        #else
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showCreateSheet = true
-            } label: {
-                Label(
-                    String(localized: "settings.playerControls.newPreset"),
-                    systemImage: "plus"
-                )
-            }
-        }
-        #endif
     }
 
     private var createPresetSheet: some View {
@@ -259,39 +232,18 @@ struct PresetSelectorView: View {
         )
     }
 
-    #if os(iOS)
     private var importPickerSheet: some View {
         PresetFilePickerView { url in
             handleImportedFile(url)
         }
     }
-    #endif
 
     // MARK: - Import/Export Actions
 
-    #if !os(tvOS)
     private func showImportPicker() {
-        #if os(iOS)
         showingImportPicker = true
-        #elseif os(macOS)
-        showMacOSImportPanel()
-        #endif
     }
 
-    #if os(macOS)
-    private func showMacOSImportPanel() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = String(localized: "settings.playerControls.import.panel.message")
-
-        if panel.runModal() == .OK, let url = panel.url {
-            handleImportedFile(url)
-        }
-    }
-    #endif
 
     private func handleImportedFile(_ url: URL) {
         isImporting = true
@@ -317,33 +269,9 @@ struct PresetSelectorView: View {
     private func exportPreset(_ preset: LayoutPreset) {
         guard let url = viewModel.exportPreset(preset) else { return }
 
-        #if os(iOS)
         exportFile = ExportFile(url: url)
-        #elseif os(macOS)
-        showMacOSSavePanel(url: url, preset: preset)
-        #endif
     }
 
-    #if os(macOS)
-    private func showMacOSSavePanel(url: URL, preset: LayoutPreset) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = PlayerControlsPresetExportImport.generateExportFilename(for: preset)
-        panel.allowedContentTypes = [.json]
-
-        if panel.runModal() == .OK, let saveURL = panel.url {
-            do {
-                // Remove existing file if it exists (NSSavePanel asks for confirmation)
-                if FileManager.default.fileExists(atPath: saveURL.path) {
-                    try FileManager.default.removeItem(at: saveURL)
-                }
-                try FileManager.default.copyItem(at: url, to: saveURL)
-            } catch {
-                LoggingService.shared.error("Failed to save preset file: \(error.localizedDescription)")
-            }
-        }
-    }
-    #endif
-    #endif
 }
 
 // MARK: - Preset Row
@@ -381,7 +309,6 @@ private struct PresetRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        #if os(iOS)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if let onDelete, !preset.isBuiltIn, canDelete {
                 Button(role: .destructive) {
@@ -418,7 +345,6 @@ private struct PresetRow: View {
                 .tint(.blue)
             }
         }
-        #endif
         .contextMenu {
             if let onRename, !preset.isBuiltIn {
                 Button {
@@ -459,7 +385,6 @@ private struct PresetRow: View {
 
 // MARK: - File Picker (iOS)
 
-#if os(iOS)
 private struct PresetFilePickerView: UIViewControllerRepresentable {
     let onSelect: (URL) -> Void
 
@@ -489,7 +414,6 @@ private struct PresetFilePickerView: UIViewControllerRepresentable {
         }
     }
 }
-#endif
 
 // MARK: - Preview
 

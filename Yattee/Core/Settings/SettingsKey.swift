@@ -30,7 +30,6 @@ enum SettingsKey: String, CaseIterable {
     case preferredAudioLanguage
     case preferredSubtitlesLanguage
     case resumeAction
-    case tvOSMenuButtonClosesVideo
     case allowSoftwareDecodedFormats
     case audioOnlyMode
 
@@ -85,9 +84,6 @@ enum SettingsKey: String, CaseIterable {
     case homeSectionItemsLimit
     case homeSectionLayout
 
-    // Top Shelf (tvOS)
-    case topShelfSections
-
     // Navigation layout (iPad, iPhone Duo inner screen)
     case navigationStyle
 
@@ -120,16 +116,8 @@ enum SettingsKey: String, CaseIterable {
     // Advanced
     case showAdvancedStreamDetails
     case showPlayerAreaDebug
-    case showTVDebugButton
-    case verboseMPVLogging
     case verboseRemoteControlLogging
-    case mpvBufferSeconds
-    case mpvUseEDLStreams
     case zoomTransitionsEnabled
-    case tvMatchDisplayFrameRate
-    case tvMatchDisplayDynamicRange
-    case tvAudioDelayMs
-    case tvVideoSyncMode
 
     // Details panel
     case floatingDetailsPanelWidth // Resizable panel width in wide layout
@@ -162,8 +150,6 @@ enum SettingsKey: String, CaseIterable {
              .homeShortcutOrder, .homeShortcutVisibility, .homeShortcutLayout, .homeShortcutCardStyle,
              .homeShortcutCardColor, .homeShortcutColorfulPalette, .homeShortcutCustomPaletteColors,
              .homeSectionOrder, .homeSectionVisibility, .homeSectionItemsLimit, .homeSectionLayout,
-             // Top Shelf — tvOS only
-             .topShelfSections,
              // Tab bar (compact size class) layout
              .navigationStyle, .tabBarItemOrder, .tabBarItemVisibility, .tabBarStartupTab,
              // Sidebar layout/selection

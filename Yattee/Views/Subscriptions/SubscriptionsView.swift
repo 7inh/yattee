@@ -6,21 +6,13 @@
 //
 
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 
 struct SubscriptionsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var sheetTransition
-    #if os(tvOS)
-    @FocusState private var focusedVideoID: String?
-    #endif
-    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    #endif
     @State private var feedCache = SubscriptionFeedCache.shared
     @State private var subscriptions: [Subscription] = []
     @State private var subscriptionsLoaded = false
@@ -34,10 +26,6 @@ struct SubscriptionsView: View {
     @State private var errorMessage: String?
     @State private var watchEntriesMap: [String: WatchEntry] = [:]
     @State private var showViewOptions = false
-    #if os(macOS)
-    @State private var showSubscriptionsData = false
-    @State private var pendingSubscriptionsData = false
-    #endif
 
     // View options (persisted)
     @AppStorage("subscriptionsLayout") private var layout: VideoListLayout = .list
@@ -50,10 +38,6 @@ struct SubscriptionsView: View {
     /// Whether the last completed load produced enough channels for the sidebar,
     /// so its space can be reserved before the next load finishes.
     @AppStorage("subscriptionsSidebarExpected") private var sidebarExpected = false
-    #if os(macOS)
-    @AppStorage("subscriptionsMacOSSidebarWidth") private var macOSSidebarWidth = 240.0
-    @State private var macOSSidebarDragStartWidth: Double?
-    #elseif os(iOS)
     @AppStorage("subscriptionsIPadSidebarWidth") private var iPadSidebarWidth = 260.0
     @State private var iPadSidebarDragStartWidth: Double?
     /// Whether the trailing status-bar column holds the channel rail, so the
@@ -64,7 +48,6 @@ struct SubscriptionsView: View {
     /// that intersect the querying view, and the content stops short of the
     /// status-bar column it would place the rail in.
     @State private var globalOcclusionFrames: [CGRect] = []
-    #endif
 
     /// List style from centralized settings.
     private var listStyle: VideoListStyle {
@@ -80,18 +63,9 @@ struct SubscriptionsView: View {
     private var viewOptionsForm: some View {
         Form {
             Section {
-                #if os(macOS)
-                Toggle("viewOptions.showSidebar", isOn: $showSidebar)
-                #elseif os(iOS)
                 if channelSidebarFits {
                     Toggle("viewOptions.showSidebar", isOn: $showSidebar)
                 }
-                #elseif os(tvOS)
-                PlatformMenuPicker(String(localized: "viewOptions.showSidebar"), selection: $showSidebar) {
-                    Text("common.on").tag(true)
-                    Text("common.off").tag(false)
-                }
-                #endif
 
                 // Layout picker (inline menu)
                 PlatformMenuPicker(String(localized: "viewOptions.layout"), selection: $layout) {
@@ -111,56 +85,24 @@ struct SubscriptionsView: View {
 
                 // Grid-specific options
                 if layout == .grid {
-                    #if os(tvOS)
-                    Picker("viewOptions.columns.header", selection: $gridColumns) {
-                        ForEach(GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, gridConfig.maxColumns), id: \.self) { count in
-                            Text("\(count)").tag(count)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    #else
                     Stepper(
                         "viewOptions.columns \(min(max(GridConstants.minAllowedColumns, gridColumns), gridConfig.maxColumns))",
                         value: $gridColumns,
                         in: GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, gridConfig.maxColumns)
                     )
-                    #endif
                 }
 
-                #if os(tvOS)
-                PlatformMenuPicker(String(localized: "viewOptions.hideWatched"), selection: $hideWatched) {
-                    Text("common.on").tag(true)
-                    Text("common.off").tag(false)
-                }
-                PlatformMenuPicker(String(localized: "viewOptions.hideShorts"), selection: $hideShorts) {
-                    Text("common.on").tag(true)
-                    Text("common.off").tag(false)
-                }
-                #else
                 Toggle("viewOptions.hideWatched", isOn: $hideWatched)
                 Toggle("viewOptions.hideShorts", isOn: $hideShorts)
-                #endif
 
-                #if os(iOS)
                 Picker("viewOptions.channelStrip", selection: $channelStripSize) {
                     ForEach(ChannelStripSize.allCases, id: \.self) { size in
                         Text(size.displayName).tag(size)
                     }
                 }
                 .disabled(channelSidebarFits && showSidebar)
-                #endif
             }
 
-            #if os(macOS)
-            Section {
-                Button {
-                    pendingSubscriptionsData = true
-                    showViewOptions = false
-                } label: {
-                    Label(String(localized: "manageChannels.subscriptionsData"), systemImage: "person.2.badge.gearshape")
-                }
-            }
-            #elseif os(iOS)
             Section {
                 NavigationLink {
                     SubscriptionsSettingsView()
@@ -168,21 +110,9 @@ struct SubscriptionsView: View {
                     Label(String(localized: "manageChannels.subscriptionsData"), systemImage: "person.2.badge.gearshape")
                 }
             }
-            #endif
         }
     }
 
-    #if os(macOS)
-    private var subscriptionsDataSheet: some View {
-        NavigationStack {
-            SubscriptionsSettingsView()
-                .toolbar {
-                    sheetCloseToolbarItem { showSubscriptionsData = false }
-                }
-        }
-        .frame(minWidth: 500, minHeight: 450)
-    }
-    #endif
 
     /// The feed error worth showing, if any — the banner takes over only for
     /// the errors it is already the answer to.
@@ -193,11 +123,7 @@ struct SubscriptionsView: View {
     /// Whether the channel filter is a rail in the trailing column rather than
     /// a bottom strip, so the feed needs no bottom space for it.
     private var usesChannelRail: Bool {
-        #if os(iOS)
         channelRailFits
-        #else
-        false
-        #endif
     }
 
     private var isShowingFullScreenError: Bool {
@@ -310,9 +236,6 @@ struct SubscriptionsView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
-            #if os(tvOS)
-            .background(Color.black.opacity(0.3))
-            #endif
 
         case .error:
             if let error = displayedFeedError {
@@ -325,9 +248,6 @@ struct SubscriptionsView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
-                #if os(tvOS)
-                .background(Color.black.opacity(0.3))
-                #endif
             }
 
         case .loadingMore:
@@ -341,9 +261,6 @@ struct SubscriptionsView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
-            #if os(tvOS)
-            .background(Color.black.opacity(0.3))
-            #endif
 
         default:
             EmptyView()
@@ -402,69 +319,13 @@ struct SubscriptionsView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
                 ZStack {
-                    #if os(tvOS)
-                    HStack(alignment: .top, spacing: 24) {
-                        if showSidebar && subscriptionsLoaded && !subscriptions.isEmpty {
-                            tvOSChannelsSidebar
-                                .frame(width: max(geometry.size.width * 0.28, 360), alignment: .leading)
-                                .focusSection()
-                        }
-
-                        VStack(alignment: .leading, spacing: 16) {
-                            if !showSidebar || subscriptions.isEmpty {
-                                tvOSViewOptionsButton
-                            }
-
-                            Group {
-                                switch layout {
-                                case .list:
-                                    listContent
-                                case .grid:
-                                    gridContent
-                                }
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        }
-                        .focusSection()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    #elseif os(macOS)
-                    HStack(spacing: 0) {
-                        if showSidebar && subscriptionsLoaded && subscriptions.count > 1 {
-                            macOSChannelsSidebar
-                                .frame(width: clampedMacOSSidebarWidth)
-
-                            macOSSidebarResizeHandle
-                        } else if showSidebar && !subscriptionsLoaded && sidebarExpected {
-                            macOSSidebarPlaceholder
-                                .frame(width: clampedMacOSSidebarWidth)
-
-                            macOSSidebarResizeHandle
-                        }
-
-                        Group {
-                            switch layout {
-                            case .list:
-                                listContent
-                            case .grid:
-                                gridContent
-                            }
-                        }
-                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    #else
                     if channelSidebarFits && showSidebar && subscriptionsLoaded && subscriptions.count > 1 {
                         HStack(spacing: 0) {
                             iOSChannelsSidebar
@@ -492,10 +353,8 @@ struct SubscriptionsView: View {
                                 LoggingService.shared.info("Pull-to-refresh completed", category: .general)
                             }
                     }
-                    #endif
 
                     // Bottom overlay for filter strip (iOS only, compact width)
-                    #if os(iOS)
                     VStack {
                         Spacer()
 
@@ -504,7 +363,6 @@ struct SubscriptionsView: View {
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                    #endif
                 }
                 // Above the feed rather than inside it: the feed is local data
                 // while this is showing, and nothing else on screen says so.
@@ -513,25 +371,18 @@ struct SubscriptionsView: View {
                         DataContextUnavailableBanner(reason: unavailability)
                     }
                 }
-                #if !os(tvOS)
                 .navigationTitle(String(localized: "tabs.subscriptions"))
-                #if os(iOS)
                 .toolbarTitleDisplayMode(isIPadRegular ? .inline : .inlineLarge)
-                #else
-                .toolbarTitleDisplayMode(.inlineLarge)
-                #endif
                 .toolbar {
                     // No switcher wherever a sidebar shows one: the macOS
                     // sidebar row and the iPad sidebar's bottom bar are the
                     // persistent switcher surfaces there, so the toolbar menu
                     // is compact-width-only.
-                    #if !os(macOS)
                     if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
                         ToolbarItem(placement: viewOptionsPlacement) {
                             DataContextSwitcherMenu()
                         }
                     }
-                    #endif
                     ToolbarItem(placement: viewOptionsPlacement) {
                         Button {
                             showViewOptions = true
@@ -539,52 +390,19 @@ struct SubscriptionsView: View {
                             Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                         }
                         .liquidGlassTransitionSource(id: "subscriptionsViewOptions", in: sheetTransition)
-                        #if os(macOS)
-                        .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                            viewOptionsForm
-                                .padding()
-                                .frame(width: 300)
-                                .onDisappear {
-                                    // Present the sheet only after the popover is gone,
-                                    // otherwise the presentation is swallowed.
-                                    if pendingSubscriptionsData {
-                                        pendingSubscriptionsData = false
-                                        showSubscriptionsData = true
-                                    }
-                                }
-                        }
-                        #endif
                     }
                 }
-                #endif
-                #if os(macOS)
-                .sheet(isPresented: $showSubscriptionsData) {
-                    subscriptionsDataSheet
-                }
-                #else
                 .sheet(isPresented: $showViewOptions) {
                         NavigationStack {
                             viewOptionsForm
-                            #if os(tvOS)
-                            .scrollClipDisabled()
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 24)
-                            #else
                             .navigationTitle(String(localized: "subscriptions.viewOptions.title"))
-                            #if os(iOS)
                             .navigationBarTitleDisplayMode(.inline)
-                            #endif
-                            #endif
                         }
                         .presentationDetents([.height(520), .large])
                         .presentationDragIndicator(.visible)
                         .liquidGlassSheetContent(sourceID: "subscriptionsViewOptions", in: sheetTransition)
                     }
-                    #endif
                     .dismissesOnExternalNavigation($showViewOptions)
-                    #if os(macOS)
-                    .dismissesOnExternalNavigation($showSubscriptionsData)
-                    #endif
                     .onAppear {
                         // Synchronous load for local accounts so the sidebar is
                         // present in the first layout pass (avoids layout jump).
@@ -688,21 +506,10 @@ struct SubscriptionsView: View {
                         proxy.scrollTo("top", anchor: .top)
                     }
                 }
-                #if os(tvOS)
-                .onChange(of: filteredVideos.first?.id.videoID, initial: true) { _, newValue in
-                    // Work around tvOS ScrollView + prefersDefaultFocus bug: set initial focus
-                    // (and refocus after channel filter changes) to the first video once cells materialize.
-                    guard let newValue else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        focusedVideoID = newValue
-                    }
-                }
-                #endif
             }
             .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                 viewWidth = newWidth
             }
-            #if os(iOS)
             // Outside the ZStack so the rail is placed in the reader's own
             // coordinate space, which the column geometry is measured in.
             //
@@ -731,7 +538,6 @@ struct SubscriptionsView: View {
                 }
                 .ignoresSafeArea()
             }
-            #endif
         }
     }
 
@@ -744,20 +550,14 @@ struct SubscriptionsView: View {
                 .id("top")
 
             // Section header (channel link is shown in the inline header on tvOS)
-            #if !os(tvOS)
             sectionHeaderView
-            #endif
         } content: {
             feedContentRows
         } footer: {
-            #if os(iOS)
             // Bottom spacer for channel strip overlay (outside the card)
             if channelStripSize != .disabled && subscriptions.count > 1 && !isShowingFullScreenError && !usesChannelRail {
                 Color.clear.frame(height: channelStripSize.totalHeight)
             }
-            #else
-            EmptyView()
-            #endif
         }
     }
 
@@ -819,11 +619,7 @@ struct SubscriptionsView: View {
                             loadMoreVideos: loadMoreSubscriptionsCallback
                         )
                     }
-                    #if os(tvOS)
-                    .focused($focusedVideoID, equals: video.id.videoID)
-                    #else
                     .videoSwipeActions(video: video)
-                    #endif
                 }
 
                 // Infinite scroll trigger for Invidious feed
@@ -856,7 +652,6 @@ struct SubscriptionsView: View {
                     .id("top")
 
                 // Section header (channel link is shown in the inline header on tvOS)
-                #if !os(tvOS)
                 HStack {
                     feedSectionHeader
                     Spacer()
@@ -864,7 +659,6 @@ struct SubscriptionsView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
                 .padding(.bottom, 12)
-                #endif
 
                 // Content
                 if let feedError = displayedFeedError, feedCache.videos.isEmpty {
@@ -897,9 +691,6 @@ struct SubscriptionsView: View {
                 }
             }
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 
     // MARK: - Channel Filter Strip
@@ -911,11 +702,7 @@ struct SubscriptionsView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, channelStripSize.verticalPadding)
                 .clipShape(Capsule())
-                #if os(tvOS)
-                .background(Color.black.opacity(0.3))
-                #else
                 .glassBackground(.regular, in: .capsule, fallback: .regularMaterial)
-                #endif
 
             // Option 2: Scrollable layout (used when chips overflow)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -924,11 +711,7 @@ struct SubscriptionsView: View {
                     .padding(.vertical, channelStripSize.verticalPadding)
             }
             .clipShape(Capsule())
-            #if os(tvOS)
-            .background(Color.black.opacity(0.3))
-            #else
             .glassBackground(.regular, in: .capsule, fallback: .regularMaterial)
-            #endif
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
@@ -971,7 +754,6 @@ struct SubscriptionsView: View {
         }
     }
 
-    #if os(iOS)
     /// The channel filter as a vertical rail in the trailing status-bar column
     /// (iPhone Duo inner screen), stacked from the bottom so the system's status
     /// items above never reach a short list, and scrolling when it outgrows the
@@ -1001,105 +783,12 @@ struct SubscriptionsView: View {
         .frame(width: placement.width, height: placement.height, alignment: .bottom)
         .animation(.smooth, value: placement.height)
     }
-    #endif
 
     // MARK: - tvOS Channels Sidebar
 
-    #if os(tvOS)
-    private var tvOSViewOptionsButton: some View {
-        HStack(spacing: 16) {
-            // The sidebar is too narrow for both buttons' full titles, and
-            // tvOS wraps them into tall two-line lozenges before truncating.
-            // The account name is the label worth keeping whole, so this
-            // button keeps only its icon and the name gets the width.
-            Button {
-                showViewOptions = true
-            } label: {
-                Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel(Text(String(localized: "viewOptions.title")))
-
-            if DataContextSwitcherVisibility.showsPickers(in: appEnvironment) {
-                DataContextSwitcherButton()
-            }
-        }
-    }
-
-    private var tvOSChannelsSidebar: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            tvOSViewOptionsButton
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    TVSubscriptionsSidebarRow(
-                        name: String(localized: "subscriptions.allChannels"),
-                        avatarURL: nil,
-                        serverURL: nil,
-                        authHeader: nil,
-                        channelID: nil,
-                        isAllChannels: true,
-                        isSelected: selectedChannelID == nil,
-                        onTap: {
-                            if selectedChannelID != nil {
-                                selectedChannelID = nil
-                            }
-                        }
-                    )
-                    .contextMenu {
-                        Button {
-                            appEnvironment?.navigationCoordinator.navigate(to: .manageChannels)
-                        } label: {
-                            Label(String(localized: "sidebar.manageChannels"), systemImage: "person.2.badge.gearshape")
-                        }
-                    }
-
-                    ForEach(sortedSubscriptions, id: \.channelID) { subscription in
-                        TVSubscriptionsSidebarRow(
-                            name: subscription.name,
-                            avatarURL: subscription.avatarURL,
-                            serverURL: yatteeServerURL,
-                            authHeader: yatteeServerAuthHeader,
-                            channelID: subscription.channelID,
-                            isAllChannels: false,
-                            isSelected: selectedChannelID == subscription.channelID,
-                            onTap: {
-                                if selectedChannelID == subscription.channelID {
-                                    selectedChannelID = nil
-                                } else {
-                                    selectedChannelID = subscription.channelID
-                                }
-                            }
-                        )
-                        .contextMenu {
-                            Button {
-                                appEnvironment?.navigationCoordinator.navigate(
-                                    to: .channel(subscription.channelID, subscription.contentSource)
-                                )
-                            } label: {
-                                Label(String(localized: "subscriptions.goToChannel"), systemImage: "person.circle")
-                            }
-                            Button(role: .destructive) {
-                                unsubscribeChannel(subscription.channelID)
-                            } label: {
-                                Label(String(localized: "channel.unsubscribe"), systemImage: "person.badge.minus")
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 8)
-            }
-            .scrollClipDisabled()
-        }
-    }
-    #endif
 
     // MARK: - Channels Sidebar (macOS / iPad)
 
-    #if !os(tvOS)
     private static let sidebarAllChannelsTag = "__all__"
 
     private var sidebarSelection: Binding<String?> {
@@ -1156,85 +845,12 @@ struct SubscriptionsView: View {
             }
         }
     }
-    #endif
 
-    #if os(macOS)
-    private static let macOSSidebarMinWidth = 180.0
-    private static let macOSSidebarMaxWidth = 400.0
-
-    private var clampedMacOSSidebarWidth: CGFloat {
-        CGFloat(min(max(macOSSidebarWidth, Self.macOSSidebarMinWidth), Self.macOSSidebarMaxWidth))
-    }
-
-    private var macOSChannelsSidebar: some View {
-        List(selection: sidebarSelection) {
-            channelsSidebarContent
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-    }
-
-    private var macOSSidebarPlaceholder: some View {
-        ProgressView()
-            .controlSize(.small)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var macOSSidebarResizeHandle: some View {
-        ZStack {
-            Rectangle()
-                .fill(.separator.opacity(0.6))
-                .frame(width: 1)
-
-            Rectangle()
-                .fill(.clear)
-                .frame(width: 8)
-                .contentShape(Rectangle())
-        }
-        .frame(width: 8)
-        .frame(maxHeight: .infinity)
-        .background(.clear)
-        .contentShape(Rectangle())
-        .highPriorityGesture(macOSSidebarResizeGesture)
-        .onHover { isHovering in
-            if isHovering {
-                NSCursor.resizeLeftRight.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
-    }
-
-    private var macOSSidebarResizeGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .onChanged { value in
-                if macOSSidebarDragStartWidth == nil {
-                    macOSSidebarDragStartWidth = macOSSidebarWidth
-                }
-
-                let baseWidth = macOSSidebarDragStartWidth ?? macOSSidebarWidth
-                let newWidth = baseWidth + value.translation.width
-                macOSSidebarWidth = min(max(newWidth, Self.macOSSidebarMinWidth), Self.macOSSidebarMaxWidth)
-            }
-            .onEnded { _ in
-                macOSSidebarDragStartWidth = nil
-            }
-    }
-    #endif
 
     private var isSidebarVisible: Bool {
-        #if os(macOS)
-        return showSidebar && subscriptionsLoaded && subscriptions.count > 1
-        #elseif os(iOS)
         return channelSidebarFits && showSidebar && subscriptionsLoaded && subscriptions.count > 1
-        #elseif os(tvOS)
-        return showSidebar && subscriptionsLoaded && !subscriptions.isEmpty
-        #else
-        return false
-        #endif
     }
 
-    #if os(iOS)
     private static let iPadSidebarMinWidth = 220.0
     private static let iPadSidebarMaxWidth = 420.0
 
@@ -1459,7 +1075,6 @@ struct SubscriptionsView: View {
         }
         .buttonStyle(.plain)
     }
-    #endif
 
     // MARK: - Content Views
 
@@ -1493,9 +1108,6 @@ struct SubscriptionsView: View {
                         videoIndex: index,
                         loadMoreVideos: loadMoreSubscriptionsCallback
                     )
-                    #if os(tvOS)
-                    .focused($focusedVideoID, equals: video.id.videoID)
-                    #endif
                 }
             }
 

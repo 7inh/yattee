@@ -31,9 +31,7 @@ struct DeveloperSettingsView: View {
             dataSection
         }
         .navigationTitle(String(localized: "settings.developer.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .confirmationDialog(
             String(localized: "settings.advanced.data.removeDuplicates.title"),
             isPresented: $showingDeduplicateConfirmation,
@@ -97,18 +95,6 @@ struct DeveloperSettingsView: View {
             }
 
             if loggingEnabled {
-                #if os(tvOS)
-                NavigationLink {
-                    LogViewerView()
-                } label: {
-                    HStack {
-                        Label(String(localized: "settings.advanced.logging.viewLogs"), systemImage: "list.bullet.rectangle")
-                        Spacer()
-                        Text("\(loggingService.entries.count)")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                #else
                 SettingsNavigationRow(
                     "settings.advanced.logging.viewLogs",
                     systemImage: "list.bullet.rectangle",
@@ -116,7 +102,6 @@ struct DeveloperSettingsView: View {
                 ) {
                     LogViewerView()
                 }
-                #endif
             }
         }
     }
@@ -125,13 +110,6 @@ struct DeveloperSettingsView: View {
     private var verboseLoggingSection: some View {
         if let settingsManager = appEnvironment?.settingsManager {
             SettingsFormSection("settings.advanced.verboseLogging.sectionTitle") {
-                Toggle(isOn: Binding(
-                    get: { settingsManager.verboseMPVLogging },
-                    set: { settingsManager.verboseMPVLogging = $0 }
-                )) {
-                    Label(String(localized: "settings.advanced.debug.verboseMPV"), systemImage: "doc.text.magnifyingglass")
-                }
-
                 Toggle(isOn: Binding(
                     get: { settingsManager.verboseRemoteControlLogging },
                     set: { settingsManager.verboseRemoteControlLogging = $0 }
@@ -160,32 +138,20 @@ struct DeveloperSettingsView: View {
                     Label(String(localized: "settings.advanced.debug.playerAreaDebug"), systemImage: "rectangle.dashed")
                 }
 
-                #if os(iOS)
                 Toggle(isOn: Binding(
                     get: { settingsManager.zoomTransitionsEnabled },
                     set: { settingsManager.zoomTransitionsEnabled = $0 }
                 )) {
                     Label(String(localized: "settings.advanced.debug.zoomTransitions"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
-                #endif
 
-                #if os(tvOS)
-                Toggle(isOn: Binding(
-                    get: { settingsManager.showTVDebugButton },
-                    set: { settingsManager.showTVDebugButton = $0 }
-                )) {
-                    Label(String(localized: "settings.advanced.debug.showTVDebugButton"), systemImage: "ant.circle")
-                }
-                #endif
             }
         }
     }
 
     @ViewBuilder
     private var testingSection: some View {
-        #if !os(tvOS)
         notificationTestingSection
-        #endif
     }
 
     @ViewBuilder
@@ -235,7 +201,6 @@ struct DeveloperSettingsView: View {
         }
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private var notificationTestingSection: some View {
         SettingsFormSection("settings.advanced.testing.notifications.sectionTitle", footer: "settings.advanced.testing.notifications.footer") {
@@ -271,7 +236,6 @@ struct DeveloperSettingsView: View {
             await appEnvironment.notificationManager.triggerBackgroundRefresh(using: appEnvironment)
         }
     }
-    #endif
 
 }
 

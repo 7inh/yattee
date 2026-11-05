@@ -5,7 +5,6 @@
 //  Settings view for configuring pinch-to-panscan gesture.
 //
 
-#if os(iOS)
 import SwiftUI
 
 /// Settings view for configuring pinch-to-panscan gesture on the player.
@@ -94,4 +93,3 @@ struct PanscanGestureSettingsView: View {
         )
     }
 }
-#endif

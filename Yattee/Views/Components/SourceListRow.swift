@@ -19,25 +19,13 @@ struct SourceListRow<Content: View>: View {
     @Environment(\.displayScale) private var displayScale
 
     /// Horizontal padding for row content.
-    #if os(macOS)
-    private let horizontalPadding: CGFloat = 12
-    #else
     private let horizontalPadding: CGFloat = 16
-    #endif
 
     /// Vertical padding for row content.
-    #if os(macOS)
-    private let verticalPadding: CGFloat = 8
-    #else
     private let verticalPadding: CGFloat = 12
-    #endif
 
     /// Width of the icon column.
-    #if os(macOS)
-    private let iconWidth: CGFloat = 24
-    #else
     private let iconWidth: CGFloat = 32
-    #endif
 
     /// Spacing between icon and text.
     private let iconTextSpacing: CGFloat = 12
@@ -63,19 +51,10 @@ struct SourceListRow<Content: View>: View {
 
     @ViewBuilder
     private var divider: some View {
-        #if os(iOS)
         Rectangle()
             .fill(Color(uiColor: .separator))
             .frame(height: 1 / displayScale)
             .padding(.leading, dividerLeadingPadding)
-        #elseif os(macOS)
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(height: 1)
-            .padding(.leading, dividerLeadingPadding)
-        #else
-        EmptyView()
-        #endif
     }
 }
 

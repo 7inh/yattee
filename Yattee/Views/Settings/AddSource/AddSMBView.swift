@@ -40,23 +40,12 @@ struct AddSMBView: View {
     /// reliably only from macOS 26 onward. On older macOS we render the
     /// "Add Source" action button inline in the form instead.
     private var usesToolbarActionButton: Bool {
-        #if os(macOS)
-        if #available(macOS 26, *) {
-            return true
-        } else {
-            return false
-        }
-        #else
         return false
-        #endif
     }
 
     // MARK: - Body
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
         Form {
             nameSection
             serverSection
@@ -69,112 +58,9 @@ struct AddSMBView: View {
 
             actionSection
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if !os(tvOS)
         .navigationTitle(String(localized: "sources.addSMB"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
-        #endif
-        .onAppear {
-            if let prefillServer {
-                server = prefillServer
-            }
-            if let prefillName, name.isEmpty {
-                name = prefillName
-            }
-        }
-        #endif
-    }
-
-    #if os(macOS)
-    private var macOSBody: some View {
-        Form {
-            Section {
-                LabeledContent(String(localized: "sources.field.name")) {
-                    TextField("", text: $name)
-                }
-            } footer: {
-                Text(String(localized: "sources.footer.displayName"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent(String(localized: "sources.placeholder.smbServer")) {
-                    TextField("", text: $server)
-                        .autocorrectionDisabled()
-                }
-            } footer: {
-                Text(String(localized: "sources.footer.smb"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent(String(localized: "sources.field.usernameOptional")) {
-                    TextField("", text: $username)
-                        .textContentType(.username)
-                        .autocorrectionDisabled()
-                }
-                LabeledContent(String(localized: "sources.field.passwordOptional")) {
-                    SecureField("", text: $password)
-                        .textContentType(.password)
-                }
-            } header: {
-                Text(String(localized: "sources.header.auth"))
-            } footer: {
-                Text(String(localized: "sources.footer.auth"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Picker(String(localized: "sources.field.smbProtocol"), selection: $protocolVersion) {
-                    ForEach(SMBProtocol.allCases, id: \.self) { proto in
-                        Text(proto.displayName).tag(proto)
-                    }
-                }
-            } header: {
-                Text(String(localized: "sources.header.advanced"))
-            } footer: {
-                Text(String(localized: "sources.footer.smbProtocol"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let result = testResult {
-                SourceTestResultSection(result: result)
-            }
-
-            if !usesToolbarActionButton {
-                actionSection
-            }
-        }
-        .formStyle(.grouped)
-        .navigationTitle(String(localized: "sources.addSMB"))
-        .toolbar {
-            if usesToolbarActionButton {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        addSource()
-                    } label: {
-                        if isTesting {
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text(testProgress ?? String(localized: "sources.testing"))
-                            }
-                        } else {
-                            Text(String(localized: "sources.addSource"))
-                        }
-                    }
-                    .disabled(!canAdd || isTesting)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-        }
         .onAppear {
             if let prefillServer {
                 server = prefillServer
@@ -184,17 +70,13 @@ struct AddSMBView: View {
             }
         }
     }
-    #endif
+
 
     // MARK: - Sections
 
     private var nameSection: some View {
         Section {
-            #if os(tvOS)
-            TVSettingsTextField(title: String(localized: "sources.field.name"), text: $name)
-            #else
             TextField(String(localized: "sources.field.name"), text: $name)
-            #endif
         } footer: {
             Text(String(localized: "sources.footer.displayName"))
         }
@@ -202,16 +84,10 @@ struct AddSMBView: View {
 
     private var serverSection: some View {
         Section {
-            #if os(tvOS)
-            TVSettingsTextField(title: String(localized: "sources.placeholder.smbServer"), text: $server)
-            #else
             TextField(String(localized: "sources.placeholder.smbServer"), text: $server, prompt: Text(String(localized: "sources.placeholder.smbServer")))
-                #if os(iOS)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
-                #endif
                 .autocorrectionDisabled()
-            #endif
         } footer: {
             Text(String(localized: "sources.footer.smb"))
         }
@@ -219,20 +95,13 @@ struct AddSMBView: View {
 
     private var authSection: some View {
         Section {
-            #if os(tvOS)
-            TVSettingsTextField(title: String(localized: "sources.field.usernameOptional"), text: $username)
-            TVSettingsTextField(title: String(localized: "sources.field.passwordOptional"), text: $password, isSecure: true)
-            #else
             TextField(String(localized: "sources.field.usernameOptional"), text: $username)
                 .textContentType(.username)
-                #if os(iOS)
                 .textInputAutocapitalization(.never)
-                #endif
                 .autocorrectionDisabled()
 
             SecureField(String(localized: "sources.field.passwordOptional"), text: $password)
                 .textContentType(.password)
-            #endif
         } header: {
             Text(String(localized: "sources.header.auth"))
         } footer: {
@@ -270,9 +139,6 @@ struct AddSMBView: View {
                 }
             }
             .disabled(!canAdd || isTesting)
-            #if os(tvOS)
-            .buttonStyle(TVSettingsButtonStyle())
-            #endif
         }
     }
 

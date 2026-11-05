@@ -8,7 +8,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-#if !os(tvOS)
 
 // MARK: - Export File Wrapper
 
@@ -85,7 +84,6 @@ struct SubscriptionsSettingsView: View {
             await refreshAccountSubscriptionCount()
         }
         .navigationTitle(String(localized: "settings.subscriptions.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingImportPicker) {
             SubscriptionFilePickerView { url in
@@ -95,7 +93,6 @@ struct SubscriptionsSettingsView: View {
         .sheet(item: $exportFile) { file in
             ShareSheet(items: [file.url])
         }
-        #endif
         .alert(
             String(localized: "settings.subscriptions.import.success.title"),
             isPresented: $showingImportResult
@@ -221,31 +218,9 @@ struct SubscriptionsSettingsView: View {
     // MARK: - Actions
 
     private func showImportPicker() {
-        #if os(iOS)
         showingImportPicker = true
-        #elseif os(macOS)
-        showMacOSImportPanel()
-        #endif
     }
 
-    #if os(macOS)
-    private func showMacOSImportPanel() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [
-            UTType.commaSeparatedText,
-            UTType(filenameExtension: "opml") ?? .xml,
-            UTType.xml
-        ]
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = String(localized: "settings.subscriptions.import.panel.message")
-
-        if panel.runModal() == .OK, let url = panel.url {
-            handleImportedFile(url)
-        }
-    }
-    #endif
 
     private func handleImportedFile(_ url: URL) {
         isImporting = true
@@ -340,7 +315,6 @@ struct SubscriptionsSettingsView: View {
 
         let filename = SubscriptionImportExport.generateExportFilename(format: selectedExportFormat)
 
-        #if os(iOS)
         // Write to temp file and share
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         do {
@@ -349,9 +323,6 @@ struct SubscriptionsSettingsView: View {
         } catch {
             LoggingService.shared.logSubscriptionsError("Failed to write export file", error: error)
         }
-        #elseif os(macOS)
-        showMacOSSavePanel(data: exportData, filename: filename)
-        #endif
     }
 
     /// Refreshes the account-scoped subscription count shown in the export footer.
@@ -385,27 +356,10 @@ struct SubscriptionsSettingsView: View {
         }
     }
 
-    #if os(macOS)
-    private func showMacOSSavePanel(data: Data, filename: String) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = filename
-        panel.allowedContentTypes = selectedExportFormat == .json ? [.json] : [UTType(filenameExtension: "opml") ?? .xml]
-
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                try data.write(to: url)
-                LoggingService.shared.logSubscriptions("Exported subscriptions to \(url.path)")
-            } catch {
-                LoggingService.shared.logSubscriptionsError("Failed to save export", error: error)
-            }
-        }
-    }
-    #endif
 }
 
 // MARK: - File Picker (iOS)
 
-#if os(iOS)
 struct SubscriptionFilePickerView: UIViewControllerRepresentable {
     let onSelect: (URL) -> Void
 
@@ -442,7 +396,6 @@ struct SubscriptionFilePickerView: UIViewControllerRepresentable {
         }
     }
 }
-#endif
 
 // MARK: - Preview
 
@@ -452,4 +405,3 @@ struct SubscriptionFilePickerView: UIViewControllerRepresentable {
     }
     .appEnvironment(.preview)
 }
-#endif

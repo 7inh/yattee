@@ -38,9 +38,7 @@ struct NotificationSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.notifications.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .task {
             await appEnvironment?.notificationManager.refreshAuthorizationStatus()
             authorizationChecked = true
@@ -135,26 +133,9 @@ private struct DefaultsSection: View {
 private struct ManageChannelsSection: View {
     var body: some View {
         SettingsFormSection {
-            #if os(tvOS)
-            NavigationLink {
-                TVSidebarDetailContainer(
-                    systemImage: "bell.badge",
-                    title: String(localized: "settings.notifications.manageChannels"),
-                    showsDismissButton: true
-                ) {
-                    ManageChannelNotificationsView()
-                }
-            } label: {
-                Label(
-                    String(localized: "settings.notifications.manageChannels"),
-                    systemImage: "bell.badge"
-                )
-            }
-            #else
             SettingsNavigationRow("settings.notifications.manageChannels", systemImage: "bell.badge") {
                 ManageChannelNotificationsView()
             }
-            #endif
         }
     }
 }
@@ -211,9 +192,7 @@ struct ManageChannelNotificationsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.notifications.manageChannels.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
             if !subscriptions.isEmpty {
                 ToolbarItem(placement: .primaryAction) {

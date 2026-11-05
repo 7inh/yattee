@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 /// Renders a horizontal row of control buttons based on layout configuration.
 struct ControlsSectionRenderer: View {
@@ -94,15 +93,6 @@ struct ControlsSectionRenderer: View {
             airplayButtonWithBackground
                 .disabled(isLocked)
                 .opacity(isLocked ? 0.5 : 1.0)
-
-        case .mpvDebug:
-            if actions.showDebugButton, actions.onToggleDebug != nil {
-                controlButton(systemImage: "info.circle") {
-                    actions.onToggleDebug?()
-                }
-                .disabled(isLocked)
-                .opacity(isLocked ? 0.5 : 1.0)
-            }
 
         case .brightness:
             brightnessControls(config: config)
@@ -1056,5 +1046,3 @@ private struct OptionalCapsuleGlassBackgroundModifier: ViewModifier {
         }
     }
 }
-
-#endif

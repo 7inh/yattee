@@ -820,7 +820,7 @@ final class PlayerControlsSettingsViewModel {
 
     /// Current volume mode from active preset, or default.
     var volumeMode: VolumeMode {
-        activePreset?.layout.globalSettings.volumeMode ?? .mpv
+        activePreset?.layout.globalSettings.volumeMode ?? .inApp
     }
 
     /// Synchronously updates the system controls mode with immediate UI feedback.

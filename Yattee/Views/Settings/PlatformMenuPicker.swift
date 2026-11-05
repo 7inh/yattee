@@ -15,17 +15,7 @@ struct PlatformMenuPicker<Selection: Hashable, Label: View, Content: View>: View
     @ViewBuilder var label: () -> Label
 
     var body: some View {
-        #if os(tvOS)
-        LabeledContent {
-            Picker(selection: $selection, content: content) { EmptyView() }
-                .pickerStyle(.menu)
-                .labelsHidden()
-        } label: {
-            label()
-        }
-        #else
         Picker(selection: $selection, content: content, label: label)
-        #endif
     }
 }
 

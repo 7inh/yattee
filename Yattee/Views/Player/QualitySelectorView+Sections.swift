@@ -66,16 +66,7 @@ extension QualitySelectorView {
                     generalSectionContent
                 }
             }
-            #if os(tvOS)
-            // Explicit symmetric padding so rows are evenly inset from the
-            // half-screen panel's edges; matches the queue panel's 80pt
-            // breathing room so the focus halo around row buttons doesn't
-            // crowd the panel boundaries.
-            .padding(.horizontal, 80)
-            .padding(.vertical, 24)
-            #else
             .padding()
-            #endif
         }
         .onAppear {
             // Fall back to the first visible tab when the requested one is
@@ -90,37 +81,6 @@ extension QualitySelectorView {
 
     @ViewBuilder
     private var mediaSelectionRows: some View {
-        #if os(tvOS)
-        // tvOS: each row is its own rounded card with vertical spacing so the
-        // system focus hover effect has clean bounds (no clipped dividers).
-        VStack(spacing: 8) {
-            if availableTabs.contains(.video) {
-                mediaSelectionRow(
-                    destination: .video,
-                    label: String(localized: "player.quality.video"),
-                    systemImage: "film",
-                    value: currentVideoDisplayValue
-                )
-                .focused($inlinePanelInitialFocus)
-            }
-            if availableTabs.contains(.audio) {
-                mediaSelectionRow(
-                    destination: .audio,
-                    label: String(localized: "stream.audio"),
-                    systemImage: "speaker.wave.2",
-                    value: currentAudioDisplayValue
-                )
-            }
-            if availableTabs.contains(.subtitles) {
-                mediaSelectionRow(
-                    destination: .subtitles,
-                    label: String(localized: "stream.subtitles"),
-                    systemImage: "captions.bubble",
-                    value: currentSubtitlesDisplayValue
-                )
-            }
-        }
-        #else
         VStack(spacing: 0) {
             if availableTabs.contains(.video) {
                 mediaSelectionRow(
@@ -154,7 +114,6 @@ extension QualitySelectorView {
             }
         }
         .cardBackground()
-        #endif
     }
 
     @ViewBuilder
@@ -179,11 +138,7 @@ extension QualitySelectorView {
             .padding(.horizontal, 20)
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 
     // MARK: - Display Value Computed Properties
@@ -258,33 +213,6 @@ extension QualitySelectorView {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        #if os(tvOS)
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                Text(title)
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 80)
-            .padding(.top, 32)
-            .padding(.bottom, 16)
-
-            ScrollView {
-                VStack(spacing: 16) {
-                    content()
-                }
-                .padding(.horizontal, 80)
-                .padding(.vertical, 24)
-            }
-        }
-        .background(
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-        )
-        .ignoresSafeArea(.container, edges: .horizontal)
-        #else
         ScrollView {
             VStack(spacing: 16) {
                 content()
@@ -293,10 +221,7 @@ extension QualitySelectorView {
         }
         .background(ListBackgroundStyle.grouped.color)
         .navigationTitle(title)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
-        #endif
     }
 
     @ViewBuilder
@@ -343,14 +268,6 @@ extension QualitySelectorView {
 
     @ViewBuilder
     var generalSectionContent: some View {
-        #if os(tvOS)
-        // tvOS rows are styled individually to match the Settings rows.
-        VStack(spacing: 8) {
-            playbackSpeedRow
-
-            audioModeRow
-        }
-        #else
         VStack(spacing: 0) {
             playbackSpeedRow
 
@@ -363,7 +280,6 @@ extension QualitySelectorView {
             lockControlsRow
         }
         .cardBackground()
-        #endif
     }
 
     @ViewBuilder
@@ -423,42 +339,12 @@ extension QualitySelectorView {
                 .disabled(nextRate() == nil)
             }
         }
-        #if os(tvOS)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-        )
-        #else
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
-        #endif
     }
 
     @ViewBuilder
     private var audioModeRow: some View {
-        #if os(tvOS)
-        Button {
-            onAudioModeToggled?(!isAudioMode)
-        } label: {
-            HStack {
-                Label(String(localized: "player.quality.audioMode"), systemImage: "music.note")
-                    .font(.headline)
-
-                Spacer()
-
-                Text(isAudioMode ? String(localized: "common.on") : String(localized: "common.off"))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         HStack {
             Label(String(localized: "player.quality.audioMode"), systemImage: "music.note")
                 .font(.headline)
@@ -473,10 +359,8 @@ extension QualitySelectorView {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
-        #endif
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private var lockControlsRow: some View {
         HStack {
@@ -494,7 +378,6 @@ extension QualitySelectorView {
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
     }
-    #endif
 
     // MARK: - Download Info Section
 
@@ -599,19 +482,6 @@ extension QualitySelectorView {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            #if os(tvOS)
-            VStack(spacing: 8) {
-                ForEach(adaptiveStreams, id: \.url) { stream in
-                    AdaptiveStreamRowView(
-                        stream: stream,
-                        isSelected: stream.url == currentStream?.url,
-                        onTap: {
-                            handleAdaptiveStreamTap(stream)
-                        }
-                    )
-                }
-            }
-            #else
             VStack(spacing: 0) {
                 ForEach(Array(adaptiveStreams.enumerated()), id: \.element.url) { index, stream in
                     if index > 0 {
@@ -629,7 +499,6 @@ extension QualitySelectorView {
                 }
             }
             .cardBackground()
-            #endif
         }
     }
 
@@ -654,13 +523,6 @@ extension QualitySelectorView {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    #if os(tvOS)
-                    VStack(spacing: 8) {
-                        ForEach(recommendedVideoStreams, id: \.url) { stream in
-                            videoStreamRow(stream)
-                        }
-                    }
-                    #else
                     VStack(spacing: 0) {
                         ForEach(Array(recommendedVideoStreams.enumerated()), id: \.element.url) { index, stream in
                             if index > 0 {
@@ -672,7 +534,6 @@ extension QualitySelectorView {
                         }
                     }
                     .cardBackground()
-                    #endif
                 }
             }
 
@@ -683,13 +544,6 @@ extension QualitySelectorView {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    #if os(tvOS)
-                    VStack(spacing: 8) {
-                        ForEach(otherVideoStreams, id: \.url) { stream in
-                            videoStreamRow(stream)
-                        }
-                    }
-                    #else
                     VStack(spacing: 0) {
                         ForEach(Array(otherVideoStreams.enumerated()), id: \.element.url) { index, stream in
                             if index > 0 {
@@ -701,7 +555,6 @@ extension QualitySelectorView {
                         }
                     }
                     .cardBackground()
-                    #endif
                 }
             }
         }
@@ -709,10 +562,10 @@ extension QualitySelectorView {
 
     /// A media-source Stream (local folder, WebDAV, SMB) carries no
     /// resolution/codec/fps metadata (`MediaFile.toStream` cannot know them
-    /// before demux), which would label the row "Unknown". Once mpv reports
+    /// before demux), which would label the row "Unknown". Once player reports
     /// the loaded file's video track, fill those fields for display. Gated to
     /// local files and the currently playing stream — the track info describes
-    /// whatever mpv has loaded. The enriched copy is display-only — selection
+    /// whatever player has loaded. The enriched copy is display-only — selection
     /// and tap handling keep using the original stream (compared by URL).
     func displayStream(for stream: Stream) -> Stream {
         guard stream.resolution == nil,
@@ -746,7 +599,7 @@ extension QualitySelectorView {
             : stream.url == selectedVideoStream?.url
         let isPreferredQuality: Bool = stream.resolution == preferredQuality.maxResolution
         // Metadata-less media-source streams get resolution/codec/fps filled
-        // from the mpv-reported video track for display; the warning must use
+        // from the player-reported video track for display; the warning must use
         // the enriched codec too or a nil codec reads as software-decoded
         let display: Stream = displayStream(for: stream)
 
@@ -814,13 +667,6 @@ extension QualitySelectorView {
             }
             .cardBackground()
         } else {
-            #if os(tvOS)
-            VStack(spacing: 8) {
-                ForEach(audioStreams, id: \.url) { stream in
-                    audioStreamRow(stream)
-                }
-            }
-            #else
             VStack(spacing: 0) {
                 ForEach(Array(audioStreams.enumerated()), id: \.element.url) { index, stream in
                     if index > 0 {
@@ -832,20 +678,12 @@ extension QualitySelectorView {
                 }
             }
             .cardBackground()
-            #endif
         }
     }
 
-    /// Embedded (in-container) audio tracks, switched live via mpv `aid`.
+    /// Embedded (in-container) audio tracks, switched live via player `aid`.
     @ViewBuilder
     private var embeddedAudioTracksContent: some View {
-        #if os(tvOS)
-        VStack(spacing: 8) {
-            ForEach(embeddedAudioTracks) { track in
-                embeddedAudioTrackRow(track)
-            }
-        }
-        #else
         VStack(spacing: 0) {
             ForEach(Array(embeddedAudioTracks.enumerated()), id: \.element.id) { index, track in
                 if index > 0 {
@@ -857,11 +695,10 @@ extension QualitySelectorView {
             }
         }
         .cardBackground()
-        #endif
     }
 
     @ViewBuilder
-    private func embeddedAudioTrackRow(_ track: MPVTrack) -> some View {
+    private func embeddedAudioTrackRow(_ track: MediaTrack) -> some View {
         EmbeddedTrackRowView(
             track: track,
             isSelected: track.trackID == currentEmbeddedAudioTrackID,
@@ -908,33 +745,6 @@ extension QualitySelectorView {
 
     @ViewBuilder
     var subtitlesSectionContent: some View {
-        #if os(tvOS)
-        VStack(spacing: 8) {
-            CaptionRowView(
-                caption: nil,
-                isSelected: currentCaption == nil && currentEmbeddedSubtitleTrackID == nil,
-                isPreferred: false,
-                onTap: {
-                    handleCaptionTap(nil)
-                }
-            )
-
-            ForEach(embeddedSubtitleTracks) { track in
-                embeddedSubtitleTrackRow(track)
-            }
-
-            ForEach(sortedCaptions) { caption in
-                CaptionRowView(
-                    caption: caption,
-                    isSelected: caption.id == currentCaption?.id,
-                    isPreferred: isCaptionPreferred(caption),
-                    onTap: {
-                        handleCaptionTap(caption)
-                    }
-                )
-            }
-        }
-        #else
         VStack(spacing: 0) {
             CaptionRowView(
                 caption: nil,
@@ -979,21 +789,13 @@ extension QualitySelectorView {
             }
         }
         .cardBackground()
-        #endif
     }
 
-    #if !os(tvOS)
     /// Row that opens a file picker to load an external subtitle file into
     /// the current media-source playback.
     private var loadSubtitleFileRow: some View {
         Button {
-            #if os(iOS)
             showingSubtitleFilePicker = true
-            #elseif os(macOS)
-            SubtitleFilePanel.present { url in
-                handlePickedSubtitleFile(url)
-            }
-            #endif
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder.badge.plus")
@@ -1012,10 +814,9 @@ extension QualitySelectorView {
         appEnvironment?.playerService.loadExternalSubtitleFile(from: url)
         performDismiss()
     }
-    #endif
 
     @ViewBuilder
-    private func embeddedSubtitleTrackRow(_ track: MPVTrack) -> some View {
+    private func embeddedSubtitleTrackRow(_ track: MediaTrack) -> some View {
         EmbeddedTrackRowView(
             track: track,
             isSelected: track.trackID == currentEmbeddedSubtitleTrackID,
@@ -1051,40 +852,13 @@ extension QualitySelectorView {
     }
 }
 
-#if os(tvOS)
-/// Row button style for Settings-style navigation/selection rows on tvOS.
-/// Avoids the default focus lift/scale so rows stay aligned; focus state is
-/// communicated via a background tint and a thin stroke.
-struct TVSettingsRowButtonStyle: ButtonStyle {
-    @Environment(\.isFocused) private var isFocused
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(.white)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isFocused ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isFocused ? Color.white.opacity(0.4) : .clear, lineWidth: 2)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-    }
-}
-#endif
 
 private extension View {
     @ViewBuilder
     func playbackSpeedMenuStyle() -> some View {
-        #if os(tvOS)
-        self
-        #else
         // On macOS Sequoia the borderlessButton menu stretches to fill the
         // available width unless it is pinned to its intrinsic size.
         self.menuStyle(.borderlessButton)
             .fixedSize()
-        #endif
     }
 }

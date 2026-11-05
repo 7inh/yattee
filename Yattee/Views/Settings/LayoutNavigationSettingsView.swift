@@ -14,40 +14,25 @@ struct LayoutNavigationSettingsView: View {
         SettingsFormContainer {
             if let settings = appEnvironment?.settingsManager {
                 CustomizationSection(settings: settings)
-                #if os(iOS)
                 HapticsSection(settings: settings)
-                #endif
-                #if os(tvOS)
-                TVVideoActionsSection(settings: settings)
-                #else
                 VideoActionsSection(settings: settings)
                 VideoInfoActionsSection(settings: settings)
                 LinkActionSection(settings: settings)
                 SharingSection(settings: settings)
                 ClipboardSection(settings: settings)
-                #endif
-                #if os(iOS)
                 if #available(iOS 26, *) {
                     MiniPlayerMinimizeBehaviorSection(settings: settings)
                 }
-                #endif
-                #if !os(tvOS)
                 HandoffSection(settings: settings)
-                #endif
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.layoutNavigation.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
 // MARK: - Haptics Section
 
-#if os(iOS)
 private struct HapticsSection: View {
     @Bindable var settings: SettingsManager
 
@@ -73,32 +58,24 @@ private struct HapticsSection: View {
         }
     }
 }
-#endif
 
 // MARK: - Customization Section
 
 private struct CustomizationSection: View {
     @Bindable var settings: SettingsManager
 
-    #if os(iOS)
     @Environment(\.appEnvironment) private var appEnvironment
     @State private var hasHinge = HingeLayoutObserver.forceTabletop
     /// Style picked but not yet confirmed: switching rebuilds the navigation
     /// Settings lives in, so the user agrees to leaving it first.
     @State private var pendingNavigationStyle: NavigationStyle?
-    #endif
 
     /// iPad and foldable iPhones (inner screen): where the sidebar layout can appear.
     private var canUseSidebar: Bool {
-        #if os(iOS)
         UIDevice.current.userInterfaceIdiom == .pad || hasHinge
-        #else
-        true
-        #endif
     }
 
     var body: some View {
-        #if os(iOS)
         if canUseSidebar {
             SettingsFormSection(footer: "settings.navigationStyle.footer") {
                 Picker(
@@ -132,25 +109,12 @@ private struct CustomizationSection: View {
                 Text(String(localized: "settings.navigationStyle.confirm.message"))
             }
         }
-        #endif
 
         SettingsFormSection {
-            #if os(tvOS)
-            NavigationLink {
-                TVSidebarDetailContainer(
-                    systemImage: SidebarItem.home.systemImage,
-                    title: String(localized: "settings.appearance.home.customize")
-                ) { HomeSettingsView() }
-            } label: {
-                Label(String(localized: "settings.appearance.home.customize"), systemImage: SidebarItem.home.systemImage)
-            }
-            #else
             SettingsNavigationRow("settings.appearance.home.customize", systemImage: SidebarItem.home.systemImage) {
                 HomeSettingsView()
             }
-            #endif
 
-            #if os(iOS)
             SettingsNavigationRow("settings.tabBar.title", systemImage: "square.grid.3x3") {
                 TabBarSettingsView()
             }
@@ -160,29 +124,11 @@ private struct CustomizationSection: View {
                     SidebarSettingsView()
                 }
             }
-            #endif
 
-            #if os(macOS)
-            SettingsNavigationRow("settings.sidebar.title", systemImage: "sidebar.leading") {
-                SidebarSettingsView()
-            }
-            #elseif os(tvOS)
-            NavigationLink {
-                TVSidebarDetailContainer(
-                    systemImage: "sidebar.leading",
-                    title: String(localized: "settings.sidebar.title")
-                ) { SidebarSettingsView() }
-            } label: {
-                Label(String(localized: "settings.sidebar.title"), systemImage: "sidebar.leading")
-            }
-            #endif
         }
-        #if os(iOS)
         .observeHinge(hasHinge: $hasHinge)
-        #endif
     }
 
-    #if os(iOS)
     /// Lands on Home before the layout swap, so neither layout remaps the
     /// Settings selection (the tab bar would reopen it as a sheet).
     private func applyNavigationStyle(_ style: NavigationStyle) {
@@ -192,7 +138,6 @@ private struct CustomizationSection: View {
         }
         settings.navigationStyle = style
     }
-    #endif
 }
 
 // MARK: - Link Action Section
@@ -223,7 +168,6 @@ private struct LinkActionSection: View {
 
 // MARK: - Sharing Section
 
-#if !os(tvOS)
 private struct SharingSection: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Bindable var settings: SettingsManager
@@ -245,7 +189,6 @@ private struct SharingSection: View {
         }
     }
 }
-#endif
 
 // MARK: - Clipboard Section
 
@@ -264,7 +207,6 @@ private struct ClipboardSection: View {
 
 // MARK: - Video Actions Section
 
-#if !os(tvOS)
 private struct VideoActionsSection: View {
     @Bindable var settings: SettingsManager
 
@@ -288,31 +230,23 @@ private struct VideoActionsSection: View {
                 }
             }
 
-            #if os(iOS)
             NavigationLink {
                 SwipeActionsSettingsView()
             } label: {
                 Label(String(localized: "settings.appearance.swipeActions"), systemImage: "hand.draw")
             }
-            #endif
         }
     }
 }
-#endif
 
 // MARK: - Video Info Actions Section
 
-#if !os(tvOS)
 private struct VideoInfoActionsSection: View {
     @Bindable var settings: SettingsManager
 
     /// macOS shows every action in the toolbar; iOS pins one and tucks the rest into the ⋯ menu.
     private var actionsFooter: LocalizedStringKey {
-        #if os(macOS)
-        "settings.videoInfo.actions.footer.macOS"
-        #else
         "settings.videoInfo.actions.footer"
-        #endif
     }
 
     var body: some View {
@@ -326,7 +260,6 @@ private struct VideoInfoActionsSection: View {
                 }
             }
 
-            #if os(iOS)
             if settings.videoInfoActionsLayout == .toolbar {
                 Picker(
                     String(localized: "settings.videoInfo.primaryAction"),
@@ -337,39 +270,15 @@ private struct VideoInfoActionsSection: View {
                     }
                 }
             }
-            #endif
         }
     }
 }
-#endif
 
 // MARK: - TV Video Actions Section
 
-#if os(tvOS)
-private struct TVVideoActionsSection: View {
-    @Bindable var settings: SettingsManager
-
-    var body: some View {
-        SettingsFormSection("settings.videoActions.header") {
-            LabeledContent(String(localized: "settings.behavior.tvOSVideoTapAction")) {
-                Picker(
-                    String(localized: "settings.behavior.tvOSVideoTapAction"),
-                    selection: $settings.tvOSVideoTapAction
-                ) {
-                    Text(VideoTapAction.openInfo.displayName).tag(VideoTapAction.openInfo)
-                    Text(VideoTapAction.playVideo.displayName).tag(VideoTapAction.playVideo)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
-        }
-    }
-}
-#endif
 
 // MARK: - Mini Player Minimize Behavior Section (iOS 26+)
 
-#if os(iOS)
 @available(iOS 26, *)
 private struct MiniPlayerMinimizeBehaviorSection: View {
     @Bindable var settings: SettingsManager
@@ -387,7 +296,6 @@ private struct MiniPlayerMinimizeBehaviorSection: View {
         }
     }
 }
-#endif
 
 // MARK: - Handoff Section
 

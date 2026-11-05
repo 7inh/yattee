@@ -34,14 +34,9 @@ final class PlayerService {
         currentBackend?.backendType ?? preferredBackendType
     }
 
-    /// MPV version information (available when MPV backend is initialized).
-    var mpvVersionInfo: MPVVersionInfo? {
-        (currentBackend as? MPVBackend)?.versionInfo
-    }
-
     /// User's preferred backend type (reads directly from settings for live updates).
     var preferredBackendType: PlayerBackendType {
-        settingsManager?.preferredBackend ?? .mpv
+        settingsManager?.preferredBackend ?? .avFoundation
     }
 
     /// Observable player state.
@@ -62,43 +57,35 @@ final class PlayerService {
     /// Currently loaded caption.
     private(set) var currentCaption: Caption?
 
-    /// Tracks reported by mpv for the currently loaded file (embedded and external).
-    private(set) var embeddedTracks: [MPVTrack] = []
+    /// Empty compatibility metadata for the existing controls until phase 2.
+    private(set) var embeddedTracks: [MediaTrack] = []
 
     /// Embedded (in-container) audio tracks of the current file.
-    var embeddedAudioTracks: [MPVTrack] {
+    var embeddedAudioTracks: [MediaTrack] {
         embeddedTracks.filter { $0.type == .audio && !$0.isExternal }
     }
 
     /// Embedded (in-container) subtitle tracks of the current file.
-    var embeddedSubtitleTracks: [MPVTrack] {
+    var embeddedSubtitleTracks: [MediaTrack] {
         embeddedTracks.filter { $0.type == .sub && !$0.isExternal }
     }
 
-    /// The embedded audio track mpv currently plays, if any.
+    /// The embedded audio track player currently plays, if any.
     var selectedEmbeddedAudioTrackID: Int? {
         embeddedAudioTracks.first(where: \.isSelected)?.trackID
     }
 
-    /// The embedded subtitle track mpv currently shows, if any.
+    /// The embedded subtitle track player currently shows, if any.
     var selectedEmbeddedSubtitleTrackID: Int? {
         embeddedSubtitleTracks.first(where: \.isSelected)?.trackID
     }
 
-    /// The video track mpv currently plays. Used to label local-file streams,
+    /// The video track player currently plays. Used to label local-file streams,
     /// whose Stream carries no resolution/codec/fps metadata before demux.
-    var primaryEmbeddedVideoTrack: MPVTrack? {
+    var primaryEmbeddedVideoTrack: MediaTrack? {
         let videoTracks = embeddedTracks.filter { $0.type == .video && !$0.isExternal && !$0.isAlbumArt }
         return videoTracks.first(where: \.isSelected) ?? videoTracks.first
     }
-
-    /// Embedded-track picks that should survive same-video reloads
-    /// (quality switch, audio-mode toggle, buffer-stall retry).
-    private var desiredEmbeddedAudioTrackID: Int?
-    private var desiredEmbeddedSubtitleTrackID: Int?
-
-    /// Whether preferred-language auto-selection already ran for this load.
-    private var didAutoSelectEmbeddedTracks = false
 
     /// The current download being played, if any.
     private(set) var currentDownload: Download?
@@ -113,7 +100,6 @@ final class PlayerService {
     private let returnYouTubeDislikeAPI: ReturnYouTubeDislikeAPI
     private let dataManager: DataManager
     private let backendFactory: BackendFactory
-    private let backendSwitcher: BackendSwitcher
     private weak var settingsManager: SettingsManager?
     private weak var downloadManager: DownloadManager?
     private weak var navigationCoordinator: NavigationCoordinator?
@@ -150,10 +136,8 @@ final class PlayerService {
     /// Used to prevent saving progress when switching to next video after natural completion.
     private var videoEndedNaturally = false
 
-    #if os(iOS)
     /// Prevents pending loads or backend recovery from undoing a sleep timer pause.
     private var isPausedBySleepTimer = false
-    #endif
 
     /// Bumped every time the playback identity changes hands: a load claiming
     /// the player, or a teardown clearing it. Work that suspends mid-playback
@@ -177,8 +161,8 @@ final class PlayerService {
     /// Used to auto-resume when interruption ends.
     private var wasInterrupted = false
 
-    /// Tracks if audio session interruption observer has been registered.
-    private var hasRegisteredInterruptionObserver = false
+    /// Token for the audio session interruption observer.
+    private var interruptionObserver: NSObjectProtocol?
 
     // MARK: - Initialization
 
@@ -196,29 +180,9 @@ final class PlayerService {
 
         let factory = backendFactory ?? BackendFactory()
         self.backendFactory = factory
-        // Note: settingsManager is set later via setSettingsManager, backendSwitcher will use it once available
-        self.backendSwitcher = BackendSwitcher(backendFactory: factory, settingsManager: nil)
 
         // Link now playing service back to player
         nowPlayingService.playerService = self
-
-        // Pre-warm backends asynchronously (non-blocking)
-        // This starts OpenGL initialization in background immediately at app launch
-        Task {
-            await factory.prewarmAllBackends()
-        }
-
-        // Listen for memory warnings to drain backend pool
-        #if os(iOS) || os(tvOS)
-        NotificationCenter.default.addObserver(
-            forName: .memoryWarning,
-            object: nil,
-            queue: .main
-        ) { [weak factory] _ in
-            Task { @MainActor [weak factory] in
-                factory?.drainPool()
-            }
-        }
 
         // Stop re-rendering the hidden player UI on every time update while
         // the app is in the background (see PlayerState.publishesTimeUpdates).
@@ -238,12 +202,9 @@ final class PlayerService {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.state.publishesTimeUpdates = true
-                #if os(iOS)
                 SleepTimer.shared.checkForExpiration()
-                #endif
             }
         }
-        #endif
     }
 
     deinit {
@@ -263,9 +224,7 @@ final class PlayerService {
     ///   - forceStartTime: When true, startTime is an explicit user request (timed link,
     ///     chapter tap) and is honored even past the completion threshold
     func play(video: Video, stream: Stream? = nil, audioStream: Stream? = nil, startTime: TimeInterval? = nil, forceStartTime: Bool = false) async {
-        #if os(iOS)
         isPausedBySleepTimer = false
-        #endif
 
         // Downloaded/local files bypass stream selection (they arrive here as
         // ready-made file:// streams), so audio mode is applied at this choke
@@ -298,6 +257,7 @@ final class PlayerService {
 
         // This load is the playback from here on
         playbackGeneration += 1
+        let loadGeneration = playbackGeneration
 
         // Reset flag for the new video
         videoEndedNaturally = false
@@ -310,14 +270,8 @@ final class PlayerService {
             availableStreams = []
         }
 
-        // Embedded-track state: the mpv-reported list always refreshes on load,
-        // but sticky user picks only reset when the video actually changes.
+        // The audio backend does not expose embedded video/subtitle tracks.
         embeddedTracks = []
-        didAutoSelectEmbeddedTracks = false
-        if isNewVideo {
-            desiredEmbeddedAudioTrackID = nil
-            desiredEmbeddedSubtitleTrackID = nil
-        }
 
         // Clear sponsor block state from previous video
         state.sponsorSegments = []
@@ -339,7 +293,7 @@ final class PlayerService {
         // id, so only clear our own). Prevents the time-update gate from leaking if
         // the load flow exits early (issue #956).
         defer {
-            if loadingVideoID == video.id { loadingVideoID = nil }
+            if playbackGeneration == loadGeneration { loadingVideoID = nil }
         }
 
         state.setPlaybackState(.loading)
@@ -357,8 +311,8 @@ final class PlayerService {
         }
 
         do {
-            let selectedStream: Stream
-            let selectedAudioStream: Stream?
+            var selectedStream: Stream
+            var selectedAudioStream: Stream?
             let backendType: PlayerBackendType
 
             // If a stream is provided (e.g., local/downloaded file or quality switch), use it directly
@@ -368,7 +322,7 @@ final class PlayerService {
                 backendType = preferredBackendType
                 // Only set availableStreams if empty (preserve existing streams during quality switch)
                 if availableStreams.isEmpty {
-                    self.availableStreams = [providedStream]
+                    self.availableStreams = [audioStream, providedStream].compactMap { $0 }.filter(\.isAVPlayerAudioPlayable)
                 }
                 state.setCurrentVideo(video, stream: providedStream, audioStream: audioStream)
                 // Mark details as loaded since we're using the video as-is
@@ -395,8 +349,9 @@ final class PlayerService {
 
                 // Check for cancellation after network fetch
                 try Task.checkCancellation()
+            guard playbackGeneration == loadGeneration else { throw CancellationError() }
 
-                self.availableStreams = streams
+                self.availableStreams = streams.filter(\.isAVPlayerAudioPlayable)
                 self.availableCaptions = captions
 
                 // Update storyboards and clear cached sprite sheets
@@ -424,20 +379,16 @@ final class PlayerService {
                 // Notify observers that full video details are now available
                 NotificationCenter.default.post(name: .videoDetailsDidLoad, object: nil)
 
-                // Auto-load preferred subtitle if set and will use MPV backend
-                if backendType == .mpv,
-                   let preferredLanguage = settingsManager?.preferredSubtitlesLanguage,
-                   !preferredLanguage.isEmpty {
-                    // Find matching caption (will be loaded after backend is ready)
-                    if let preferredCaption = captions.first(where: { caption in
-                        caption.baseLanguageCode == preferredLanguage ||
-                        caption.languageCode.hasPrefix(preferredLanguage)
-                    }) {
-                        // Store for later loading after backend is created
-                        currentCaption = preferredCaption
-                    }
-                }
             }
+
+            // Enforce audio-only playback for supplied, downloaded and queued
+            // streams as well as normal selection. Never load a video fallback.
+            guard let audio = bestAudioStream(from: [selectedAudioStream, selectedStream].compactMap { $0 }) ?? bestAudioStream(from: availableStreams) else {
+                throw APIError.noStreams
+            }
+            selectedStream = audio
+            selectedAudioStream = nil
+            state.setCurrentVideo(state.currentVideo ?? video, stream: audio, audioStream: nil)
 
             // Audio-only streams never report a video size, so the previous
             // video's aspect ratio would stick to the player area forever.
@@ -448,6 +399,7 @@ final class PlayerService {
 
             // Check for cancellation before loading stream
             try Task.checkCancellation()
+            guard playbackGeneration == loadGeneration else { throw CancellationError() }
 
             // Calculate seek time BEFORE loading to know if we need to prepare for initial seek
             // This prevents the thumbnail from hiding before the resume position is reached
@@ -485,13 +437,6 @@ final class PlayerService {
             // Create or switch backend if needed
             let backend = try await ensureBackend(type: backendType)
 
-            // If we're going to seek after load, tell the backend to defer ready callbacks
-            // until the seek completes. This prevents showing a flash of the video at position 0
-            // before jumping to the resume position.
-            if seekTime > 0 {
-                backend.prepareForInitialSeek()
-            }
-
             // Apply volume based on volume mode setting from active preset
             let volumeMode: VolumeMode
             if let layoutService = playerControlsLayoutService {
@@ -501,23 +446,28 @@ final class PlayerService {
                 volumeMode = GlobalLayoutSettings.cached.volumeMode
             }
 
-            if volumeMode == .mpv {
+            try Task.checkCancellation()
+            guard playbackGeneration == loadGeneration else { throw CancellationError() }
+            if seekTime > 0 { backend.prepareForInitialSeek() }
+
+            if volumeMode == .inApp {
                 // In-app mode: use persisted volume
                 backend.volume = settingsManager?.playerVolume ?? 1.0
                 state.volume = backend.volume
             } else {
-                // System mode: set MPV to max, let device control volume
+                // System mode: set player to max, let device control volume
                 backend.volume = 1.0
                 state.volume = 1.0
             }
 
-            // Load stream
-            // Pass EDL setting (MPV-specific: combines video+audio into single virtual file for unified caching)
-            let useEDL = settingsManager?.mpvUseEDLStreams ?? true
-            try await backend.load(stream: selectedStream, audioStream: selectedAudioStream, autoplay: false, useEDL: useEDL)
+            backend.rate = Float(state.rate.rawValue)
+
+            // Load the standalone audio rendition.
+            try await backend.load(stream: selectedStream, audioStream: selectedAudioStream, autoplay: false)
 
             // Check for cancellation after stream load completes
             try Task.checkCancellation()
+            guard playbackGeneration == loadGeneration else { throw CancellationError() }
 
             if seekTime > 0 {
                 await backend.seek(to: seekTime, showLoading: false)
@@ -535,16 +485,8 @@ final class PlayerService {
             let videoForChapters = state.currentVideo ?? video
             resolveChapters(for: videoForChapters)
 
-            // Ensure audio session is active before setting Now Playing (required for tvOS MPV)
-            #if os(iOS) || os(tvOS)
-            if let mpvBackend = backend as? MPVBackend {
-                LoggingService.shared.logPlayer("Ensuring audio session active before Now Playing setup")
-                mpvBackend.ensureAudioSessionActive()
-            }
-            #endif
-
             LoggingService.shared.logPlayer("Setting up Now Playing info before backend.play()")
-            // Update Now Playing info BEFORE starting playback (tvOS requires this order)
+            // Establish lock-screen metadata before playback starts.
             // The system listens to the play event to trigger Now Playing display,
             // so metadata must be established before playback begins.
             let videoForNowPlaying = state.currentVideo ?? video
@@ -577,34 +519,18 @@ final class PlayerService {
             loadingVideoID = nil  // Clear loading flag - time updates are now valid
             updateSleepPrevention()
 
-            // For MPV backend, wait for sufficient buffer before starting playback
-            // This prevents the brief pause/stutter that occurs when MPV starts playing
-            // before enough content is buffered
-            // Skip buffer wait for local files - they don't need network buffering
-            let isLocalFile = selectedStream.url.isFileURL
-            if !isLocalFile, let mpvBackend = backend as? MPVBackend {
-                let bufferTime = settingsManager?.mpvBufferSeconds ?? SettingsManager.defaultMpvBufferSeconds
-                _ = await mpvBackend.waitForBuffer(minimumBuffer: bufferTime)
-            }
-
-            // Buffer is ready - thumbnail can now hide
+            // AVPlayerItem is ready; AVPlayer manages network buffering.
             state.isBufferReady = true
             state.bufferProgress = nil  // Clear buffer progress since buffering is complete
 
-            // Give SwiftUI time to process the isBufferReady state change and complete
-            // the thumbnail fade-out animation (200ms) before audio starts playing.
-            // Without this, audio may start while thumbnail is still visible.
-            try? await Task.sleep(nanoseconds: 250_000_000)  // 250ms (animation is 200ms)
+            try Task.checkCancellation()
+            guard playbackGeneration == loadGeneration else { throw CancellationError() }
 
-            #if os(iOS)
             if isPausedBySleepTimer {
                 pause()
             } else {
                 backend.play()
             }
-            #else
-            backend.play()
-            #endif
 
             // Update Handoff activity for cross-device continuation
             handoffManager?.updateActivity(for: .video(.id(video.id)))
@@ -614,12 +540,6 @@ final class PlayerService {
             // Note: Captions are now fetched together with video details and streams
             if stream == nil, case .global = video.id.source {
                 await fetchReturnYouTubeDislikeCounts(for: video.id.videoID)
-            }
-
-            // Load preferred subtitle if one was selected earlier (for MPV backend)
-            if let caption = currentCaption, let mpvBackend = backend as? MPVBackend {
-                mpvBackend.loadCaption(caption)
-                LoggingService.shared.logPlayer("Auto-loaded preferred subtitle: \(caption.displayName)")
             }
 
             // Start progress saving
@@ -639,7 +559,7 @@ final class PlayerService {
             // still loading/retrying, suppress the error — it no longer applies to what
             // is on screen. loadingVideoID is reassigned by every new play() call and
             // cleared on success, so a mismatch means we are no longer the active load.
-            guard loadingVideoID == video.id else {
+            guard playbackGeneration == loadGeneration else {
                 LoggingService.shared.logPlayer("Ignoring stale playback error for \(video.id.id) — user switched videos")
                 sleepPreventionService.allowSleep()
                 return
@@ -664,15 +584,11 @@ final class PlayerService {
     /// which suspends the app, stops playback, and powers the TV off over CEC.
     /// Audio-only playback must keep the idle timer disabled as well.
     private func updateSleepPrevention() {
-        #if os(tvOS)
-        sleepPreventionService.preventSleep()
-        #else
         if state.currentStream?.isAudioOnly == true {
             sleepPreventionService.allowSleep()
         } else {
             sleepPreventionService.preventSleep()
         }
-        #endif
     }
 
     /// Pauses playback.
@@ -682,18 +598,15 @@ final class PlayerService {
         sleepPreventionService.allowSleep()
         currentBackend?.pause()
         state.setPlaybackState(.paused)
-        #if os(iOS)
         // A sleep timer leaves a completed video paused rather than ended.
         // Preserve its completion when a later control action pauses it again.
         let shouldSaveProgress = shouldSaveProgress && !videoEndedNaturally
-        #endif
         if shouldSaveProgress {
             saveProgress()
         }
         nowPlayingService.updatePlaybackRate(isPlaying: false, currentTime: state.currentTime)
     }
 
-    #if os(iOS)
     /// Uses the normal pause path, while keeping a pending load from starting later.
     func pauseForSleepTimer() {
         guard state.currentVideo != nil else { return }
@@ -701,17 +614,14 @@ final class PlayerService {
         wasInterrupted = false
         pause(saveProgress: !videoEndedNaturally && state.playbackState != .ended)
     }
-    #endif
 
     /// Resumes playback.
     func resume() {
-        #if os(iOS)
         if isPausedBySleepTimer && videoEndedNaturally {
             Task { await replayCurrentVideo() }
             return
         }
         isPausedBySleepTimer = false
-        #endif
 
         updateSleepPrevention()
         currentBackend?.play()
@@ -802,9 +712,6 @@ final class PlayerService {
         cleanupAllTempSubtitles()
         currentCaption = nil
         embeddedTracks = []
-        desiredEmbeddedAudioTrackID = nil
-        desiredEmbeddedSubtitleTrackID = nil
-        didAutoSelectEmbeddedTracks = false
         lastSkippedSegmentID = nil
         nowPlayingService.clearNowPlaying()
     }
@@ -864,48 +771,24 @@ final class PlayerService {
             updateSleepPrevention()
         }
 
-        #if os(macOS)
-        // On macOS, don't treat main window closing as background when the player window is still visible
-        // The scenePhase changes to .background when the main window closes, but if the player window
-        // is still open, we should continue playing video normally
-        if phase == .background && ExpandedPlayerWindowManager.shared.isPresented {
-            LoggingService.shared.debug("PlayerService: Ignoring background phase - player window is still visible", category: .player)
-            return
-        }
-        #endif
 
-        #if os(iOS)
-        let isPiPActive = (currentBackend as? MPVBackend)?.isPiPActive ?? false
-        #else
         let isPiPActive = false
-        #endif
 
         // With background playback disabled, pause when the app leaves the
-        // foreground — the audio background mode would otherwise keep mpv
+        // foreground — the audio background mode would otherwise keep player
         // playing. Not applicable on macOS, where apps are never suspended.
-        #if os(iOS)
         let backgroundEnabled = settingsManager?.backgroundPlaybackEnabled ?? true
         if phase == .background, !backgroundEnabled, !isPiPActive, state.playbackState == .playing {
             LoggingService.shared.debug("PlayerService: pausing playback (phase=\(phase), backgroundPlaybackEnabled=false)", category: .player)
             pause()
         }
-        #elseif os(tvOS)
-        let backgroundEnabled = settingsManager?.backgroundPlaybackEnabled ?? true
-        LoggingService.shared.debug("PlayerService[tvOS-bg]: phase=\(phase) bgEnabled=\(backgroundEnabled) playbackState=\(state.playbackState)", category: .player)
-        if (phase == .background || phase == .inactive), !backgroundEnabled, state.playbackState == .playing {
-            LoggingService.shared.debug("PlayerService[tvOS-bg]: pausing playback (phase=\(phase), backgroundPlaybackEnabled=false)", category: .player)
-            pause()
-        }
-        #endif
 
         currentBackend?.handleScenePhase(phase, isPiPActive: isPiPActive)
     }
 
     /// Plays the next video in queue, respecting the current queue mode.
     func playNext() async {
-        #if os(iOS)
         if SleepTimer.shared.stopAtEndOfVideo(for: self) { return }
-        #endif
 
         // Pause without saving progress if video ended - 100% was already saved in backendDidFinishPlaying
         pause(saveProgress: state.playbackState != .ended)
@@ -1173,17 +1056,13 @@ final class PlayerService {
         // so callers with a stale watch entry cannot seek into the live window.
         let startTime = video.isLive ? nil : startTime
 
-        // Check if MPV PiP is active - if so, don't expand the player
-        #if os(iOS) || os(macOS)
-        let mpvPiPActive = (currentBackend as? MPVBackend)?.isPiPActive ?? false
-        #else
-        let mpvPiPActive = false
-        #endif
+        // Check if player PiP is active - if so, don't expand the player
+        let isPiPActive = false
 
         // If this video is already loaded, optionally seek/resume instead of reloading.
         if isCurrentlyPlaying(video: video) {
             LoggingService.shared.logPlayer("Video already loaded, applying seek/resume instead of reload (startTime=\(startTime ?? -1), state=\(state.playbackState))")
-            if !mpvPiPActive {
+            if !isPiPActive {
                 navigationCoordinator?.expandPlayer()
             }
             let wasPaused = state.playbackState == .paused
@@ -1211,7 +1090,7 @@ final class PlayerService {
         state.setCurrentVideo(video, stream: nil)
 
         // Expand player immediately so it opens while loading (unless PiP is active)
-        if !mpvPiPActive {
+        if !isPiPActive {
             navigationCoordinator?.expandPlayer()
         }
 
@@ -1229,16 +1108,12 @@ final class PlayerService {
     ///   - download: Optional download to load local storyboards and captions from
     ///   - captions: Optional array of external captions (e.g., from WebDAV subtitle files)
     func openVideo(_ video: Video, stream: Stream, audioStream: Stream? = nil, download: Download? = nil, captions: [Caption] = []) {
-        // Check if MPV PiP is active - if so, don't expand the player
-        #if os(iOS) || os(macOS)
-        let mpvPiPActive = (currentBackend as? MPVBackend)?.isPiPActive ?? false
-        #else
-        let mpvPiPActive = false
-        #endif
+        // Check if player PiP is active - if so, don't expand the player
+        let isPiPActive = false
 
         // If this video is already loaded, optionally resume instead of reloading.
         if isCurrentlyPlaying(video: video) {
-            if !mpvPiPActive {
+            if !isPiPActive {
                 navigationCoordinator?.expandPlayer()
             }
             if state.playbackState == .paused {
@@ -1258,7 +1133,7 @@ final class PlayerService {
         state.setCurrentVideo(video, stream: stream, audioStream: audioStream)
 
         // Expand player immediately so it opens while loading (unless PiP is active)
-        if !mpvPiPActive {
+        if !isPiPActive {
             navigationCoordinator?.expandPlayer()
         }
 
@@ -1389,33 +1264,18 @@ final class PlayerService {
             }
 
             // Update available streams
-            self.availableStreams = streams
+            self.availableStreams = streams.filter(\.isAVPlayerAudioPlayable)
             self.availableCaptions = captions
 
-            // Find matching stream or best alternative
-            let newStream: Stream
-            let newAudioStream: Stream?
-
-            if state.currentStream?.isAudioOnly == true || settingsManager?.audioOnlyModeEnabled == true,
-               let refreshedAudio = findMatchingAudioStream(in: streams, preferring: state.currentStream)
-            {
-                // Preserve audio-only playback (audio mode or audio-only content);
-                // `findMatchingAudioStream` matches the current track's language
-                newStream = refreshedAudio
-                newAudioStream = nil
-            } else {
-                newStream = findMatchingStream(in: streams, preferring: state.currentStream)
-                newAudioStream = newStream.isVideoOnly
-                    ? findMatchingAudioStream(in: streams, preferring: state.currentAudioStream)
-                    : nil
+            guard let newStream = findMatchingAudioStream(in: streams, preferring: state.currentStream) else {
+                throw APIError.noStreams
             }
+            let newAudioStream: Stream? = nil
 
             LoggingService.shared.logPlayer("Resuming with stream: \(newStream.qualityLabel) at \(resumeTime ?? 0)s")
 
-            #if os(iOS)
             // A refresh may have been awaiting the network when the timer fired.
             guard !isPausedBySleepTimer else { return }
-            #endif
 
             // Resume playback with fresh stream
             await play(video: video, stream: newStream, audioStream: newAudioStream, startTime: resumeTime)
@@ -1451,140 +1311,18 @@ final class PlayerService {
         }
     }
 
-    /// Finds a stream matching the preferred stream's quality, or the best available alternative.
-    private func findMatchingStream(in streams: [Stream], preferring preferred: Stream?) -> Stream {
-        let videoStreams = streams.filter { !$0.isAudioOnly }
-
-        // If we have a preferred stream, try to match its resolution
-        if let preferred, let preferredResolution = preferred.resolution {
-            // First try exact resolution match
-            if let exact = videoStreams.first(where: { $0.resolution == preferredResolution }) {
-                return exact
-            }
-
-            // Then try closest resolution
-            let sorted = videoStreams.sorted { stream1, stream2 in
-                let diff1 = abs((stream1.resolution?.height ?? 0) - preferredResolution.height)
-                let diff2 = abs((stream2.resolution?.height ?? 0) - preferredResolution.height)
-                return diff1 < diff2
-            }
-            if let closest = sorted.first {
-                return closest
-            }
-        }
-
-        // Fall back to best available stream
-        return videoStreams.max(by: { ($0.resolution?.height ?? 0) < ($1.resolution?.height ?? 0) }) ?? streams.first!
-    }
-
-    /// Finds an audio stream matching the preferred stream, or the best available alternative.
     private func findMatchingAudioStream(in streams: [Stream], preferring preferred: Stream?) -> Stream? {
-        let audioStreams = streams.filter { $0.isAudioOnly }
-
-        guard !audioStreams.isEmpty else { return nil }
-
-        // If we have a preferred audio stream, try to match its language/codec
-        if let preferred {
-            // Try exact language match
-            if let preferredLang = preferred.audioLanguage,
-               let match = audioStreams.first(where: { $0.audioLanguage == preferredLang }) {
-                return match
-            }
-        }
-
-        // Fall back to best available (highest bitrate)
-        return audioStreams.max(by: { ($0.bitrate ?? 0) < ($1.bitrate ?? 0) })
+        AudioStreamSelector.select(from: streams, preferredLanguage: preferred?.audioLanguage ?? settingsManager?.preferredAudioLanguage)
     }
-
     // MARK: - Captions
 
-    /// Loads and displays a caption track.
-    /// Only works with MPV backend.
-    /// - Parameter caption: The caption to load, or nil to disable subtitles
+    /// Retained for the existing controls until the audio UI replaces them.
     func loadCaption(_ caption: Caption?) {
-        guard let mpvBackend = currentBackend as? MPVBackend else {
-            LoggingService.shared.debug("Cannot load caption: not using MPV backend", category: .player)
-            return
-        }
-
-        mpvBackend.loadCaption(caption)
-        currentCaption = caption
-        // An explicit external pick (or Off) overrides any embedded-subtitle intent
-        desiredEmbeddedSubtitleTrackID = nil
-
-        if let caption {
-            LoggingService.shared.logPlayer("Loaded caption: \(caption.displayName)")
-        } else {
-            LoggingService.shared.logPlayer("Disabled subtitles")
-        }
-    }
-
-    /// Selects an embedded audio track by mpv track id (live, no reload).
-    /// Only works with MPV backend.
-    func selectEmbeddedAudioTrack(_ trackID: Int) {
-        guard let mpvBackend = currentBackend as? MPVBackend else { return }
-
-        desiredEmbeddedAudioTrackID = trackID
-        mpvBackend.selectEmbeddedAudioTrack(trackID)
-        LoggingService.shared.logPlayer("Selected embedded audio track \(trackID)")
-    }
-
-    /// Selects an embedded subtitle track by mpv track id (nil = off).
-    /// Only works with MPV backend.
-    func selectEmbeddedSubtitleTrack(_ trackID: Int?) {
-        guard let mpvBackend = currentBackend as? MPVBackend else { return }
-
-        desiredEmbeddedSubtitleTrackID = trackID
         currentCaption = nil
-        mpvBackend.selectEmbeddedSubtitleTrack(trackID)
-        LoggingService.shared.logPlayer("Selected embedded subtitle track \(trackID.map(String.init) ?? "off")")
     }
-
-    /// Re-applies a sticky embedded-track pick after a reload, or auto-selects
-    /// preferred languages once per load. Called whenever mpv's track list changes.
-    private func reapplyOrAutoSelectEmbeddedTracks() {
-        guard let mpvBackend = currentBackend as? MPVBackend else { return }
-
-        // Re-apply sticky user picks. Loop-safe: selecting fires one more
-        // track-list update in which the track is already selected.
-        if let desired = desiredEmbeddedAudioTrackID,
-           let track = embeddedAudioTracks.first(where: { $0.trackID == desired }),
-           !track.isSelected {
-            mpvBackend.selectEmbeddedAudioTrack(desired)
-        }
-        if let desired = desiredEmbeddedSubtitleTrackID,
-           let track = embeddedSubtitleTracks.first(where: { $0.trackID == desired }),
-           !track.isSelected {
-            mpvBackend.selectEmbeddedSubtitleTrack(desired)
-        }
-
-        // Auto-select preferred languages once per load. Skipped while the
-        // list is empty so the reset delivered at load start doesn't consume
-        // the one-shot flag.
-        guard !didAutoSelectEmbeddedTracks, !embeddedTracks.isEmpty else { return }
-        didAutoSelectEmbeddedTracks = true
-
-        if desiredEmbeddedAudioTrackID == nil,
-           embeddedAudioTracks.count > 1,
-           let match = embeddedAudioTracks.first(where: { $0.matchesLanguage(settingsManager?.preferredAudioLanguage) }),
-           !match.isSelected {
-            mpvBackend.selectEmbeddedAudioTrack(match.trackID)
-            LoggingService.shared.logPlayer("Auto-selected embedded audio track \(match.trackID) (\(match.displayName))")
-        }
-
-        // External captions win: the preferred-caption flow sets currentCaption
-        // before mpv reports any tracks.
-        if desiredEmbeddedSubtitleTrackID == nil,
-           currentCaption == nil,
-           let match = embeddedSubtitleTracks.first(where: { !$0.isForced && $0.matchesLanguage(settingsManager?.preferredSubtitlesLanguage) }),
-           !match.isSelected {
-            mpvBackend.selectEmbeddedSubtitleTrack(match.trackID)
-            LoggingService.shared.logPlayer("Auto-selected embedded subtitle track \(match.trackID) (\(match.displayName))")
-        }
-    }
-
+    func selectEmbeddedAudioTrack(_ trackID: Int) {}
+    func selectEmbeddedSubtitleTrack(_ trackID: Int?) {}
     /// Loads a local subtitle file from disk.
-    /// Only works with MPV backend.
     /// - Parameter url: The local file URL of the caption file
     func loadLocalCaption(url: URL) {
         // Extract language from filename (e.g., "videoID_en.vtt" -> "en")
@@ -1602,7 +1340,7 @@ final class PlayerService {
     }
 
     /// Loads a user-picked external subtitle file (iOS document picker / macOS open panel).
-    /// Copies the file into the per-video temp subtitle directory (so mpv can read it
+    /// Copies the file into the per-video temp subtitle directory (so player can read it
     /// after the picker's security scope expires), registers it as a selectable
     /// Caption for the current video, and activates it.
     /// - Parameter pickedURL: The URL returned by the file picker.
@@ -1742,102 +1480,20 @@ final class PlayerService {
         await play(video: video, stream: stream, audioStream: audioStream, startTime: currentTime)
     }
 
-    /// Applies audio-only mode to local (downloaded) streams. Online streams
-    /// are handled by stream selection; local files reach `play()` pre-resolved,
-    /// so the swap happens here instead.
     private func applyingAudioModeToLocalStreams(video: Video, stream: Stream, audioStream: Stream?) -> (Stream, Stream?) {
-        guard stream.url.isFileURL else { return (stream, audioStream) }
-
-        if settingsManager?.audioOnlyModeEnabled == true {
-            guard !stream.isAudioOnly else { return (stream, audioStream) }
-            if let audioStream, audioStream.url.isFileURL {
-                // Separate downloaded audio track - play it on its own
-                LoggingService.shared.logPlayer("Audio mode: using downloaded audio track for \(video.id.id)")
-                return (audioStream, nil)
-            }
-            // Muxed file - same URL with the video track disabled at load time
-            LoggingService.shared.logPlayer("Audio mode: playing muxed local file without video track for \(video.id.id)")
-            return (stream.audioOnlyVariant(), nil)
-        }
-
-        // Mode is off but an audio-only stream was stored for a downloaded
-        // video (e.g. queue/history item created while audio mode was on) -
-        // restore the full local streams from the download record.
-        if stream.isAudioOnly,
-           let downloadManager,
-           let download = downloadManager.download(for: video.id),
-           download.status == .completed,
-           let (_, videoStream, downloadAudio, _, _) = downloadManager.videoAndStream(for: download) {
-            return (videoStream, downloadAudio)
-        }
-        return (stream, audioStream)
+        // Never relabel a muxed local file: its video bytes would still be read.
+        if let audioStream, audioStream.isAVPlayerAudioPlayable { return (audioStream, nil) }
+        return (stream, nil)
     }
-
-    /// Toggles global audio-only ("music") mode. If an online video is playing,
-    /// reloads it at the current position (same mechanism as a quality switch).
+    /// Playback is always audio-only; the existing UI cannot enable video.
     func setAudioMode(_ enabled: Bool) async {
-        guard settingsManager?.audioOnlyModeEnabled != enabled else { return }
-        settingsManager?.audioOnlyModeEnabled = enabled
-        LoggingService.shared.logPlayer("Audio mode \(enabled ? "enabled" : "disabled")")
-
-        // Nothing playing: just persist the setting.
-        guard state.currentVideo != nil else { return }
-
-        // Downloaded content: re-derive the local streams from the download
-        // record and reload; play() applies the mode swap for local files
-        // (separate audio track, or same file with the video track disabled).
-        if let currentDownload {
-            guard (state.currentStream?.isAudioOnly == true) != enabled,
-                  let downloadManager,
-                  let (downloadedVideo, localStream, localAudio, captionURL, _) = downloadManager.videoAndStream(for: currentDownload)
-            else { return }
-            let currentTime = state.currentTime
-            await play(video: downloadedVideo, stream: localStream, audioStream: localAudio, startTime: currentTime)
-            if let captionURL {
-                loadLocalCaption(url: captionURL)
-            }
-            return
-        }
-
-        // No stream list to reselect from (e.g. still loading): just persist.
-        guard let video = state.currentVideo, !availableStreams.isEmpty else { return }
-
-        let currentTime = state.currentTime
-
-        if enabled {
-            // Already audio-only (e.g. audio-only content) - nothing to reload
-            guard state.currentStream?.isAudioOnly != true else { return }
-            guard let bestAudio = bestAudioStream(from: availableStreams.filter { $0.isAudioOnly }) else {
-                LoggingService.shared.logPlayer("Audio mode: no audio-only streams for current video, keeping current stream")
-                return
-            }
-            await play(video: video, stream: bestAudio, audioStream: nil, startTime: currentTime)
-        } else {
-            // Re-run normal selection with the mode now off
-            let selection = selectStreamAndBackend(from: availableStreams)
-            guard let stream = selection.stream else { return }
-            // Audio-only content still selects audio - no reload needed
-            if stream.isAudioOnly, state.currentStream?.isAudioOnly == true { return }
-            await play(video: video, stream: stream, audioStream: selection.audioStream, startTime: currentTime)
-        }
+        settingsManager?.audioOnlyModeEnabled = true
     }
-
-    /// Handles an explicit stream pick from the quality selector, switching at
-    /// the current playback position. Picking a video stream while audio mode
-    /// is on turns audio mode off so the choice sticks.
     func selectStreamManually(_ stream: Stream, audioStream: Stream?) async {
-        guard let video = state.currentVideo else { return }
-
-        if !stream.isAudioOnly, settingsManager?.audioOnlyModeEnabled == true {
-            settingsManager?.audioOnlyModeEnabled = false
-            LoggingService.shared.logPlayer("Audio mode disabled by explicit quality selection")
-        }
-
-        let currentTime = state.currentTime
-        LoggingService.shared.logPlayer("Manual stream switch to \(stream.qualityLabel) at \(currentTime)s")
-        await play(video: video, stream: stream, audioStream: audioStream, startTime: currentTime)
+        guard let video = state.currentVideo,
+              let audio = bestAudioStream(from: [audioStream, stream].compactMap { $0 }) ?? bestAudioStream(from: availableStreams) else { return }
+        await play(video: video, stream: audio, startTime: state.currentTime)
     }
-
     // MARK: - Media Browser Stream Resolution
 
     /// Resolves stream and subtitles for a media source video by fetching folder contents on-demand.
@@ -1940,7 +1596,7 @@ final class PlayerService {
             let folderKey = "\(sourceID):\(parentPath)"
 
             // Pre-download ALL subtitles in folder on first access.
-            // Must complete before MPV opens any SMB connection.
+            // Must complete before player opens any SMB connection.
             // For queued videos from the same folder, subtitles will already be cached.
             if !preDownloadedSubtitleFolders.contains(folderKey) {
                 let allSubtitleFiles = folderFiles.filter { $0.isSubtitle }
@@ -1966,7 +1622,7 @@ final class PlayerService {
 
                 preDownloadedSubtitleFolders.insert(folderKey)
 
-                // Release app SMB context before MPV opens its connection.
+                // Release app SMB context before player opens its connection.
                 // libsmbclient uses process-global talloc state that corrupts
                 // when two contexts access the same server concurrently.
                 await smbClient.clearCache(for: source)
@@ -2010,7 +1666,7 @@ final class PlayerService {
     // MARK: - Private Methods
 
     /// Checks if the stream URL goes through Yattee Server's fast download endpoint.
-    /// Fast endpoint streams don't have Content-Length, so MPV can't determine accurate duration.
+    /// Fast endpoint streams don't have Content-Length, so player can't determine accurate duration.
     /// In this case, we should use the API-provided duration instead.
     private func isFastEndpointStream(_ stream: Stream?) -> Bool {
         guard let urlString = stream?.url.absoluteString else { return false }
@@ -2018,7 +1674,7 @@ final class PlayerService {
     }
 
     /// Locks duration from API if playing through fast endpoint.
-    /// This prevents progress bar jitter when MPV reports changing duration during progressive download.
+    /// This prevents progress bar jitter when player reports changing duration during progressive download.
     private func lockDurationIfNeeded(for video: Video, stream: Stream?) {
         if isFastEndpointStream(stream), video.duration > 0 {
             state.lockDuration(video.duration)
@@ -2027,24 +1683,18 @@ final class PlayerService {
     }
 
     private func setupAudioSession() {
-        #if os(iOS) || os(tvOS)
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback)
-            try session.setActive(true)
+            try AVAudioBackend.configureAudioSession()
 
-            #if os(tvOS)
-            nowPlayingService.refreshSystemControlsForCurrentAudioRoute(reason: "audio session activation")
-            #endif
 
             // Only register observer once
-            guard !hasRegisteredInterruptionObserver else { return }
-            hasRegisteredInterruptionObserver = true
+            guard interruptionObserver == nil else { return }
 
             LoggingService.shared.debug("Registering audio session interruption observer", category: .player)
 
             // Register for audio interruption notifications (phone calls, alarms, etc.)
-            NotificationCenter.default.addObserver(
+            interruptionObserver = NotificationCenter.default.addObserver(
                 forName: AVAudioSession.interruptionNotification,
                 object: session,
                 queue: .main
@@ -2065,10 +1715,8 @@ final class PlayerService {
         } catch {
             LoggingService.shared.logPlayerError("Audio session setup failed", error: error)
         }
-        #endif
     }
 
-    #if os(iOS) || os(tvOS)
     private func handleAudioSessionInterruption(type: AVAudioSession.InterruptionType, optionsValue: UInt?) {
         LoggingService.shared.debug("handleAudioSessionInterruption called, current playbackState: \(state.playbackState), wasInterrupted: \(wasInterrupted)", category: .player)
 
@@ -2112,7 +1760,6 @@ final class PlayerService {
             break
         }
     }
-    #endif
 
     private func fetchVideoStreamsAndCaptions(for video: Video) async throws -> (Video, [Stream], [Caption]) {
         let result = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
@@ -2130,9 +1777,9 @@ final class PlayerService {
                 return (video, [stream], [], [])
             }
 
-            // Direct media (a file mpv plays as-is): rebuild the stream from the
+            // Direct media (a file player plays as-is): rebuild the stream from the
             // URL. A probe fills in the format/size for opaque CDN links; if it
-            // fails (offline, expired token) still hand mpv the URL and let it
+            // fails (offline, expired token) still hand player the URL and let it
             // report the real error.
             if extractor == DirectMediaHelper.provider {
                 let probe = await DirectMediaProbe.probe(originalURL)
@@ -2273,7 +1920,7 @@ final class PlayerService {
         }
 
         // Create stream with placeholder resolution and audio codec so it's recognized as muxed
-        // (actual values are unknown until playback, but MPV handles all formats)
+        // (actual values are unknown until playback, but player handles all formats)
         return Stream(
             url: playbackURL,
             resolution: .p720,  // Placeholder - actual resolution unknown
@@ -2307,222 +1954,12 @@ final class PlayerService {
     }
 
     private func selectStreams(for backendType: PlayerBackendType, from streams: [Stream]) -> (video: Stream, audio: Stream?)? {
-        let supportedFormats = backendType.supportedFormats
-
-        // Get user's original quality preference (before network adjustments)
-        let userPreferredQuality = settingsManager?.preferredQuality ?? .auto
-
-        // Network-aware quality selection for fixed-bitrate streams
-        let effectiveQuality: VideoQuality
-        if let monitor = connectivityMonitor {
-            if monitor.isConstrained {
-                // Low Data Mode - be very conservative
-                effectiveQuality = .sd480p
-            } else if monitor.isCellular || monitor.isExpensive {
-                // Cellular/expensive - use cellular quality setting
-                effectiveQuality = settingsManager?.cellularQuality ?? .hd720p
-            } else {
-                effectiveQuality = userPreferredQuality
-            }
-        } else {
-            effectiveQuality = userPreferredQuality
-        }
-
-        // Separate streams by type
-        let videoOnlyStreams = streams.filter { stream in
-            guard !stream.isAudioOnly && stream.isVideoOnly else { return false }
-            let format = StreamFormat.detect(from: stream)
-            return supportedFormats.contains(format)
-        }
-
-        let muxedStreams = streams.filter { stream in
-            let format = StreamFormat.detect(from: stream)
-            guard supportedFormats.contains(format) else { return false }
-            // Only include HLS/DASH if they have video (audio-only HLS/DASH should be treated as audio streams)
-            if format == .hls || format == .dash {
-                return !stream.isAudioOnly
-            }
-            return stream.isMuxed
-        }
-
-        let audioStreams = streams.filter { $0.isAudioOnly }
-
-        // Audio-only ("music") mode: skip the video track entirely
-        if settingsManager?.audioOnlyModeEnabled == true {
-            if let bestAudio = bestAudioStream(from: audioStreams) {
-                LoggingService.shared.debug("Stream selection: Audio mode enabled, selecting audio-only stream", category: .player)
-                return (bestAudio, nil)
-            }
-            LoggingService.shared.warning("Stream selection: Audio mode enabled but no audio-only streams available, falling back to normal selection", category: .player)
-        }
-
-        // Check for audio-only content (no real video streams available)
-        // This handles cases like SoundCloud where HLS is audio-only but not marked as such
-        let hasRealVideoStreams = !videoOnlyStreams.isEmpty || muxedStreams.contains { stream in
-            // Real video muxed streams have resolution info
-            // HLS/DASH without resolution could be audio-only (can't tell without parsing)
-            let format = StreamFormat.detect(from: stream)
-            if format == .hls || format == .dash {
-                return stream.resolution != nil
-            }
-            return true
-        }
-
-        if !hasRealVideoStreams, let bestAudio = bestAudioStream(from: audioStreams) {
-            LoggingService.shared.debug("Stream selection: Audio-only content detected, using best audio stream", category: .player)
-            return (bestAudio, nil)
-        }
-
-        // Get the maximum resolution based on effective quality preference
-        let maxResolution = effectiveQuality.maxResolution
-
-        // For live streams, always prefer HLS/DASH (designed for live streaming)
-        // Live streams with direct MP4 URLs (live=1&hang=1) don't work reliably
-        let isLiveStream = streams.contains(where: { $0.isLive })
-        if isLiveStream {
-            if let hlsStream = muxedStreams.first(where: { StreamFormat.detect(from: $0) == .hls }) {
-                LoggingService.shared.debug("Stream selection: Using HLS for live stream", category: .player)
-                return (hlsStream, nil)
-            }
-            if let dashStream = muxedStreams.first(where: { StreamFormat.detect(from: $0) == .dash }) {
-                LoggingService.shared.debug("Stream selection: Using DASH for live stream", category: .player)
-                return (dashStream, nil)
-            }
-            LoggingService.shared.warning("Stream selection: No HLS/DASH available for live stream, falling back to adaptive formats", category: .player)
-        }
-
-        // Note: For non-live videos, we prefer progressive formats (MP4/WebM) over HLS/DASH
-        // because they typically offer better quality. HLS/DASH are only used as last resort.
-        // Live streams are already handled above with HLS/DASH preference.
-
-        // Try to find the best video-only stream + audio (for MPV which supports all formats)
-        if backendType == .mpv && !videoOnlyStreams.isEmpty && !audioStreams.isEmpty {
-            let filteredVideoStreams: [Stream]
-            if let maxRes = maxResolution {
-                filteredVideoStreams = videoOnlyStreams.filter { stream in
-                    guard let resolution = stream.resolution else { return true }
-                    return resolution <= maxRes
-                }
-            } else {
-                filteredVideoStreams = videoOnlyStreams
-            }
-
-            // Filter out codecs with priority 0 (software decode) if hardware options exist,
-            // unless the user opted in to software-decoded formats.
-            let streamsToConsider: [Stream]
-            if settingsManager?.allowSoftwareDecodedFormats ?? false {
-                streamsToConsider = filteredVideoStreams
-            } else {
-                let hardwareDecodableStreams = filteredVideoStreams.filter { videoCodecPriority($0.videoCodec) > 0 }
-                streamsToConsider = hardwareDecodableStreams.isEmpty ? filteredVideoStreams : hardwareDecodableStreams
-            }
-
-            // Sort by resolution first, then by codec priority
-            let sortedVideo = streamsToConsider.sorted { s1, s2 in
-                let res1 = s1.resolution ?? .p360
-                let res2 = s2.resolution ?? .p360
-                if res1 != res2 {
-                    return res1 > res2
-                }
-                // Same resolution - prefer better codec
-                return videoCodecPriority(s1.videoCodec) > videoCodecPriority(s2.videoCodec)
-            }
-
-            if let bestVideo = sortedVideo.first, let audio = bestAudioStream(from: audioStreams) {
-                return (bestVideo, audio)
-            }
-        }
-
-        // Fallback to muxed streams - prefer progressive formats over HLS/DASH for non-live content
-        let filteredMuxed: [Stream]
-        if let maxRes = maxResolution {
-            filteredMuxed = muxedStreams.filter { stream in
-                guard let resolution = stream.resolution else { return true }
-                return resolution <= maxRes
-            }
-        } else {
-            filteredMuxed = muxedStreams
-        }
-
-        // Sort: prefer progressive formats, then HLS, and only fall back to DASH as a last
-        // resort (DASH should never be chosen when any other format is available).
-        let sortedMuxed = filteredMuxed.sorted { s1, s2 in
-            let rank1 = muxedFormatRank(StreamFormat.detect(from: s1))
-            let rank2 = muxedFormatRank(StreamFormat.detect(from: s2))
-            if rank1 != rank2 {
-                return rank1 < rank2
-            }
-            return (s1.resolution ?? .p360) > (s2.resolution ?? .p360)
-        }
-
-        if let bestMuxed = sortedMuxed.first {
-            return (bestMuxed, nil)
-        }
-
-        // Last resort: any muxed stream (HLS/DASH will be selected here if nothing else available)
-        if let anyMuxed = muxedStreams.sorted(by: { ($0.resolution ?? .p360) > ($1.resolution ?? .p360) }).first {
-            return (anyMuxed, nil)
-        }
-
-        return nil
+        guard let audio = bestAudioStream(from: streams) else { return nil }
+        return (audio, nil)
     }
-
-    /// Ranks muxed formats for fallback selection (lower = preferred).
-    /// Progressive formats win, then HLS; DASH is the last resort and is only
-    /// selected when it is the only format available.
-    private func muxedFormatRank(_ format: StreamFormat) -> Int {
-        switch format {
-        case .dash: return 2
-        case .hls: return 1
-        default: return 0 // progressive
-        }
+    private func bestAudioStream(from streams: [Stream]) -> Stream? {
+        AudioStreamSelector.select(from: streams, preferredLanguage: settingsManager?.preferredAudioLanguage)
     }
-
-    /// Returns codec priority for video streams (higher = better).
-    /// Prefers hardware-decodable codecs for battery efficiency.
-    private func videoCodecPriority(_ codec: String?) -> Int {
-        HardwareCapabilities.shared.codecPriority(for: codec)
-    }
-
-    /// Selects the best audio-only stream: preferred language (or original audio
-    /// when no preference is set), then codec priority, then bitrate.
-    private func bestAudioStream(from audioStreams: [Stream]) -> Stream? {
-        let preferredAudioLanguage = settingsManager?.preferredAudioLanguage
-        return audioStreams
-            .sorted { stream1, stream2 in
-                if let preferred = preferredAudioLanguage {
-                    // User selected a specific language
-                    let matches1 = (stream1.audioLanguage ?? "").hasPrefix(preferred)
-                    let matches2 = (stream2.audioLanguage ?? "").hasPrefix(preferred)
-                    if matches1 != matches2 { return matches1 }
-                } else {
-                    // No preference set - prefer original audio track
-                    if stream1.isOriginalAudio != stream2.isOriginalAudio {
-                        return stream1.isOriginalAudio
-                    }
-                }
-
-                let codecPriority1 = audioCodecPriority(stream1.audioCodec)
-                let codecPriority2 = audioCodecPriority(stream2.audioCodec)
-                if codecPriority1 != codecPriority2 {
-                    return codecPriority1 > codecPriority2
-                }
-
-                return (stream1.bitrate ?? 0) > (stream2.bitrate ?? 0)
-            }
-            .first
-    }
-
-    /// Returns codec priority for audio streams.
-    /// Opus and AAC are treated equally - let bitrate decide quality.
-    private func audioCodecPriority(_ codec: String?) -> Int {
-        guard let codec = codec?.lowercased() else { return 0 }
-        if codec.contains("opus") || codec.contains("aac") || codec.contains("mp4a") {
-            return 1 // Both are good - bitrate will decide
-        }
-        return 0
-    }
-
     private func ensureBackend(type: PlayerBackendType) async throws -> any PlayerBackend {
         // Reuse existing backend if same type
         if let current = currentBackend, current.backendType == type {
@@ -2533,49 +1970,6 @@ final class PlayerService {
         let backend = try backendFactory.createBackend(type: type)
         backend.delegate = self
         currentBackend = backend
-
-        // Configure MPV-specific settings
-        #if os(iOS) || os(macOS)
-        if let mpvBackend = backend as? MPVBackend {
-            // Configure PiP callbacks
-            if let coordinator = navigationCoordinator {
-                mpvBackend.onRestoreFromPiP = { [weak coordinator] in
-                    #if os(macOS)
-                    // On macOS, always restore into the expanded player window —
-                    // the mini player is not a restore target there
-                    coordinator?.expandPlayer()
-                    #else
-                    // If mini player video is disabled, expand player for restore
-                    // Otherwise video continues in mini player
-                    if MiniPlayerSettings.cached.showVideo == false {
-                        coordinator?.expandPlayer()
-                    }
-                    #endif
-                }
-                mpvBackend.onPiPDidStart = { [weak coordinator] in
-                    guard let coordinator else {
-                        LoggingService.shared.debug("PlayerService: onPiPDidStart - coordinator is nil", category: .player)
-                        return
-                    }
-                    // Collapse the player sheet/window when PiP starts
-                    LoggingService.shared.debug("PlayerService: onPiPDidStart - isPlayerExpanded=\(coordinator.isPlayerExpanded)", category: .player)
-                    if coordinator.isPlayerExpanded {
-                        // Set collapsing first so mini player shows video immediately
-                        coordinator.isPlayerCollapsing = true
-                        coordinator.isPlayerExpanded = false
-                        LoggingService.shared.debug("PlayerService: onPiPDidStart - set isPlayerExpanded to false", category: .player)
-                    }
-                }
-                #if os(macOS)
-                // Clean up hidden window when PiP is closed via X button (not restore)
-                mpvBackend.onPiPDidStopWithoutRestore = {
-                    LoggingService.shared.debug("PlayerService: onPiPDidStopWithoutRestore - cleaning up hidden window", category: .player)
-                    ExpandedPlayerWindowManager.shared.cleanupAfterPiP()
-                }
-                #endif
-            }
-        }
-        #endif
 
         return backend
     }
@@ -2635,7 +2029,6 @@ final class PlayerService {
     /// Sets the settings manager for accessing user preferences.
     func setSettingsManager(_ manager: SettingsManager) {
         self.settingsManager = manager
-        self.backendSwitcher.settingsManager = manager
         // Reconfigure remote commands now that we have settings
         nowPlayingService.configureRemoteCommands()
         // Note: preferredBackendType is now computed directly from settingsManager
@@ -2706,19 +2099,6 @@ final class PlayerService {
     func setNavigationCoordinator(_ coordinator: NavigationCoordinator) {
         self.navigationCoordinator = coordinator
 
-        #if os(iOS)
-        // Configure PiP restore callback - don't expand player, just let PiP close
-        // Video continues in mini player; user taps mini player to expand
-        if let mpvBackend = currentBackend as? MPVBackend {
-            mpvBackend.onRestoreFromPiP = { [weak coordinator] in
-                // If mini player video is disabled, expand player for restore
-                // Otherwise video continues in mini player
-                if MiniPlayerSettings.cached.showVideo == false {
-                    coordinator?.expandPlayer()
-                }
-            }
-        }
-        #endif
     }
 
     /// Sets the handoff manager for activity updates.
@@ -2731,61 +2111,8 @@ final class PlayerService {
         self.watchHistorySyncService = service
     }
 
-    #if os(iOS)
-    /// Called when the player sheet appears.
-    func playerSheetDidAppear() {
-        let backendType = currentBackend?.backendType.rawValue ?? "none"
-        let playbackState = state.playbackState
-        LoggingService.shared.debug("PlayerService: playerSheetDidAppear - backend=\(backendType), playbackState=\(playbackState)", category: .player)
-
-        // Re-enable visual tracks and reattach layer when sheet appears
-        let isPiPActive = (currentBackend as? MPVBackend)?.isPiPActive ?? false
-        LoggingService.shared.debug("PlayerService: sheetDidAppear checks - isPiPActive=\(isPiPActive)", category: .player)
-
-        guard !isPiPActive else {
-            LoggingService.shared.debug("PlayerService: skipping visibility handling (isPiPActive=\(isPiPActive))", category: .player)
-            return
-        }
-
-        if let mpvBackend = currentBackend as? MPVBackend {
-            LoggingService.shared.debug("Player sheet appeared - re-enabling video (MPV)", category: .player)
-            mpvBackend.handlePlayerSheetVisibility(isVisible: true)
-        }
-    }
-
-    /// Called when the player sheet disappears.
-    func playerSheetDidDisappear() {
-        let backendType = currentBackend?.backendType.rawValue ?? "none"
-        let playbackState = state.playbackState
-        LoggingService.shared.debug("PlayerService: playerSheetDidDisappear - backend=\(backendType), playbackState=\(playbackState)", category: .player)
-
-        // Disable visual tracks and detach layer for background audio playback
-        let mpvPiPActive = (currentBackend as? MPVBackend)?.isPiPActive ?? false
-        LoggingService.shared.debug("PlayerService: sheetDidDisappear checks - mpvPiPActive=\(mpvPiPActive)", category: .player)
-
-        guard !mpvPiPActive else {
-            LoggingService.shared.debug("PlayerService: skipping visibility handling on disappear (mpvPiP=\(mpvPiPActive))", category: .player)
-            return
-        }
-
-        // Check if mini player video should be visible
-        // If so, don't pause rendering - mini player will manage rendering state
-        let miniPlayerVideoEnabled = MiniPlayerSettings.cached.showVideo
-        let isAudioOnly = state.currentStream?.isAudioOnly == true
-        let shouldMiniPlayerShowVideo = miniPlayerVideoEnabled && !isAudioOnly
-
-        if shouldMiniPlayerShowVideo {
-            LoggingService.shared.debug("PlayerService: skipping pause - mini player will show video (miniPlayerVideoEnabled=\(miniPlayerVideoEnabled), isAudioOnly=\(isAudioOnly))", category: .player)
-            return
-        }
-
-        if let mpvBackend = currentBackend as? MPVBackend {
-            LoggingService.shared.debug("Player sheet dismissed - disabling video for background playback (MPV)", category: .player)
-            mpvBackend.handlePlayerSheetVisibility(isVisible: false)
-        }
-    }
-    #endif
-
+    func playerSheetDidAppear() {}
+    func playerSheetDidDisappear() {}
     private func findInstance(for video: Video) async throws -> Instance? {
         guard let instancesManager else { return nil }
         return instancesManager.instance(for: video)
@@ -2869,7 +2196,6 @@ final class PlayerService {
 
         // Save locally only during playback - no iCloud sync overhead.
         // Live streams still get a history entry, but no resume position.
-        #if os(iOS)
         // In the background (audio playback) the app can be suspended the
         // moment playback stops. Suspending mid-save holds the SQLite lock in
         // the shared app-group container and iOS kills the app with
@@ -2883,7 +2209,6 @@ final class PlayerService {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
             }
         }
-        #endif
         dataManager.updateWatchProgressLocal(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
 
@@ -2904,7 +2229,7 @@ final class PlayerService {
 
         // Use video.duration (API-reported) to match WatchEntry.duration stored value.
         // This ensures 100% progress since WatchEntry.progress = watchedSeconds / WatchEntry.duration.
-        // Fall back to state.duration (MPV-reported) if video.duration is not available.
+        // Fall back to state.duration (player-reported) if video.duration is not available.
         let completedDuration = video.duration > 0 ? video.duration : state.duration
         guard completedDuration > 0 else { return }
 
@@ -3002,19 +2327,15 @@ final class PlayerService {
         lastNowPlayingTimeBucket = nil
 
         // Remove audio session interruption observer
-        #if os(iOS) || os(tvOS)
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
-        hasRegisteredInterruptionObserver = false
-        #endif
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        interruptionObserver = nil
 
         // Cancel any ongoing play task
         currentPlayTask?.cancel()
         currentPlayTask = nil
 
         currentBackend?.stop()
-        // Keep backend alive for reuse - prevents race condition where old backend's
-        // delayed deinit destroys render context that new backend is using
-        // currentBackend = nil
+        // Reuse the lightweight audio backend on the next load.
     }
 
     /// Cleans up temporary subtitle files for a given video.
@@ -3125,7 +2446,7 @@ extension PlayerService: PlayerBackendDelegate {
 
     func backend(_ backend: any PlayerBackend, didUpdateDuration duration: TimeInterval) {
         // Skip duration updates when locked from API (fast endpoint streams where
-        // file is progressively downloaded and MPV can't determine accurate duration)
+        // file is progressively downloaded and player can't determine accurate duration)
         guard !state.isDurationLockedFromAPI else { return }
         state.duration = duration
     }
@@ -3133,15 +2454,13 @@ extension PlayerService: PlayerBackendDelegate {
     func backend(_ backend: any PlayerBackend, didChangeState playbackState: PlaybackState) {
         LoggingService.shared.debug("Backend state changed to: \(playbackState)", category: .player)
 
-        #if os(iOS)
         if isPausedBySleepTimer && playbackState == .playing {
             pause(saveProgress: !videoEndedNaturally)
             return
         }
-        #endif
 
         // Clear the time-update gate once the new video is loaded, in case the load
-        // flow wedged before doing so (issue #956). Only .ready: it comes from mpv's
+        // flow wedged before doing so (issue #956). Only .ready: it comes from player's
         // file-loaded event, which only the new load can emit. The previous video
         // (still playing on the reused backend during the details/streams fetch) can
         // emit .playing via buffering recovery or unpause — healing on that would
@@ -3152,6 +2471,15 @@ extension PlayerService: PlayerBackendDelegate {
         }
 
         state.setPlaybackState(playbackState)
+        switch playbackState {
+        case .playing, .paused, .buffering, .ended:
+            nowPlayingService.updatePlaybackRate(isPlaying: playbackState == .playing, currentTime: state.currentTime)
+        default: break
+        }
+        if case .failed(let error) = playbackState, loadingVideoID == nil {
+            nowPlayingService.updatePlaybackRate(isPlaying: false, currentTime: state.currentTime)
+            delegate?.playerService(self, didEncounterError: error)
+        }
         delegate?.playerService(self, didChangeState: playbackState)
     }
 
@@ -3186,11 +2514,6 @@ extension PlayerService: PlayerBackendDelegate {
         state.setRetryState(retryState)
     }
 
-    func backend(_ backend: any PlayerBackend, didUpdateTracks tracks: [MPVTrack]) {
-        embeddedTracks = tracks
-        reapplyOrAutoSelectEmbeddedTracks()
-    }
-
     func backend(_ backend: any PlayerBackend, didRequestStreamRefresh atTime: TimeInterval?) {
         LoggingService.shared.logPlayer("Stream refresh requested at time: \(atTime ?? -1)")
 
@@ -3202,17 +2525,6 @@ extension PlayerService: PlayerBackendDelegate {
     func backendDidBecomeReady(_ backend: any PlayerBackend) {
         // First frame of new video has been rendered - thumbnail can now hide
         state.isFirstFrameReady = true
-    }
-
-    func backendDidFallBackToSoftwareDecoding(_ backend: any PlayerBackend) {
-        toastManager?.show(
-            category: .playerStatus,
-            title: String(localized: "toast.player.hwdecFallback.title"),
-            subtitle: String(localized: "toast.player.hwdecFallback.subtitle"),
-            icon: "cpu",
-            iconColor: .orange,
-            autoDismissDelay: 8.0
-        )
     }
 
     func backendDidFinishPlaying(_ backend: any PlayerBackend) {
@@ -3240,7 +2552,6 @@ extension PlayerService: PlayerBackendDelegate {
         // already in flight.
         watchHistorySyncService?.endSession()
 
-        #if os(iOS)
         // Leave the state paused so the visible player's .ended observer cannot
         // start a countdown. Stop here before repeat-one or background autoplay.
         if SleepTimer.shared.stopAtEndOfVideo(for: self) { return }
@@ -3248,7 +2559,6 @@ extension PlayerService: PlayerBackendDelegate {
             pause(saveProgress: false)
             return
         }
-        #endif
 
         delegate?.playerServiceDidFinishPlaying(self)
 
@@ -3294,9 +2604,7 @@ extension PlayerService: PlayerBackendDelegate {
     /// Handles playback errors by auto-skipping to next video if available and player is not visible.
     /// When player is visible, user can manually tap "Play Next" button on the error overlay.
     private func handlePlaybackErrorAutoSkip() async {
-        #if os(iOS)
         guard !isPausedBySleepTimer else { return }
-        #endif
 
         let autoPlayEnabled = settingsManager?.queueAutoPlayNext ?? true
         let hasNextInQueue = !state.queue.isEmpty

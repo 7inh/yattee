@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct PanelSettingsView: View {
     @Bindable var viewModel: PlayerControlsSettingsViewModel
@@ -23,11 +22,7 @@ struct PanelSettingsView: View {
     /// Corner layout exists on iPad and macOS, and on a foldable iPhone whose
     /// interior display is large enough (see `hasHinge`).
     static var supportsCornerLayout: Bool {
-        #if os(macOS)
-        return true
-        #else
         return UIDevice.current.userInterfaceIdiom == .pad
-        #endif
     }
 
     /// Foldable iPhone: the interior display qualifies for the corner layout.
@@ -65,16 +60,10 @@ struct PanelSettingsView: View {
             pagesSection
         }
         .navigationTitle(String(localized: "settings.playerControls.detailsPanel"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #elseif os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .toolbar {
-            #if os(iOS)
             EditButton()
-            #endif
         }
         .onAppear {
             syncLocalState()
@@ -152,11 +141,7 @@ struct PanelSettingsView: View {
 
     /// macOS has no portrait player layout: only the landscape default.
     private static var hasPortraitLayout: Bool {
-        #if os(macOS)
-        return false
-        #else
         return true
-        #endif
     }
 
     private var visibilitySection: some View {
@@ -431,5 +416,3 @@ private struct PanelLayoutSchematic: View {
             }
     }
 }
-
-#endif

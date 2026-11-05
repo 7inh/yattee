@@ -92,13 +92,8 @@ struct LinkActionConfirmationSheet: View {
 
             Spacer(minLength: 0)
         }
-        #if os(macOS)
-        .frame(width: 380)
-        #endif
-        #if !os(tvOS)
         .presentationDetents([.height(210)])
         .presentationDragIndicator(.visible)
-        #endif
     }
 
     private var header: some View {
@@ -125,35 +120,3 @@ struct LinkActionConfirmationSheet: View {
         dismiss()
     }
 }
-
-#if os(tvOS)
-extension View {
-    /// Presents a link action confirmation as an alert. tvOS sheets fill most
-    /// of the screen, too much for a two-button question.
-    func linkActionConfirmationAlert(
-        _ confirmation: LinkActionConfirmation?,
-        onDismiss: @escaping () -> Void
-    ) -> some View {
-        alert(
-            confirmation?.title ?? "",
-            isPresented: Binding {
-                confirmation != nil
-            } set: { isPresented in
-                if !isPresented { onDismiss() }
-            },
-            presenting: confirmation
-        ) { confirmation in
-            Button(confirmation.confirmTitle) { confirmation.answer(true) }
-            Button(String(localized: "common.cancel"), role: .cancel) { confirmation.answer(false) }
-        } message: { confirmation in
-            Text([confirmation.subject, confirmation.detail].compactMap { $0 }.joined(separator: "\n"))
-        }
-        .onChange(of: confirmation) { previous, _ in
-            // Gone without an answer (Menu button, external navigation, another
-            // sheet): treat as cancel. Deferred so a button's answer comes first.
-            guard let previous else { return }
-            Task { @MainActor in previous.answer(false) }
-        }
-    }
-}
-#endif

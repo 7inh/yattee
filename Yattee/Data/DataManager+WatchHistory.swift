@@ -97,7 +97,6 @@ extension DataManager {
 
             // Queue for CloudKit sync
             cloudKitSync?.queueWatchEntrySave(entry)
-            TopShelfSnapshotWriter.writeContinueWatching(dataManager: self)
         } catch {
             LoggingService.shared.logCloudKitError("Failed to update watch progress", error: error)
         }
@@ -180,7 +179,6 @@ extension DataManager {
     func deleteWatchEntry(_ entry: WatchEntry) {
         modelContext.delete(entry)
         save()
-        TopShelfSnapshotWriter.writeContinueWatching(dataManager: self)
     }
 
     /// Inserts a watch entry into the database.
@@ -205,7 +203,6 @@ extension DataManager {
             modelContext.insert(watchEntry)
             save()
         }
-        TopShelfSnapshotWriter.writeContinueWatching(dataManager: self)
     }
 
     /// Clears all watch history.

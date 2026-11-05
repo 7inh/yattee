@@ -10,11 +10,7 @@
 import SwiftUI
 import Nuke
 
-#if os(macOS)
-import AppKit
-#else
 import UIKit
-#endif
 
 /// A channel icon that pre-scales the image for use in TabSection labels.
 /// Standard SwiftUI frame/resizable modifiers don't work in Tab labels.
@@ -49,15 +45,9 @@ struct SidebarChannelIcon: View {
 
     @ViewBuilder
     private func scaledImage(from image: PlatformImage) -> Image? {
-        #if os(macOS)
-        if let scaled = image.scaledCircular(to: NSSize(width: size, height: size)) {
-            Image(nsImage: scaled)
-        }
-        #else
         if let scaled = image.scaledCircular(to: CGSize(width: size, height: size)) {
             Image(uiImage: scaled)
         }
-        #endif
     }
 
     private func loadImage() {
@@ -89,30 +79,6 @@ struct SidebarChannelIcon: View {
 
 // MARK: - Platform Image Scaling
 
-#if os(macOS)
-private extension NSImage {
-    func scaledCircular(to targetSize: NSSize) -> NSImage? {
-        let newImage = NSImage(size: targetSize)
-        newImage.lockFocus()
-
-        // Create circular clipping path
-        let path = NSBezierPath(ovalIn: NSRect(origin: .zero, size: targetSize))
-        path.addClip()
-
-        NSGraphicsContext.current?.imageInterpolation = .high
-
-        draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: size),
-            operation: .copy,
-            fraction: 1.0
-        )
-
-        newImage.unlockFocus()
-        return newImage
-    }
-}
-#else
 private extension UIImage {
     func scaledCircular(to targetSize: CGSize) -> UIImage? {
         let renderer = UIGraphicsImageRenderer(size: targetSize)
@@ -126,11 +92,9 @@ private extension UIImage {
         }
     }
 }
-#endif
 
 // MARK: - Preview
 
-#if !os(tvOS)
 #Preview {
     List {
         Label {
@@ -150,4 +114,3 @@ private extension UIImage {
     }
     .listStyle(.sidebar)
 }
-#endif

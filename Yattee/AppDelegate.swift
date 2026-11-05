@@ -7,7 +7,6 @@
 
 import Foundation
 
-#if os(iOS)
 
 import UIKit
 
@@ -103,42 +102,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
-#elseif os(macOS)
-
-import AppKit
-
-class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        LoggingService.shared.logCloudKit("Requesting remote notification registration...")
-        NSApplication.shared.registerForRemoteNotifications()
-
-        if let rawValue = UserDefaults.standard.string(forKey: "appIcon"),
-           let icon = AppIcon(rawValue: rawValue) {
-            SettingsManager.applyMacAppIcon(icon)
-        }
-    }
-
-    func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        LoggingService.shared.logCloudKit("Registered for remote notifications (token: \(deviceToken.count) bytes)")
-    }
-
-    func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        LoggingService.shared.logCloudKitError("Failed to register for remote notifications", error: error)
-    }
-
-    func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
-        LoggingService.shared.logCloudKit("Received remote notification (keys: \(Array(userInfo.keys)))")
-        CloudKitSyncEngine.current?.handleRemoteNotification()
-    }
-
-    func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
-        LoggingService.shared.debug("[Handoff] macOS AppDelegate received activity: \(userActivity.activityType)", category: .general)
-        NotificationCenter.default.post(name: .continueUserActivity, object: userActivity)
-        return true
-    }
-}
-
-#endif
 
 // MARK: - Notification Name
 

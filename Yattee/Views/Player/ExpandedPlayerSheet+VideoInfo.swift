@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 extension ExpandedPlayerSheet {
     // MARK: - Scroll & Comments
@@ -79,7 +78,7 @@ extension ExpandedPlayerSheet {
         appEnvironment?.settingsManager.landscapeDetailsPanelVisible = false
 
         // Stop player FIRST before dismissing window
-        // This ensures MPVRenderView and backend are properly cleaned up
+        // This ensures player and backend are properly cleaned up
         // before the window's content view hierarchy is destroyed
         playerService?.stop()
 
@@ -94,5 +93,3 @@ extension ExpandedPlayerSheet {
         }
     }
 }
-
-#endif

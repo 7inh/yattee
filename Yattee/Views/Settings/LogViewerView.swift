@@ -14,9 +14,6 @@ struct LogViewerView: View {
     @State private var showingExportSheet = false
     @State private var selectedEntry: LogEntry?
 
-    #if os(tvOS)
-    @State private var logExportServer = LogExportHTTPServer()
-    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,38 +24,8 @@ struct LogViewerView: View {
         }
         .opaqueSettingsFormBackground()
         .navigationTitle(String(localized: "settings.advanced.logs.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
-            #if os(macOS)
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingFilters = true
-                } label: {
-                    Label(String(localized: "settings.advanced.logs.filter"), systemImage: "line.3.horizontal.decrease.circle")
-                }
-                .help(String(localized: "settings.advanced.logs.filter"))
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showMacOSSavePanel()
-                } label: {
-                    Label(String(localized: "settings.advanced.logs.export"), systemImage: "square.and.arrow.up")
-                }
-                .help(String(localized: "settings.advanced.logs.export"))
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button(role: .destructive) {
-                    loggingService.clearLogs()
-                } label: {
-                    Label(String(localized: "settings.advanced.logs.clear"), systemImage: "trash")
-                }
-                .help(String(localized: "settings.advanced.logs.clear"))
-            }
-            #else
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
@@ -84,40 +51,18 @@ struct LogViewerView: View {
                     Image(systemName: "ellipsis.circle")
                 }
             }
-            #endif
         }
         .sheet(isPresented: $showingFilters) {
             LogFiltersSheet(loggingService: loggingService)
         }
-        #if os(tvOS)
-        .sheet(isPresented: $showingExportSheet) {
-            LogExportOverlayView(server: logExportServer)
-        }
-        #elseif os(iOS)
         .sheet(isPresented: $showingExportSheet) {
             ShareSheet(items: [loggingService.exportLogs()])
         }
-        #endif
         .sheet(item: $selectedEntry) { entry in
             LogEntryDetailView(entry: entry)
         }
     }
 
-    #if os(macOS)
-    private func showMacOSSavePanel() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "Yattee Logs \(Date.now.formatted(.iso8601.year().month().day())).txt"
-        panel.allowedContentTypes = [.plainText]
-
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                try Data(loggingService.exportLogs().utf8).write(to: url)
-            } catch {
-                loggingService.log(level: .error, category: .general, message: "Failed to save logs export", details: error.localizedDescription)
-            }
-        }
-    }
-    #endif
 
     private var searchBar: some View {
         HStack {
@@ -272,9 +217,7 @@ private struct LogEntryDetailView: View {
                     Text(entry.message)
                         .font(.body)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        #if !os(tvOS)
                         .textSelection(.enabled)
-                        #endif
                 }
 
                 if let details = entry.details {
@@ -283,24 +226,17 @@ private struct LogEntryDetailView: View {
                             .font(.caption)
                             .fontDesign(.monospaced)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            #if !os(tvOS)
                             .textSelection(.enabled)
-                            #endif
                     }
                 }
             }
             .navigationTitle(String(localized: "settings.advanced.logs.detail.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 sheetCloseToolbarItem { dismiss() }
             }
         }
         .presentationDetents([.medium, .large])
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 400)
-        #endif
     }
 
     private var levelColor: Color {
@@ -329,9 +265,6 @@ private struct LogFiltersSheet: View {
                         }
                     }
                 }
-                #if os(macOS)
-                .labelStyle(FixedIconWidthLabelStyle())
-                #endif
 
                 SettingsFormSection("settings.advanced.logs.filter.levels") {
                     ForEach(LogLevel.allCases, id: \.self) { level in
@@ -340,9 +273,6 @@ private struct LogFiltersSheet: View {
                         }
                     }
                 }
-                #if os(macOS)
-                .labelStyle(FixedIconWidthLabelStyle())
-                #endif
 
                 HStack {
                     Button(String(localized: "settings.advanced.logs.filter.reset")) {
@@ -355,9 +285,7 @@ private struct LogFiltersSheet: View {
                 .padding(.bottom, 16)
             }
             .navigationTitle(String(localized: "settings.advanced.logs.filter.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(role: .cancel) {
@@ -369,9 +297,6 @@ private struct LogFiltersSheet: View {
             }
         }
         .presentationDetents([.medium])
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 500)
-        #endif
     }
 
     private func binding(for category: LogCategory) -> Binding<Bool> {

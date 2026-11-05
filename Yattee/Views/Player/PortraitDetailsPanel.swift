@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 struct PortraitDetailsPanel: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -471,16 +470,9 @@ struct PortraitDetailsPanel: View {
                     },
                     onAirPlay: { /* AirPlay - handled by system */ },
                     onPiP: {
-                        #if os(iOS)
-                        if let mpvBackend = playerService?.currentBackend as? MPVBackend {
-                            mpvBackend.togglePiP()
-                        }
-                        #endif
                     },
                     onOrientationLock: {
-                        #if os(iOS)
                         appEnvironment?.settingsManager.inAppOrientationLock.toggle()
-                        #endif
                     },
                     onFullscreen: { onFullscreen?() },
                     onRateChanged: { rate in
@@ -546,5 +538,3 @@ struct PortraitDetailsPanel: View {
         }
     }
 }
-
-#endif

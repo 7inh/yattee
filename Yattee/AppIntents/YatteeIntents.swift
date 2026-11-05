@@ -111,7 +111,6 @@ struct AddToQueueIntent: AppIntent {
     }
 }
 
-#if !os(tvOS)
 struct DownloadVideoIntent: AppIntent {
     static let title: LocalizedStringResource = "Download Video"
     static let description = IntentDescription("Downloads a video in Yattee at your preferred download quality.")
@@ -130,7 +129,6 @@ struct DownloadVideoIntent: AppIntent {
         return .result(value: values["title"] ?? "")
     }
 }
-#endif
 
 struct BookmarkVideoIntent: AppIntent {
     static let title: LocalizedStringResource = "Bookmark Video"

@@ -8,9 +8,7 @@
 
 import Foundation
 import Network
-#if os(iOS)
 import UIKit
-#endif
 
 /// Error thrown when a connection attempt times out.
 struct ConnectionTimeoutError: Error, LocalizedError {
@@ -113,15 +111,7 @@ final class LocalNetworkService {
 
     /// Returns the system device name (used as placeholder/default when no custom name is set).
     static var systemDeviceName: String {
-        #if os(macOS)
-        return Host.current().localizedName ?? "Mac"
-        #elseif os(iOS)
         return UIDevice.current.name
-        #elseif os(tvOS)
-        return "Apple TV"
-        #else
-        return "Yattee Device"
-        #endif
     }
 
     // MARK: - Initialization

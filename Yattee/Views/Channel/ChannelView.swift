@@ -38,9 +38,6 @@ struct ChannelView: View {
     /// nothing in a platform menu's content is ever given a lifecycle to load
     /// from.
     @State private var destinationMembership = SubscriptionDestinationMembershipLoader()
-    #if os(tvOS)
-    @State private var showingSubscriptionDestinations = false
-    #endif
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollToTop: Bool = false
     @State private var cachedHeader: CachedChannelData?
@@ -94,19 +91,6 @@ struct ChannelView: View {
     // External channel state (page-based pagination for extracted channels)
     @State private var externalCurrentPage = 1
 
-    #if os(tvOS)
-    // tvOS-specific state
-    @State private var isDescriptionScrollLocked = false
-    @State private var tvOSShowSearchTab = false
-    @FocusState private var isSubscribeFocused: Bool
-    @FocusState private var isTVSearchFieldFocused: Bool
-    @FocusState private var tvOSFocusedTab: TvOSChannelFocusTarget?
-
-    private enum TvOSChannelFocusTarget: Hashable {
-        case tab(ChannelTab)
-        case searchTab
-    }
-    #endif
 
     // Header configuration
     private let baseHeaderHeight: CGFloat = 280
@@ -169,11 +153,7 @@ struct ChannelView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
@@ -189,14 +169,6 @@ struct ChannelView: View {
                     loadingContent(cachedHeader)
                 } else if isLoading {
                     ProgressView()
-                        #if os(tvOS)
-                        // As a sidebar channel this is a tab root that cannot
-                        // be popped, so Cancel lands on the error and its Retry.
-                        .tvStalledLoadCancel {
-                            isLoading = false
-                            errorMessage = String(localized: "common.loadingStopped")
-                        }
-                        #endif
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = errorMessage {
                     errorView(error)
@@ -245,11 +217,7 @@ struct ChannelView: View {
     /// tab), so this is a passthrough.
     @ViewBuilder
     private func channelSearchable(@ViewBuilder _ content: () -> some View) -> some View {
-        #if os(tvOS)
         content()
-        #else
-        content()
-            #if os(iOS)
             .if(supportsChannelSearch) { view in
                 // iPhone: search bar drawer in the navigation area (header reserves
                 // space for it). iPad: toolbar search button — the drawer would add
@@ -264,16 +232,6 @@ struct ChannelView: View {
                     prompt: Text("channel.search.placeholder")
                 )
             }
-            #elseif os(macOS)
-            .if(supportsChannelSearch) { view in
-                view.searchable(
-                    text: $searchText,
-                    isPresented: $isSearchActive,
-                    placement: .toolbar,
-                    prompt: Text("channel.search.placeholder")
-                )
-            }
-            #endif
             .onSubmit(of: .search) {
                 Task {
                     await performSearch()
@@ -293,7 +251,6 @@ struct ChannelView: View {
                     searchText = ""
                 }
             }
-        #endif
     }
 
     private func loadWatchEntries() {
@@ -330,14 +287,9 @@ struct ChannelView: View {
 
     @ViewBuilder
     private func channelContent(_ channel: Channel) -> some View {
-        #if os(tvOS)
-        tvOSChannelContent(channel)
-        #else
         iOSChannelContent(channel)
-        #endif
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private func iOSChannelContent(_ channel: Channel) -> some View {
         GeometryReader { geometry in
@@ -352,13 +304,6 @@ struct ChannelView: View {
 
                             // Content based on instance type
                             // On macOS the content type picker lives in the toolbar instead.
-                            #if os(macOS)
-                            // Breathing room between the banner and the content below.
-                            Color.clear.frame(height: 16)
-                            if !supportsChannelTabs {
-                                channelDescription(channel)
-                            }
-                            #else
                             if supportsChannelTabs {
                                 // Pill-style content type switcher
                                 contentTypePicker
@@ -368,7 +313,6 @@ struct ChannelView: View {
                                 // Non-tab instances: show description
                                 channelDescription(channel)
                             }
-                            #endif
                         }
 
                         // Tab content or search results
@@ -378,16 +322,8 @@ struct ChannelView: View {
                             // Since we use .ignoresSafeArea(edges: .top), we need manual spacing
                             // iOS: safe area (~59pt) + nav bar (~44pt) + search bar (~56pt) = ~130pt extra
                             // macOS: safe area + toolbar (~52pt)
-                            #if os(iOS)
                             Spacer()
                                 .frame(height: geometry.safeAreaInsets.top + 130)
-                            #elseif os(macOS)
-                            Spacer()
-                                .frame(height: geometry.safeAreaInsets.top + 52)
-                            #else
-                            Spacer()
-                                .frame(height: geometry.safeAreaInsets.top)
-                            #endif
                             
                             searchResultsContent
                         } else if supportsChannelTabs {
@@ -416,31 +352,12 @@ struct ChannelView: View {
         .background(viewBackgroundColor)
         .ignoresSafeArea(edges: .top)
         .softTopScrollEdgeEffect()
-        #if os(macOS)
-        .overlay(alignment: .top) {
-            legacyToolbarScrim
-        }
-        #endif
         .animation(.easeInOut(duration: 0.25), value: isSearchActive)
         .modifier(ChannelScrollOffsetModifier(
             scrollOffset: $scrollOffset,
             isPlayerExpanded: appEnvironment?.navigationCoordinator.isPlayerExpanded ?? false
         ))
         .toolbar {
-            #if os(macOS)
-            // Keep the content picker in the center `.principal` slot even while
-            // searching. Its presence is what pins the trailing `.searchable`
-            // field to the right edge — dropping it (or making it zero-width)
-            // lets the search field re-center. During search it's disabled so the
-            // user can't switch tabs while the content area shows search results.
-            if supportsChannelTabs {
-                ToolbarItem(placement: .principal) {
-                    contentTypePicker
-                        .fixedSize()
-                        .disabled(isSearchActive && hasSearched)
-                }
-            }
-            #else
             ToolbarItem(placement: .principal) {
                 // Collapsed title in toolbar
                 HStack(spacing: 8) {
@@ -465,7 +382,6 @@ struct ChannelView: View {
                 }
                 .opacity(collapsedTitleOpacity)
             }
-            #endif
 
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
@@ -474,52 +390,29 @@ struct ChannelView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "channelViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
 
             // macOS: channel avatar + name sit on the leading edge, next to view
             // options. Excluded from the shared glass background so the view
             // options button keeps its own capsule and the title renders plain.
-            #if os(macOS)
-            if #available(macOS 26, *) {
-                ToolbarItem(placement: .navigation) {
-                    collapsedToolbarTitle(name: channel.name, thumbnailURL: channel.thumbnailURL)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .navigation) {
-                    collapsedToolbarTitle(name: channel.name, thumbnailURL: channel.thumbnailURL)
-                }
-            }
-            #endif
 
             // iOS keeps a fixed gap between the trailing view options and channel
             // menu buttons; on macOS view options moves to the leading edge, so no
             // gap is needed here.
-            #if os(iOS)
             if #available(iOS 26, *) {
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
-            #endif
 
             ToolbarItem(placement: .primaryAction) {
                 channelMenu
             }
         }
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "channelViewOptions", in: sheetTransition)
         }
-        #endif
-        #if os(iOS)
         .toolbarBackground(collapseProgress > 0.8 ? .visible : .hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .confirmationDialog(
             String(localized: "channel.unsubscribe.confirmation.title"),
             isPresented: $showingUnsubscribeConfirmation,
@@ -534,21 +427,15 @@ struct ChannelView: View {
         }
         .presentationCompactAdaptation(.sheet)
     }
-    #endif
 
     // MARK: - Loading Content
 
     /// Shows cached header with a spinner below while loading full channel data.
     @ViewBuilder
     private func loadingContent(_ cached: CachedChannelData) -> some View {
-        #if os(tvOS)
-        tvOSLoadingContent(cached)
-        #else
         iOSLoadingContent(cached)
-        #endif
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private func iOSLoadingContent(_ cached: CachedChannelData) -> some View {
         GeometryReader { geometry in
@@ -559,15 +446,11 @@ struct ChannelView: View {
 
                     // Show tab picker during loading (doesn't depend on channel)
                     // On macOS the content type picker lives in the toolbar instead.
-                    #if os(macOS)
-                    Color.clear.frame(height: 16)
-                    #else
                     if supportsChannelTabs {
                         contentTypePicker
                             .padding(.horizontal)
                             .padding(.vertical, 8)
                     }
-                    #endif
 
                     // Centered spinner for content area below tabs
                     ProgressView()
@@ -585,20 +468,7 @@ struct ChannelView: View {
         .background(viewBackgroundColor)
         .ignoresSafeArea(edges: .top)
         .softTopScrollEdgeEffect()
-        #if os(macOS)
-        .overlay(alignment: .top) {
-            legacyToolbarScrim
-        }
-        #endif
         .toolbar {
-            #if os(macOS)
-            if supportsChannelTabs {
-                ToolbarItem(placement: .principal) {
-                    contentTypePicker
-                        .fixedSize()
-                }
-            }
-            #else
             ToolbarItem(placement: .principal) {
                 // Collapsed title in toolbar (using cached data)
                 HStack(spacing: 8) {
@@ -623,7 +493,6 @@ struct ChannelView: View {
                 }
                 .opacity(collapsedTitleOpacity)
             }
-            #endif
 
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
@@ -632,52 +501,29 @@ struct ChannelView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "channelViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
 
             // macOS: channel avatar + name sit on the leading edge, next to view
             // options. Excluded from the shared glass background so the view
             // options button keeps its own capsule and the title renders plain.
-            #if os(macOS)
-            if #available(macOS 26, *) {
-                ToolbarItem(placement: .navigation) {
-                    collapsedToolbarTitle(name: cached.name, thumbnailURL: cached.thumbnailURL)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .navigation) {
-                    collapsedToolbarTitle(name: cached.name, thumbnailURL: cached.thumbnailURL)
-                }
-            }
-            #endif
 
             // iOS keeps a fixed gap between the trailing view options and channel
             // menu buttons; on macOS view options moves to the leading edge, so no
             // gap is needed here.
-            #if os(iOS)
             if #available(iOS 26, *) {
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
-            #endif
 
             ToolbarItem(placement: .primaryAction) {
                 channelMenu
             }
         }
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "channelViewOptions", in: sheetTransition)
         }
-        #endif
-        #if os(iOS)
         .toolbarBackground(collapseProgress > 0.8 ? .visible : .hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .modifier(ChannelScrollOffsetModifier(
             scrollOffset: $scrollOffset,
             isPlayerExpanded: appEnvironment?.navigationCoordinator.isPlayerExpanded ?? false
@@ -696,379 +542,10 @@ struct ChannelView: View {
         }
         .presentationCompactAdaptation(.sheet)
     }
-    #endif
 
-    #if os(tvOS)
-    // MARK: - tvOS Two-Column Layout
-
-    @ViewBuilder
-    private func tvOSChannelContent(_ channel: Channel) -> some View {
-        GeometryReader { geometry in
-            let leftWidth = geometry.size.width * 0.30
-            HStack(alignment: .top, spacing: 40) {
-                tvOSLeftColumn(channel: channel, geometry: geometry)
-                    .frame(width: leftWidth, alignment: .leading)
-                    .focusSection()
-
-                tvOSRightColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .focusSection()
-            }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 40)
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            .onChange(of: geometry.safeAreaInsets, initial: true) { _, insets in
-                horizontalSafeAreaInsets = (insets.leading, insets.trailing)
-            }
-        }
-        .confirmationDialog(
-            String(localized: "channel.unsubscribe.confirmation.title"),
-            isPresented: $showingUnsubscribeConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "channel.unsubscribe.confirmation.action"), role: .destructive) {
-                unsubscribe()
-            }
-            Button(String(localized: "common.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "channel.unsubscribe.confirmation.message"))
-        }
-    }
-
-    @ViewBuilder
-    private func tvOSLeftColumn(channel: Channel, geometry: GeometryProxy) -> some View {
-        tvOSLeftColumnContent(
-            name: channel.name,
-            thumbnailURL: channel.thumbnailURL,
-            subscriberCount: channel.subscriberCount,
-            description: channel.description
-        )
-    }
-
-    @ViewBuilder
-    private func tvOSLeftColumnContent(
-        name: String,
-        thumbnailURL: URL?,
-        subscriberCount: Int?,
-        description: String?
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
-            tvOSAvatar(name: name, thumbnailURL: thumbnailURL)
-                .frame(maxWidth: .infinity)
-
-            Text(name)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if let subscriberCount {
-                Text(CountFormatter.compact(subscriberCount))
-                    .fontWeight(.bold)
-                + Text(verbatim: " ")
-                + Text(String(localized: "channel.subscribers"))
-            }
-
-            if !isDescriptionScrollLocked {
-                tvOSSubscribeButton
-                tvOSSubscriptionDestinationsButton
-            }
-
-            if let description, !description.isEmpty {
-                TVScrollableDescription(
-                    description: description,
-                    isScrollLocked: $isDescriptionScrollLocked
-                )
-                .frame(maxHeight: .infinity)
-            } else {
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(.vertical, 8)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .animation(.easeInOut(duration: 0.25), value: isDescriptionScrollLocked)
-    }
-
-    @ViewBuilder
-    private func tvOSAvatar(name: String, thumbnailURL: URL?) -> some View {
-        LazyImage(url: thumbnailURL) { state in
-            if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Text(String(name.prefix(1)))
-                            .font(.system(size: 56, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-            }
-        }
-        .frame(width: 140, height: 140)
-        .clipShape(Circle())
-        .overlay(
-            Circle()
-                .stroke(.white.opacity(0.8), lineWidth: 3)
-        )
-        .shadow(color: .black.opacity(0.4), radius: 10, y: 5)
-    }
-
-    private var tvOSSubscribeButton: some View {
-        Button {
-            toggleSubscription()
-        } label: {
-            Label(
-                isSubscribed
-                    ? String(localized: "channel.menu.unsubscribe")
-                    : String(localized: "channel.menu.subscribe"),
-                systemImage: isSubscribed ? "person.fill.xmark" : "person.badge.plus"
-            )
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .font(.headline)
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(!allowsCurrentContextMutation)
-        .focused($isSubscribeFocused)
-    }
-
-    /// The destination list, as its own button: a menu is unusable with a
-    /// remote, and the primary tap has to stay the current account's toggle.
-    @ViewBuilder
-    private var tvOSSubscriptionDestinationsButton: some View {
-        if let channelToSubscribe, SubscriptionDestinations.areOffered(in: appEnvironment) {
-            Button {
-                showingSubscriptionDestinations = true
-            } label: {
-                Label(
-                    String(localized: "channel.menu.subscribeOn"),
-                    systemImage: "person.crop.circle.badge.plus"
-                )
-                .frame(maxWidth: .infinity, minHeight: 60)
-            }
-            .buttonStyle(.bordered)
-            .fullScreenCover(isPresented: $showingSubscriptionDestinations) {
-                SubscriptionDestinationPicker(
-                    channel: channelToSubscribe,
-                    membership: destinationMembership
-                ) { context, subscribed in
-                    destinationDidToggle(context, subscribed: subscribed)
-                }
-            }
-        }
-    }
-
-    private var tvOSTabButtons: some View {
-        HStack(spacing: 12) {
-            ForEach([ChannelTab.videos, .shorts, .streams, .playlists]) { tab in
-                tvOSTabButton(for: tab)
-            }
-            if supportsChannelSearch {
-                tvOSSearchTabButton
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var tvOSSearchTabButton: some View {
-        let isSelected = tvOSShowSearchTab
-        let action = {
-            tvOSFocusedTab = .searchTab
-            if !tvOSShowSearchTab {
-                tvOSShowSearchTab = true
-                isSearchActive = true
-            }
-        }
-        let label = Label(String(localized: "search.title"), systemImage: "magnifyingglass")
-            .fontWeight(isSelected ? .bold : .regular)
-            .lineLimit(1)
-
-        Button(action: action) { label }
-            .buttonStyle(.borderedProminent)
-            .tint(isSelected ? accentColor : Color.gray.opacity(0.3))
-            .focused($tvOSFocusedTab, equals: .searchTab)
-    }
-
-    @ViewBuilder
-    private func tvOSTabButton(for tab: ChannelTab) -> some View {
-        let isSelected = !tvOSShowSearchTab && selectedTab == tab
-        let action = {
-            tvOSFocusedTab = .tab(tab)
-            if tvOSShowSearchTab {
-                tvOSShowSearchTab = false
-                isSearchActive = false
-            }
-            if selectedTab != tab {
-                selectedTab = tab
-                Task {
-                    await loadTabContentIfNeeded(tab)
-                }
-            }
-        }
-        let label = Label(tab.title, systemImage: tab.systemImage)
-            .fontWeight(isSelected ? .bold : .regular)
-            .lineLimit(1)
-
-        Button(action: action) { label }
-            .buttonStyle(.borderedProminent)
-            .tint(isSelected ? accentColor : Color.gray.opacity(0.3))
-            .focused($tvOSFocusedTab, equals: .tab(tab))
-    }
-
-    private var tvOSRightColumn: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            if supportsChannelTabs {
-                tvOSTabButtons
-            }
-
-            if tvOSShowSearchTab {
-                tvOSChannelSearchContent
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Group {
-                            switch selectedTab {
-                            case .videos:
-                                videosGrid
-                            case .shorts:
-                                shortsGrid
-                            case .streams:
-                                streamsGrid
-                            case .playlists:
-                                playlistsGrid
-                            case .about:
-                                videosGrid
-                            }
-                        }
-                        .id(selectedTab)
-                    }
-                    .padding(.vertical, 20)
-                }
-                .scrollClipDisabled()
-            }
-        }
-    }
-
-    private var tvOSChannelSearchContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 24) {
-                TextField(String(localized: "search.placeholder"), text: $searchText)
-                    .textFieldStyle(.plain)
-                    .focused($isTVSearchFieldFocused)
-                    .onSubmit {
-                        Task { await performSearch() }
-                    }
-            }
-            .focusSection()
-
-            ScrollView {
-                if hasSearched || isSearchLoading {
-                    searchResultsContent
-                        .padding(.vertical, 20)
-                }
-            }
-            .scrollClipDisabled()
-        }
-        .onAppear {
-            isTVSearchFieldFocused = true
-        }
-    }
-
-    @ViewBuilder
-    private func tvOSLoadingContent(_ cached: CachedChannelData) -> some View {
-        GeometryReader { geometry in
-            let leftWidth = geometry.size.width * 0.30
-            HStack(alignment: .top, spacing: 40) {
-                tvOSLeftColumnContent(
-                    name: cached.name,
-                    thumbnailURL: cached.thumbnailURL,
-                    subscriberCount: cached.subscriberCount,
-                    description: cached.description
-                )
-                .frame(width: leftWidth, alignment: .leading)
-                .focusSection()
-
-                VStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 40)
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            .onChange(of: geometry.safeAreaInsets, initial: true) { _, insets in
-                horizontalSafeAreaInsets = (insets.leading, insets.trailing)
-            }
-        }
-    }
-    #endif
 
     // MARK: - Header
 
-    #if os(macOS)
-    /// Pre-macOS 26 has no Liquid Glass toolbar capsules, so toolbar items sit
-    /// directly on the banner/scrolled content. A fixed window-background scrim
-    /// at the top keeps them legible in both appearances.
-    @ViewBuilder
-    private var legacyToolbarScrim: some View {
-        if #unavailable(macOS 26) {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.9), location: 0),
-                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.75), location: 0.5),
-                    .init(color: .clear, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 100)
-            .frame(maxWidth: .infinity)
-            .allowsHitTesting(false)
-            .ignoresSafeArea(edges: .top)
-        }
-    }
-
-    @ViewBuilder
-    private func collapsedToolbarTitle(name: String, thumbnailURL: URL?) -> some View {
-        let label = HStack(spacing: 8) {
-            LazyImage(url: thumbnailURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Circle()
-                        .fill(.quaternary)
-                }
-            }
-            .frame(width: 28, height: 28)
-            .clipShape(Circle())
-
-            Text(name)
-                .font(.headline)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-
-        // Own glass capsule; the toolbar item opts out of the shared background
-        // so this doesn't merge with the view options button.
-        if #available(macOS 26, *) {
-            label
-                .padding(.vertical, 5)
-                .glassEffect()
-        } else {
-            label
-        }
-    }
-    #endif
 
     private func header(_ channel: Channel) -> some View {
         header(name: channel.name, thumbnailURL: channel.thumbnailURL, bannerURL: channel.bannerURL)
@@ -1078,16 +555,11 @@ struct ChannelView: View {
         GeometryReader { geometry in
             // Calculate avatar vertical position
             let avatarBottomPadding: CGFloat = 20
-            #if os(macOS)
-            let headerAvatarSize = avatarSize
-            let nameSpace: CGFloat = 0
-            #else
             // Smoothly interpolate the space for channel name (40pt when visible, 0 when collapsed)
             // Name starts fading at progress 0, fully gone at 0.3
             let nameSpaceProgress = min(collapseProgress / 0.3, 1.0)
             let nameSpace: CGFloat = 40 * (1 - nameSpaceProgress)
             let headerAvatarSize = currentAvatarSize
-            #endif
             let avatarContentHeight: CGFloat = headerAvatarSize + nameSpace + avatarBottomPadding
             let idealAvatarY = headerHeight - avatarContentHeight
             // Minimum Y position to prevent going into nav bar
@@ -1137,14 +609,10 @@ struct ChannelView: View {
                 .offset(x: bannerXOffset, y: pinOffset)
 
                 // Avatar and channel name - pinned to bottom of banner
-                #if os(macOS)
-                let avatarOpacity: CGFloat = 1
-                #else
                 // Smooth opacity fade based on collapse progress
                 let avatarOpacity = max(0, 1.0 - collapseProgress * 1.4)
                 // Channel name fades out faster than avatar (starts fading at 0, gone by 0.3)
                 let nameOpacity = max(0, 1.0 - collapseProgress * 3.3)
-                #endif
 
                 VStack(spacing: 8) {
                     LazyImage(url: thumbnailURL) { state in
@@ -1170,7 +638,6 @@ struct ChannelView: View {
                     )
                     .shadow(color: .black.opacity(0.4), radius: 10, y: 5)
 
-                    #if !os(macOS)
                     // Channel name with smooth fade
                     Text(name)
                         .font(.title2)
@@ -1178,7 +645,6 @@ struct ChannelView: View {
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
                         .opacity(nameOpacity)
-                    #endif
                 }
                 .offset(y: clampedAvatarY + pinOffset)
                 .opacity(avatarOpacity)
@@ -1286,7 +752,6 @@ struct ChannelView: View {
             // main button makes, so it survives an unusable current context.
             // tvOS reaches the same list through its own button — this menu is
             // never presented there.
-            #if !os(tvOS)
             if let channelToSubscribe {
                 SubscriptionDestinationMenu(
                     channel: channelToSubscribe,
@@ -1295,7 +760,6 @@ struct ChannelView: View {
                     destinationDidToggle(context, subscribed: subscribed)
                 }
             }
-            #endif
 
             // Notifications toggle (only visible when subscribed)
             if isSubscribed {
@@ -1630,9 +1094,7 @@ struct ChannelView: View {
                                 loadMoreVideos: loadMoreVideosCallback
                             )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(video: video)
-                    #endif
                 }
 
                 // External channels use manual load more button
@@ -1875,9 +1337,7 @@ struct ChannelView: View {
                                 loadMoreVideos: loadMoreShortsCallback
                             )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(video: video)
-                    #endif
                 }
 
                 LoadMoreTrigger(
@@ -1995,9 +1455,7 @@ struct ChannelView: View {
                                 loadMoreVideos: loadMoreStreamsCallback
                             )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(video: video)
-                    #endif
                 }
 
                 LoadMoreTrigger(
@@ -2110,9 +1568,7 @@ struct ChannelView: View {
                                 videoIndex: searchResultVideos.firstIndex(where: { $0.id == video.id }) ?? 0,
                                 loadMoreVideos: nil
                             )
-                            #if !os(tvOS)
                             .videoSwipeActions(video: video)
-                            #endif
 
                     case .playlist(let playlist):
                         ChannelPlaylistRow(playlist: playlist, style: rowStyle)
@@ -2803,9 +2259,6 @@ private struct ChannelScrollOffsetModifier: ViewModifier {
     var isPlayerExpanded: Bool
 
     func body(content: Content) -> some View {
-        #if os(macOS)
-        content
-        #else
         content
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y
@@ -2817,7 +2270,6 @@ private struct ChannelScrollOffsetModifier: ViewModifier {
                     scrollOffset = newValue
                 }
             }
-        #endif
     }
 }
 

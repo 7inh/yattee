@@ -7,19 +7,11 @@
 
 import SwiftUI
 
-#if os(tvOS)
-private let tapFeedbackIconSize: CGFloat = 88
-private let tapFeedbackTextSize: CGFloat = 32
-private let tapFeedbackCircleSize: CGFloat = 240
-private let tapFeedbackVStackSpacing: CGFloat = 16
-private let tapFeedbackPadding: CGFloat = 40
-#else
 private let tapFeedbackIconSize: CGFloat = 44
 private let tapFeedbackTextSize: CGFloat = 16
 private let tapFeedbackCircleSize: CGFloat = 120
 private let tapFeedbackVStackSpacing: CGFloat = 8
 private let tapFeedbackPadding: CGFloat = 20
-#endif
 
 /// Position for tap feedback display.
 enum TapFeedbackPosition {

@@ -8,7 +8,6 @@
 import SwiftUI
 import NukeUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 extension ExpandedPlayerSheet {
     // MARK: - Layout Constants
@@ -35,7 +34,6 @@ extension ExpandedPlayerSheet {
     /// the controls confined to the trailing half.
     static let bookFoldHingeGap: CGFloat = 16
 
-    #if os(iOS)
     /// Reflection strength at the hinge line; it fades to nothing at
     /// `tabletopReflectionFadeEnd` of the mirrored video height.
     static let tabletopReflectionOpacity: Double = 0.4
@@ -51,38 +49,14 @@ extension ExpandedPlayerSheet {
             && playerState.pipState != .active
     }
 
-    /// Mirrored video frames sized like the fitted video, fading out downwards.
-    private func tabletopReflection(backend: MPVBackend, width: CGFloat, height: CGFloat) -> some View {
-        MPVReflectionView(backend: backend)
-            .frame(width: width, height: height)
-            .blur(radius: Self.tabletopReflectionBlurRadius)
-            .mask(
-                LinearGradient(
-                    colors: [.white.opacity(Self.tabletopReflectionOpacity), .clear],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: Self.tabletopReflectionFadeEnd)
-                )
-            )
-            .allowsHitTesting(false)
-    }
-    #endif
-
     // MARK: - Layout Detection
 
     /// Check if widescreen layout should be used based on available size.
     func isWideScreenLayout(size: CGSize) -> Bool {
-        #if os(iOS)
         let isLandscape = size.width > size.height
         return isLandscape // All landscape orientations use widescreen
-        #elseif os(macOS)
-        // macOS: Always use widescreen layout
-        return true
-        #else
-        return false // tvOS uses different layout
-        #endif
     }
 
-    #if os(iOS) || os(macOS)
     /// Whether the corner layout should be used for the given size: opted into
     /// via the preset's panel settings, large enough (iPad, macOS, iPhone Duo
     /// interior), and in a widescreen orientation. Evaluated per layout pass
@@ -97,13 +71,10 @@ extension ExpandedPlayerSheet {
     /// The size half of `isCornerLayout(size:)`, independent of the preset's
     /// layout mode.
     func cornerLayoutFits(size: CGSize) -> Bool {
-        #if os(iOS)
         guard size.height >= Self.minHeightForCornerLayout else { return false }
-        #endif
         return size.width >= Self.minWidthForCornerLayout
             && isWideScreenLayout(size: size)
     }
-    #endif
 
     // MARK: - Standard/Portrait Layout
 
@@ -139,9 +110,7 @@ extension ExpandedPlayerSheet {
         let videoDetailsState = playerState?.videoDetailsState ?? .idle
         let shouldUseCompactPanel = videoDetailsState == .loaded && !hasDescription
 
-        #if os(iOS)
         let canPresentOnTheGo = UIDevice.current.userInterfaceIdiom == .phone && !isWideScreenLayout(size: geometry.size)
-        #endif
 
         // Check if expanded comments pill will be visible (needs extra panel height)
         let pillSettings = playerControlsLayout.effectivePlayerPillSettings
@@ -164,13 +133,8 @@ extension ExpandedPlayerSheet {
         // half of the screen is the video area, the lower half holds every
         // control. `layoutHeight` replaces the full screen height wherever the
         // fullscreen video is fitted and positioned.
-        #if os(iOS)
         let isHingeSplit = isTabletopHinge
         let isTabletop = isTabletopHinge && !isPortraitPanelVisible
-        #else
-        let isHingeSplit = false
-        let isTabletop = false
-        #endif
         let layoutHeight = isTabletop ? fullScreenHeight / 2 : fullScreenHeight
 
         // Calculate fit size (aspect-fit within screen bounds, but capped to show panel)
@@ -195,12 +159,8 @@ extension ExpandedPlayerSheet {
         let fillHeight: CGFloat = max(1, fitHeightFromWidth >= fillAreaHeight ? fitHeightFromWidth : fillAreaHeight)
         let fillWidth: CGFloat = max(1, fitHeightFromWidth >= fillAreaHeight ? screenWidth : fillAreaHeight * aspectRatio)
 
-        #if os(iOS)
         // Use UIKit pinch gesture panscan from NavigationCoordinator.
         let panscan = !isPortraitPanelVisible ? (navigationCoordinator?.pinchPanscan ?? 0.0) : 0.0
-        #else
-        let panscan = 0.0
-        #endif
 
         // Video layer uses panscan-interpolated size, controls stay at fit size
         let videoHeight = max(1, fitHeight + (fillHeight - fitHeight) * panscan)
@@ -249,17 +209,12 @@ extension ExpandedPlayerSheet {
         // towards this point, and using the full-screen center there moved
         // the video down during the drag, only to snap it back up once the
         // hidden state flipped to the half-height layout.
-        #if os(iOS)
         let hiddenLayoutHeight = isTabletopHinge ? fullScreenHeight / 2 : fullScreenHeight
-        #else
-        let hiddenLayoutHeight = fullScreenHeight
-        #endif
         let hiddenVideoY = hiddenLayoutHeight / 2 - safeAreaInsets.top
         // Video centered in video area (above panel). Hinge split: the same
         // spot as with the panel hidden, so toggling the panel never moves it.
         let topY = isHingeSplit ? hiddenVideoY : videoAreaHeight / 2
 
-        #if os(iOS)
         // 500 points fits the full controls at standard text sizes on a
         // 375×812 iPhone. Cap the sheet below the actual video, including when
         // compact details center it lower down; shorter panels can scroll.
@@ -267,7 +222,6 @@ extension ExpandedPlayerSheet {
         let onTheGoVideoBottom = safeAreaInsets.top + topY + fitHeight / 2
         let onTheGoAvailableHeight = fullScreenHeight - onTheGoVideoBottom - windowSafeAreaInsets.bottom - 8
         let onTheGoSmallDetent = PresentationDetent.height(max(1, min(500, onTheGoAvailableHeight)))
-        #endif
 
         let videoY: CGFloat = {
             if isPortraitPanelVisible {
@@ -361,25 +315,12 @@ extension ExpandedPlayerSheet {
                 .animation(isPanelDragging ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: videoYOffset)
                 .animation(panelRevealOffset != 0 ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: isPortraitPanelVisible)
 
-            #if os(iOS)
             // Tabletop: mirror the video across the hinge line into the lower
             // half, like a screen standing on a glossy table. The mirrored
             // frames come from the render view; this only places and fades them.
             // Clipped to the lower half: a filled (panscanned) video is taller
             // than the upper half, and its mirror would otherwise spill back
             // over the hinge onto the video itself.
-            if isTabletop, showsTabletopReflection,
-               let backend = playerService?.currentBackend as? MPVBackend {
-                let hingeY = layoutHeight - safeAreaInsets.top
-                tabletopReflection(backend: backend, width: videoWidth, height: videoHeight)
-                    .position(x: screenWidth / 2 + fullscreenPlayerXOffset, y: hingeY - videoY)
-                    .frame(width: screenWidth, height: layoutHeight)
-                    .clipped()
-                    .position(x: screenWidth / 2, y: hingeY + layoutHeight / 2)
-                    .transition(.opacity)
-            }
-            #endif
-
             // Controls layer - positioned based on panel state
             // When panel visible: positioned to cover from top down to panel
             // When fullscreen: positioned exactly like playerView so they align
@@ -397,7 +338,6 @@ extension ExpandedPlayerSheet {
                 }
             }
             // Reveal gesture - swipe up to show panel when hidden (simultaneous so taps still work for controls)
-            #if !os(tvOS)
             .simultaneousGesture(
                     !isPortraitPanelVisible ?
                     DragGesture()
@@ -467,10 +407,8 @@ extension ExpandedPlayerSheet {
                         }
                     : nil
                 )
-            #endif
 
             // Pinned panel (fills space below video) - iOS only
-            #if os(iOS)
             // Always rendered; use offset to hide when not visible
             if isPortraitPanelVisible || panelRevealOffset != 0 {
                 if let video = playerState?.currentVideo {
@@ -653,7 +591,6 @@ extension ExpandedPlayerSheet {
                     .ignoresSafeArea(edges: .bottom)  // Only ignore bottom safe area, preserve top
                 }
             }
-            #endif
 
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -684,9 +621,7 @@ extension ExpandedPlayerSheet {
         // after reveal, allowing sheet dismiss gesture to incorrectly fire.
         .onChange(of: isPortraitPanelVisible) { _, isVisible in
             if !isVisible {
-                #if os(iOS)
                 isOnTheGoPresented = false
-                #endif
                 // Clear panel frame when hidden
                 navigationCoordinator?.portraitPanelFrame = .zero
                 // Reset panel expansion state
@@ -714,7 +649,6 @@ extension ExpandedPlayerSheet {
                 useCompactPanel = shouldUseCompact
             }
         }
-        #if os(iOS)
         .sheet(isPresented: $isOnTheGoPresented) {
             onTheGoSheet(smallDetent: onTheGoSmallDetent)
         }
@@ -723,7 +657,6 @@ extension ExpandedPlayerSheet {
                 onTheGoSelectedDetent = newDetent
             }
         }
-        #endif
     }
 
     /// Toggle floating panel visibility (for tall videos only)
@@ -827,26 +760,6 @@ extension ExpandedPlayerSheet {
                 }
 
                 // Video player layer - fades in when ready
-                if let backend = playerService?.currentBackend as? MPVBackend,
-                   let playerState,
-                   let playerService,
-                   info.hasBackend {
-                    let isAudioOnlyStream = playerState.currentStream?.isAudioOnly == true
-                    MPVVideoView(
-                        backend: backend,
-                        playerState: playerState,
-                        playerService: playerService,
-                        showsControls: false, // Controls rendered separately
-                        showsDebugOverlay: false // Debug overlay rendered at sheet level
-                    )
-                    .frame(width: safeVideoWidth, height: safeVideoHeight)
-                    // Only show video when both first frame is ready AND buffer is ready
-                    // This prevents showing a frozen frame before playback can start smoothly
-                    // Hide for audio-only streams - show thumbnail instead
-                    .opacity(info.hasBackend && playerState.isFirstFrameReady && playerState.isBufferReady && !isAudioOnlyStream ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: info.hasBackend && playerState.isFirstFrameReady && playerState.isBufferReady && !isAudioOnlyStream)
-                }
-
                 // Fallback when no video is set
                 if playerState?.currentVideo == nil {
                     ProgressView()
@@ -870,10 +783,9 @@ extension ExpandedPlayerSheet {
 
             // Controls layer - covers full screen in fullscreen mode, fit size otherwise
             // Only render here if showControls is true (controls will be rendered externally otherwise)
-            #if os(iOS)
             if showControls,
                let backend = playerService?.currentBackend,
-               backend.backendType == .mpv,
+               backend.backendType == .avFoundation,
                let playerState,
                let playerService,
                playerState.pipState != .active && !playerState.showDebugOverlay {
@@ -900,9 +812,6 @@ extension ExpandedPlayerSheet {
                         closeVideo()
                     },
                     onTogglePiP: {
-                        if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                            mpvBackend.togglePiP()
-                        }
                     },
                     onToggleDebug: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -988,135 +897,8 @@ extension ExpandedPlayerSheet {
                 .frame(width: controlsWidth, height: controlsHeight)
                 .offset(y: controlsVerticalOffset)
             }
-            #elseif os(macOS)
-            // No backend gate: the backend is created only after the video
-            // details fetch, and controls should be visible while loading.
-            if let playerState,
-               let playerService,
-               playerState.pipState != .active && !playerState.showDebugOverlay {
-                MacOSPlayerControlsView(
-                    playerState: playerState,
-                    onPlayPause: {
-                        playerService.togglePlayPause()
-                    },
-                    onSeek: { time in
-                        await playerService.seek(to: time)
-                    },
-                    onSeekForward: { seconds in
-                        playerService.seekForward(by: seconds)
-                    },
-                    onSeekBackward: { seconds in
-                        playerService.seekBackward(by: seconds)
-                    },
-                    isFullscreen: !isPortraitPanelVisible,
-                    onClose: { [self] in
-                        closeVideo()
-                    },
-                    onTogglePiP: {
-                        if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                            mpvBackend.togglePiP()
-                        }
-                    },
-                    onPlayNext: {
-                        await playerService.playNext()
-                    },
-                    onPlayPrevious: {
-                        await playerService.playPrevious()
-                    },
-                    onVolumeChanged: { [weak appEnvironment] volume in
-                        playerService.currentBackend?.volume = volume
-                        appEnvironment?.settingsManager.playerVolume = volume
-                        appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                    },
-                    onMuteToggled: { [weak appEnvironment] in
-                        let newMuted = !playerState.isMuted
-                        playerService.currentBackend?.isMuted = newMuted
-                        playerState.isMuted = newMuted
-                        appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                    },
-                    onShowSettings: { [self] in
-                        showingQualitySheet = true
-                    },
-                    onShowQueue: { [self] in
-                        presentSheet(.queue())
-                    },
-                    onShowPlaylistSelector: { [self] in
-                        presentAddToPlaylist()
-                    },
-                    onRateChanged: { rate in
-                        playerState.rate = rate
-                        playerService.currentBackend?.rate = Float(rate.rawValue)
-                    }
-                )
-                .frame(width: controlsWidth, height: controlsHeight)
-                .offset(y: controlsVerticalOffset)
-            }
-            #endif
-
-            // Debug overlay
-            #if os(iOS)
-            if let playerState {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        playerState.showDebugOverlay = false
-                    }
-                    .opacity(playerState.showDebugOverlay ? 1 : 0)
-                    .allowsHitTesting(playerState.showDebugOverlay)
-
-                VStack {
-                    HStack {
-                        MPVDebugOverlay(
-                            stats: debugStats,
-                            isVisible: Binding(
-                                get: { playerState.showDebugOverlay },
-                                set: { playerState.showDebugOverlay = $0 }
-                            ),
-                            isLandscape: false
-                        )
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(12)
-                .allowsHitTesting(false)
-                .opacity(playerState.showDebugOverlay ? 1 : 0)
-                .animation(.easeInOut(duration: 0.2), value: playerState.showDebugOverlay)
-            }
-            #endif
 
             // Debug overlay (macOS)
-            #if os(macOS)
-            if let playerState, playerState.showDebugOverlay {
-                // Tap anywhere to dismiss
-                Color.black.opacity(0.3)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        playerState.showDebugOverlay = false
-                    }
-
-                VStack {
-                    HStack {
-                        MPVDebugOverlay(
-                            stats: debugStats,
-                            isVisible: Binding(
-                                get: { playerState.showDebugOverlay },
-                                set: { playerState.showDebugOverlay = $0 }
-                            ),
-                            isLandscape: true  // macOS uses landscape layout
-                        )
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 80) // Avoid window traffic light buttons
-                .padding(.top, 16)
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-            #endif
         }
     }
 
@@ -1148,9 +930,8 @@ extension ExpandedPlayerSheet {
         // and the pinch-to-fill is off
         let topBarOffset: CGFloat = isTabletop ? (videoAreaTop - Self.tabletopTopBarInset + 8) : 0
 
-        #if os(iOS)
         if let backend = playerService?.currentBackend,
-           backend.backendType == .mpv,
+           backend.backendType == .avFoundation,
            let playerState,
            let playerService,
            playerState.pipState != .active && !playerState.showDebugOverlay {
@@ -1177,9 +958,6 @@ extension ExpandedPlayerSheet {
                     closeVideo()
                 },
                 onTogglePiP: {
-                    if let mpvBackend = backend as? MPVBackend {
-                        mpvBackend.togglePiP()
-                    }
                 },
                 onToggleDebug: {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -1277,75 +1055,11 @@ extension ExpandedPlayerSheet {
             )
             .frame(width: controlsWidth, height: controlsHeight)
         }
-        #elseif os(macOS)
-        // No backend gate: the backend is created only after the video
-        // details fetch, and controls should be visible while loading.
-        if let playerState,
-           let playerService,
-           playerState.pipState != .active && !playerState.showDebugOverlay {
-            MacOSPlayerControlsView(
-                playerState: playerState,
-                onPlayPause: {
-                    playerService.togglePlayPause()
-                },
-                onSeek: { time in
-                    await playerService.seek(to: time)
-                },
-                onSeekForward: { seconds in
-                    playerService.seekForward(by: seconds)
-                },
-                onSeekBackward: { seconds in
-                    playerService.seekBackward(by: seconds)
-                },
-                isFullscreen: !isPortraitPanelVisible,
-                onClose: { [self] in
-                    closeVideo()
-                },
-                onTogglePiP: {
-                    if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                        mpvBackend.togglePiP()
-                    }
-                },
-                onPlayNext: {
-                    await playerService.playNext()
-                },
-                onPlayPrevious: {
-                    await playerService.playPrevious()
-                },
-                onVolumeChanged: { [weak appEnvironment] volume in
-                    playerService.currentBackend?.volume = volume
-                    appEnvironment?.settingsManager.playerVolume = volume
-                    appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                },
-                onMuteToggled: { [weak appEnvironment] in
-                    let newMuted = !playerState.isMuted
-                    playerService.currentBackend?.isMuted = newMuted
-                    playerState.isMuted = newMuted
-                    appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                },
-                onShowSettings: { [self] in
-                    showingQualitySheet = true
-                },
-                onShowQueue: { [self] in
-                    presentSheet(.queue())
-                },
-                onShowPlaylistSelector: { [self] in
-                    presentAddToPlaylist()
-                },
-                onRateChanged: { rate in
-                    playerState.rate = rate
-                    playerService.currentBackend?.rate = Float(rate.rawValue)
-                }
-            )
-            .frame(width: controlsWidth, height: controlsHeight)
-        }
-        #endif
     }
 }
 
 // MARK: - Widescreen Layout (iOS/macOS only)
 
-#if os(iOS) || os(macOS)
 
 extension ExpandedPlayerSheet {
     // MARK: - Widescreen Content
@@ -1372,9 +1086,7 @@ extension ExpandedPlayerSheet {
                 navigationCoordinator?.navigateToChannel(for: video, collapsePlayer: true)
             } : nil,
             onFullscreen: {
-                #if os(iOS)
                 self.toggleFullscreen()
-                #endif
             }
         )
     }
@@ -1382,7 +1094,7 @@ extension ExpandedPlayerSheet {
     // MARK: - Corner Content
 
     /// Corner layout: video top-left, side column, optional below-video
-    /// region. Reuses `playerAreaForWidescreen` so the MPV hosting path is
+    /// region. Reuses `playerAreaForWidescreen` so the player hosting path is
     /// identical to the stacked layout — only the container size differs.
     @ViewBuilder
     func cornerContent(video: Video) -> some View {
@@ -1412,7 +1124,6 @@ extension ExpandedPlayerSheet {
                     fullWidth: width,
                     fullHeight: height
                 )
-                #if os(iOS)
                 .background {
                     GeometryReader { proxy in
                         Color.clear
@@ -1424,15 +1135,12 @@ extension ExpandedPlayerSheet {
                             }
                     }
                 }
-                #endif
             },
             onChannelTap: video.author.hasRealChannelInfo ? {
                 navigationCoordinator?.navigateToChannel(for: video, collapsePlayer: true)
             } : nil,
             onFullscreen: {
-                #if os(iOS)
                 self.toggleFullscreen()
-                #endif
             },
             isHingeSplit: isHingeSplitActive
         )
@@ -1440,11 +1148,7 @@ extension ExpandedPlayerSheet {
 
     /// The corner layout splits on the hinge while it's partially open.
     private var isHingeSplitActive: Bool {
-        #if os(iOS)
         isTabletopHinge
-        #else
-        false
-        #endif
     }
 
     // MARK: - Widescreen Player Area
@@ -1481,7 +1185,6 @@ extension ExpandedPlayerSheet {
         // Calculate offset for controls positioning (used for animation)
         let controlsOffset = (leadingSafeArea - trailingSafeArea) / 2
 
-        #if os(iOS)
         // Foldable in book posture (hinge partially open, landscape, the
         // player spanning the fold): the buttons move to the trailing half so
         // nothing sits on the hinge; dimming and taps still cover the whole
@@ -1494,7 +1197,6 @@ extension ExpandedPlayerSheet {
             // Controls frame starts at the leading safe area
             return max(0, fullWidth / 2 + Self.bookFoldHingeGap - leadingSafeArea)
         }()
-        #endif
 
         // Calculate video frame size based on panscan
         // At panscan 0: aspect-fit (may have black bars)
@@ -1519,12 +1221,8 @@ extension ExpandedPlayerSheet {
             }
         }()
 
-        #if os(iOS)
         // Use UIKit pinch gesture panscan from NavigationCoordinator
         let panscan = navigationCoordinator?.pinchPanscan ?? 0.0
-        #else
-        let panscan = 0.0
-        #endif
 
         // Interpolate between fit and fill based on panscan
         let videoWidth = max(1, fitSize.width + (fillSize.width - fitSize.width) * panscan)
@@ -1582,29 +1280,6 @@ extension ExpandedPlayerSheet {
                     }
 
                     // Video player layer - fades in when ready
-                    if let backend = playerService?.currentBackend as? MPVBackend,
-                       let playerState,
-                       let playerService,
-                       info.hasBackend {
-                        let isAudioOnlyStream = playerState.currentStream?.isAudioOnly == true
-                        MPVVideoView(
-                            backend: backend,
-                            playerState: playerState,
-                            playerService: playerService,
-                            showsControls: false, // Controls rendered separately at full size
-                            isWideScreenLayout: true,
-                            onTogglePanel: onTogglePanel,
-                            isPanelVisible: isPanelVisible,
-                            panelSide: panelSide
-                        )
-                        .frame(width: videoWidth, height: videoHeight)
-                        // Only show video when both first frame is ready AND buffer is ready
-                        // This prevents showing a frozen frame before playback can start smoothly
-                        // Hide for audio-only streams - show thumbnail instead
-                        .opacity(info.hasBackend && playerState.isFirstFrameReady && playerState.isBufferReady && !isAudioOnlyStream ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.2), value: info.hasBackend && playerState.isFirstFrameReady && playerState.isBufferReady && !isAudioOnlyStream)
-                    }
-
                     // Fallback when no video is set
                     if playerState?.currentVideo == nil {
                         ProgressView()
@@ -1634,9 +1309,8 @@ extension ExpandedPlayerSheet {
 
             // Controls layer - positioned using offset for smooth animation
             // Hidden when floating panel is visible (unless paused)
-            #if os(iOS)
             if let backend = playerService?.currentBackend,
-               backend.backendType == .mpv,
+               backend.backendType == .avFoundation,
                let playerState,
                let playerService,
                shouldShowControls,
@@ -1665,9 +1339,6 @@ extension ExpandedPlayerSheet {
                         closeVideo()
                     },
                     onTogglePiP: {
-                        if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                            mpvBackend.togglePiP()
-                        }
                     },
                     onToggleDebug: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -1760,10 +1431,8 @@ extension ExpandedPlayerSheet {
                             Text(verbatim: "availW: \(Int(availableWidth)) fullW: \(Int(fullWidth))")
                             Text(verbatim: "fullH: \(Int(fullHeight)) offset: \(Int(controlsOffset))")
                             Text(verbatim: "pinned: \(isPanelPinned ? "Y" : "N") vis: \(isPanelVisible ? "Y" : "N") side: \(panelSide == .left ? "L" : "R")")
-                            #if os(iOS)
                             let orientation = UIApplication.shared.foregroundWindowScene?.interfaceOrientation
                             Text(verbatim: "orient: \(orientation == .landscapeLeft ? "LL" : orientation == .landscapeRight ? "LR" : "P")")
-                            #endif
                         }
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundStyle(.yellow)
@@ -1780,164 +1449,6 @@ extension ExpandedPlayerSheet {
                     }
                 }
             }
-            #elseif os(macOS)
-            // No backend gate: the backend is created only after the video
-            // details fetch, and controls should be visible while loading.
-            if let playerState,
-               let playerService,
-               playerState.pipState != .active && !playerState.showDebugOverlay {
-                MacOSPlayerControlsView(
-                    playerState: playerState,
-                    onPlayPause: {
-                        playerService.togglePlayPause()
-                    },
-                    onSeek: { time in
-                        await playerService.seek(to: time)
-                    },
-                    onSeekForward: { seconds in
-                        playerService.seekForward(by: seconds)
-                    },
-                    onSeekBackward: { seconds in
-                        playerService.seekBackward(by: seconds)
-                    },
-                    onToggleFullscreen: {
-                        // Toggle native macOS fullscreen (drops the floating
-                        // config first so a pinned window can enter fullscreen)
-                        ExpandedPlayerWindowManager.shared.toggleFullScreen()
-                    },
-                    // The coordinator flag covers the inline overlay (where the
-                    // main window is the fullscreen one) and, being @Observable,
-                    // refreshes the button icon on toggle; the keyWindow check
-                    // covers the separate-window presentation.
-                    isFullscreen: navigationCoordinator?.isMacInlinePlayerFullScreen == true
-                        || NSApp.keyWindow?.styleMask.contains(.fullScreen) == true,
-                    // Esc collapses the inline overlay to the mini bar; in
-                    // separate-window mode Esc keeps its default handling.
-                    onCollapse: appEnvironment?.settingsManager.macPlayerSeparateWindow == true
-                        ? nil
-                        : { [weak navigationCoordinator] in
-                            navigationCoordinator?.isPlayerExpanded = false
-                        },
-                    onClose: { [self] in
-                        closeVideo()
-                    },
-                    onTogglePiP: {
-                        if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                            mpvBackend.togglePiP()
-                        }
-                    },
-                    onPlayNext: {
-                        await playerService.playNext()
-                    },
-                    onPlayPrevious: {
-                        await playerService.playPrevious()
-                    },
-                    onVolumeChanged: { [weak appEnvironment] volume in
-                        playerService.currentBackend?.volume = volume
-                        appEnvironment?.settingsManager.playerVolume = volume
-                        appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                    },
-                    onMuteToggled: { [weak appEnvironment] in
-                        let newMuted = !playerState.isMuted
-                        playerService.currentBackend?.isMuted = newMuted
-                        playerState.isMuted = newMuted
-                        appEnvironment?.remoteControlCoordinator.broadcastStateUpdate()
-                    },
-                    onShowSettings: { [self] in
-                        showingQualitySheet = true
-                    },
-                    onShowQueue: { [self] in
-                        presentSheet(.queue())
-                    },
-                    onShowPlaylistSelector: { [self] in
-                        presentAddToPlaylist()
-                    },
-                    onTitleTap: {
-                        onTogglePanel()
-                    },
-                    // Only a floating (unpinned) panel covers the video and
-                    // takes the controls with it. Pinned and corner layout
-                    // panels sit beside the video: showing them again (e.g.
-                    // the restore after native fullscreen) must not leave the
-                    // controls hidden with hover unable to bring them back.
-                    isDetailsPanelVisible: isPanelVisible && !isPanelPinned,
-                    onRateChanged: { rate in
-                        playerState.rate = rate
-                        playerService.currentBackend?.rate = Float(rate.rawValue)
-                    }
-                )
-                .frame(width: availableWidth, height: availableHeight)
-                .offset(x: controlsOffset)
-            }
-            #endif
-
-            #if os(iOS)
-            // Debug overlay - tap to dismiss layer (widescreen)
-            if let playerState, playerState.showDebugOverlay {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        playerState.showDebugOverlay = false
-                    }
-            }
-
-            // Debug overlay content (widescreen)
-            if let playerState, playerState.showDebugOverlay {
-                VStack {
-                    HStack {
-                        MPVDebugOverlay(
-                            stats: debugStats,
-                            isVisible: Binding(
-                                get: { playerState.showDebugOverlay },
-                                set: { playerState.showDebugOverlay = $0 }
-                            ),
-                            isLandscape: true
-                        )
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(.leading, windowSafeAreaInsets.left + 16)
-                .padding(.top, windowSafeAreaInsets.top + 16)
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-            #endif
-
-            #if os(macOS)
-            // Debug overlay - tap to dismiss layer (widescreen macOS)
-            if let playerState, playerState.showDebugOverlay {
-                Color.black.opacity(0.3)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        playerState.showDebugOverlay = false
-                    }
-
-                // Debug overlay content (widescreen macOS)
-                VStack {
-                    HStack {
-                        MPVDebugOverlay(
-                            stats: debugStats,
-                            isVisible: Binding(
-                                get: { playerState.showDebugOverlay },
-                                set: { playerState.showDebugOverlay = $0 }
-                            ),
-                            isLandscape: true
-                        )
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 80) // Avoid window traffic light buttons
-                .padding(.top, 16)
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-            #endif
 
             // Tap to hide panel overlay - only active when panel visible and not pinned
             if isPanelVisible && !isPanelPinned {
@@ -1952,7 +1463,3 @@ extension ExpandedPlayerSheet {
         .animation(.easeInOut(duration: 0.3), value: panelSide)
     }
 }
-
-#endif
-
-#endif

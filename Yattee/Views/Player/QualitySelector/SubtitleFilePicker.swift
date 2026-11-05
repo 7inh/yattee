@@ -9,7 +9,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-#if !os(tvOS)
 
 /// Content types accepted by the subtitle file pickers.
 enum SubtitleFileTypes {
@@ -21,7 +20,6 @@ enum SubtitleFileTypes {
     }
 }
 
-#if os(iOS)
 struct SubtitleFilePickerView: UIViewControllerRepresentable {
     let onSelect: (URL) -> Void
 
@@ -51,24 +49,3 @@ struct SubtitleFilePickerView: UIViewControllerRepresentable {
         }
     }
 }
-#endif
-
-#if os(macOS)
-enum SubtitleFilePanel {
-    @MainActor
-    static func present(onSelect: (URL) -> Void) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = SubtitleFileTypes.contentTypes
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = String(localized: "stream.subtitles.loadFromFile.message")
-
-        if panel.runModal() == .OK, let url = panel.url {
-            onSelect(url)
-        }
-    }
-}
-#endif
-
-#endif

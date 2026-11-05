@@ -105,19 +105,11 @@ struct PlaylistSelectorSheet: View {
                     }
                 }
             }
-            #if os(tvOS)
-            .scrollClipDisabled()
-            .padding(.horizontal, 40)
-            .padding(.vertical, 24)
-            #else
             .navigationTitle(String(localized: "playlist.addTo"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 sheetCloseToolbarItem { dismiss() }
             }
-            #endif
             .sheet(isPresented: $showingNewPlaylist) {
                 PlaylistFormSheet(mode: .create) { title, description in
                     pendingPlaylistTitle = title
@@ -155,12 +147,7 @@ struct PlaylistSelectorSheet: View {
                 }
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium, .large])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 450, minHeight: 500)
-        #endif
     }
 
     // MARK: - Destination Picker
@@ -176,41 +163,13 @@ struct PlaylistSelectorSheet: View {
     }
 
     private var destinationPicker: some View {
-        #if os(tvOS)
-        // A tvOS menu picker shows only its value; the name of the control has
-        // to be the row's own, so the menu's label is the whole labelled row —
-        // the same shape as the settings switcher row.
-        Menu {
-            destinationOptions
-        } label: {
-            HStack {
-                Text(String(localized: "accounts.switcher.title"))
-                Spacer(minLength: 8)
-                Text(DataContextSwitcherLabels.title(for: selectedDestination, in: appEnvironment))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        }
-        #else
         Picker(String(localized: "accounts.switcher.title"), selection: $selectedDestination) {
             destinationOptions
         }
         .pickerStyle(.menu)
-        #endif
     }
 
-    #if os(tvOS)
-    /// The same choices, hosted by the labelled menu: a picker inside a menu
-    /// renders as checkmarked items.
-    private var destinationOptions: some View {
-        Picker(selection: $selectedDestination) {
-            destinationOptionRows
-        } label: {}
-    }
-    #else
     private var destinationOptions: some View { destinationOptionRows }
-    #endif
 
     @ViewBuilder private var destinationOptionRows: some View {
         Text(DataContextSwitcherLabels.title(for: .local, in: appEnvironment))
@@ -242,17 +201,10 @@ struct PlaylistSelectorSheet: View {
     /// The "New Playlist" row's label. tvOS lays a `Label`'s icon nearly
     /// against its title at this size, so the gap is spelled out there.
     private var newPlaylistLabel: some View {
-        #if os(tvOS)
-        HStack(spacing: 20) {
-            Image(systemName: "plus.circle")
-            Text(String(localized: "playlist.new"))
-        }
-        #else
         Label(
             String(localized: "playlist.new"),
             systemImage: "plus.circle"
         )
-        #endif
     }
 
     private var localSection: some View {
@@ -315,9 +267,7 @@ struct PlaylistSelectorSheet: View {
                 }
             } else if loadingAccountIDs.contains(account.id) {
                 ProgressView()
-                    #if !os(tvOS)
                     .controlSize(.small)
-                    #endif
                     .frame(maxWidth: .infinity)
             }
         }
@@ -581,9 +531,7 @@ private struct RemotePlaylistSelectionRow: View {
                         .foregroundStyle(.green)
                 } else if isAdding {
                     ProgressView()
-                        #if !os(tvOS)
                         .controlSize(.small)
-                        #endif
                 } else {
                     Image(systemName: "plus.circle")
                         .foregroundStyle(.secondary)

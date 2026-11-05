@@ -37,22 +37,6 @@ struct DataContextSwitcherRows: View {
         // off" rather than a row that looks ordinary and does nothing.
         let title = DataContextSwitcherLabels.title(for: context, in: appEnvironment)
 
-        #if os(macOS)
-        // The mark has to be the menu item's own. A `Label`'s `systemImage` is
-        // dropped by a macOS menu row, leaving the selected context
-        // indistinguishable from the rest; a `Toggle` is what SwiftUI renders
-        // as a checked item, mark character included.
-        Toggle(isOn: Binding(
-            get: { isCurrent(context) },
-            set: { isOn in
-                guard isOn else { return }
-                switchTo(context)
-            }
-        )) {
-            Text(title)
-        }
-        .disabled(isRefused(context))
-        #else
         Button {
             switchTo(context)
         } label: {
@@ -63,7 +47,6 @@ struct DataContextSwitcherRows: View {
             }
         }
         .disabled(isRefused(context))
-        #endif
     }
 
     private func switchTo(_ context: DataContext) {
@@ -257,7 +240,6 @@ enum DataContextSwitcherVisibility {
         return appEnvironment.settingsManager.showAccountPickers && showsSwitcher(in: appEnvironment)
     }
 
-    #if os(iOS)
     /// The iOS toolbar menus: same rule again, minus the regular widths, where
     /// the sidebar layout already pins the switcher in its bottom bar — a
     /// toolbar button there would say the same thing twice, the way macOS
@@ -269,7 +251,6 @@ enum DataContextSwitcherVisibility {
     ) -> Bool {
         horizontalSizeClass == .compact && showsPickers(in: appEnvironment)
     }
-    #endif
 }
 
 // MARK: - Glyph
@@ -364,7 +345,6 @@ struct DataContextSwitcherIcon: View {
 
 // MARK: - Menu
 
-#if !os(tvOS)
 /// The toolbar switcher: one tap, no confirmation — switching is reversible.
 struct DataContextSwitcherMenu: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -393,9 +373,7 @@ struct DataContextSwitcherMenu: View {
     }
 }
 
-#endif
 
-#if os(iOS)
 /// The iPad sidebar pill's presentation: just the icon and the current
 /// account's name, centered. The pill's placement already says what the
 /// control is, so the "Account" caption the settings rows carry is dropped;
@@ -431,77 +409,19 @@ struct DataContextSwitcherSidebarRow: View {
         appEnvironment?.accountsManager.currentContext ?? .local
     }
 }
-#endif
 
 /// A settings row naming the current context, with the switcher attached.
 struct DataContextSwitcherSettingsRow: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
     var body: some View {
-        #if os(tvOS)
-        // The same menu the Subscriptions, History and Playlists headers use:
-        // one click, options in place, rather than a full-screen round trip.
         Menu {
             DataContextSwitcherRows()
         } label: {
             rowLabel
         }
-        #elseif os(macOS)
-        // A macOS menu label renders its first text and nothing else — the
-        // trailing name was dropped at every width, leaving the row silent
-        // about which account is selected. So the name is the menu's *own*
-        // label, and the row carries only what names the control.
-        // `LabeledContent` overflows rather than compress its label, so at the
-        // sidebar's 140 pt minimum a captioned row (caption + spacing + the
-        // name's floor ≈ 158 pt) juts past both edges. The caption is the one
-        // part the icon already says, so it is the part that goes.
-        ViewThatFits(in: .horizontal) {
-            macOSRow(captioned: true)
-            macOSRow(captioned: false)
-        }
-        #else
-        Menu {
-            DataContextSwitcherRows()
-        } label: {
-            rowLabel
-        }
-        #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder private func macOSRow(captioned: Bool) -> some View {
-        LabeledContent {
-            Menu {
-                DataContextSwitcherRows()
-            } label: {
-                Text(contextTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .menuStyle(.borderlessButton)
-            // The floor must sit on the menu itself: a borderless menu button
-            // lays out its label alone, so a frame inside it never reaches the
-            // row's layout, and the caption would keep its ideal width while
-            // the name shrank to an ellipsis. Out here the menu claims the
-            // width and the caption is what gives way.
-            .frame(minWidth: Self.minimumNameWidth, alignment: .trailing)
-            .layoutPriority(1)
-            .help(contextTitle)
-            .accessibilityLabel(Text(String(localized: "accounts.switcher.title")))
-            .accessibilityValue(Text(contextTitle))
-        } label: {
-            Label {
-                if captioned {
-                    Text(String(localized: "accounts.switcher.title"))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            } icon: {
-                DataContextSwitcherIcon()
-            }
-        }
-    }
-    #endif
 
     /// What the trailing name may never be squeezed below.
     ///
@@ -513,7 +433,6 @@ struct DataContextSwitcherSettingsRow: View {
     /// which the icon beside it already says — is what truncates instead.
     private static let minimumNameWidth: CGFloat = 80
 
-    #if !os(macOS)
     private var rowLabel: some View {
         HStack {
             Label {
@@ -531,7 +450,6 @@ struct DataContextSwitcherSettingsRow: View {
                 .frame(minWidth: Self.minimumNameWidth, alignment: .trailing)
         }
     }
-    #endif
 
     private var contextTitle: String {
         DataContextSwitcherLabels.title(for: currentContext, in: appEnvironment)
@@ -543,32 +461,3 @@ struct DataContextSwitcherSettingsRow: View {
 }
 
 // MARK: - tvOS button
-
-#if os(tvOS)
-/// The switcher for placing beside other tvOS controls: a menu, like the
-/// menu-style pickers in Settings, so switching is one click instead of a
-/// full-screen round trip.
-struct DataContextSwitcherButton: View {
-    @Environment(\.appEnvironment) private var appEnvironment
-
-    var body: some View {
-        Menu {
-            DataContextSwitcherRows()
-        } label: {
-            Label {
-                // One line always: beside other header buttons the name would
-                // wrap into a tall two-line lozenge before it truncates.
-                Text(DataContextSwitcherLabels.title(for: currentContext, in: appEnvironment))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            } icon: {
-                DataContextSwitcherIcon()
-            }
-        }
-    }
-
-    private var currentContext: DataContext {
-        appEnvironment?.accountsManager.currentContext ?? .local
-    }
-}
-#endif

@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct AddLocalFolderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appEnvironment) private var appEnvironment
@@ -18,9 +17,7 @@ struct AddLocalFolderView: View {
     @State private var selectedFolderURL: URL?
     @State private var testResult: SourceTestResult?
 
-    #if os(iOS)
     @State private var showingFolderPicker = false
-    #endif
 
     // Closure to dismiss the parent sheet
     var dismissSheet: DismissAction?
@@ -35,23 +32,12 @@ struct AddLocalFolderView: View {
     /// reliably only from macOS 26 onward. On older macOS we render the
     /// "Add Source" action button inline in the form instead.
     private var usesToolbarActionButton: Bool {
-        #if os(macOS)
-        if #available(macOS 26, *) {
-            return true
-        } else {
-            return false
-        }
-        #else
         return false
-        #endif
     }
 
     // MARK: - Body
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
         Form {
             nameSection
             folderSection
@@ -63,77 +49,14 @@ struct AddLocalFolderView: View {
             actionSection
         }
         .navigationTitle(String(localized: "sources.addLocalFolder"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingFolderPicker) {
             FolderPickerView { url in
                 handleFolderSelection(url)
             }
         }
-        #endif
-        #endif
     }
 
-    #if os(macOS)
-    private var macOSBody: some View {
-        Form {
-            Section {
-                LabeledContent(String(localized: "sources.field.name")) {
-                    TextField("", text: $name)
-                }
-            } footer: {
-                Text(String(localized: "sources.footer.displayName"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent(String(localized: "sources.header.folder")) {
-                    HStack {
-                        if let url = selectedFolderURL {
-                            Text(url.path)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        } else {
-                            Text(String(localized: "sources.selectFolder"))
-                                .foregroundStyle(.secondary)
-                        }
-                        Button(String(localized: "sources.selectFolder")) {
-                            selectFolderMacOS()
-                        }
-                    }
-                }
-            } footer: {
-                Text(String(localized: "sources.footer.folder"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let result = testResult {
-                SourceTestResultSection(result: result)
-            }
-
-            if !usesToolbarActionButton {
-                actionSection
-            }
-        }
-        .formStyle(.grouped)
-        .navigationTitle(String(localized: "sources.addLocalFolder"))
-        .toolbar {
-            if usesToolbarActionButton {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "sources.addSource")) {
-                        addSource()
-                    }
-                    .disabled(!canAdd)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-        }
-    }
-    #endif
 
     // MARK: - Sections
 
@@ -147,7 +70,6 @@ struct AddLocalFolderView: View {
 
     private var folderSection: some View {
         Section {
-            #if os(iOS)
             Button {
                 showingFolderPicker = true
             } label: {
@@ -162,20 +84,6 @@ struct AddLocalFolderView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            #elseif os(macOS)
-            Button {
-                selectFolderMacOS()
-            } label: {
-                HStack {
-                    if let url = selectedFolderURL {
-                        Label(url.lastPathComponent, systemImage: "folder.fill")
-                    } else {
-                        Label(String(localized: "sources.selectFolder"), systemImage: "folder.badge.plus")
-                    }
-                    Spacer()
-                }
-            }
-            #endif
         } header: {
             Text(String(localized: "sources.header.folder"))
         } footer: {
@@ -203,19 +111,6 @@ struct AddLocalFolderView: View {
         }
     }
 
-    #if os(macOS)
-    private func selectFolderMacOS() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            handleFolderSelection(url)
-        }
-    }
-    #endif
 
     private func addSource() {
         guard let appEnvironment,
@@ -255,4 +150,3 @@ struct AddLocalFolderView: View {
             .appEnvironment(.preview)
     }
 }
-#endif

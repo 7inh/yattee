@@ -17,12 +17,7 @@
 //
 
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
-#if canImport(AppKit)
-import AppKit
-#endif
 
 struct ResolvedLinkPromptsModifier: ViewModifier {
     /// Whether this host should actually present the dialogs right now. Used
@@ -95,11 +90,7 @@ struct ResolvedLinkPromptsModifier: ViewModifier {
 
     @MainActor
     private func openInSystemBrowser(_ url: URL) {
-        #if os(iOS)
         UIApplication.shared.open(url)
-        #elseif os(macOS)
-        NSWorkspace.shared.open(url)
-        #endif
     }
 }
 

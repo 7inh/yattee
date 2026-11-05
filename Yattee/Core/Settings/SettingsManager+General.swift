@@ -7,11 +7,7 @@
 
 import Foundation
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 extension SettingsManager {
     // MARK: - Theme Settings
@@ -34,16 +30,12 @@ extension SettingsManager {
     /// window scenes (Settings), so the override is applied at the
     /// UIKit/AppKit level instead.
     static func applyTheme(_ theme: AppTheme) {
-        #if os(iOS)
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
             for window in windowScene.windows {
                 window.overrideUserInterfaceStyle = theme.userInterfaceStyle
             }
         }
-        #elseif os(macOS)
-        NSApp.appearance = theme.appearance
-        #endif
     }
 
     var accentColor: AccentColor {
@@ -126,25 +118,12 @@ extension SettingsManager {
     /// dynamic platform color that resolves per trait environment, so all consumers
     /// (root tint and direct readers) adapt to light/dark automatically.
     var resolvedAccentColor: Color {
-        #if os(tvOS)
-        // tvOS keeps the system default accent; user-picked colors (possibly
-        // synced from iOS via iCloud) must never override it.
-        return .accentColor
-        #else
         let light = resolvedLightAccentColor
         guard useSeparateDarkAccentColor else { return light }
         let dark = resolvedDarkAccentColor
-        #if os(macOS)
-        return Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return NSColor(isDark ? dark : light)
-        }))
-        #else
         return Color(uiColor: UIColor { traits in
             UIColor(traits.userInterfaceStyle == .dark ? dark : light)
         })
-        #endif
-        #endif
     }
 
     // MARK: - App Icon Settings
@@ -164,54 +143,15 @@ extension SettingsManager {
 
             // Apply the icon change
             Task { @MainActor in
-                #if os(iOS)
                 do {
                     try await UIApplication.shared.setAlternateIconName(newValue.alternateIconName)
                 } catch {
                     LoggingService.shared.error("Failed to set alternate icon: \(error)", category: .general)
                 }
-                #elseif os(macOS)
-                SettingsManager.applyMacAppIcon(newValue)
-                #endif
             }
         }
     }
 
-    #if os(macOS)
-    static func applyMacAppIcon(_ icon: AppIcon) {
-        if icon == .default {
-            NSApp.applicationIconImage = nil
-        } else if let source = NSImage(named: icon.previewImageName) {
-            NSApp.applicationIconImage = makeMacIconImage(from: source)
-        }
-    }
-
-    /// Paints the source image onto a 1024×1024 canvas with the standard macOS
-    /// squircle mask and transparent padding so the Dock renders it like a
-    /// native app icon.
-    private static func makeMacIconImage(from source: NSImage) -> NSImage {
-        let canvasSize: CGFloat = 1024
-        // macOS icon grid: artwork occupies ~824×824 centered in a 1024 canvas,
-        // with a ~185pt corner radius on the masked rect.
-        let artworkSize: CGFloat = 824
-        let cornerRadius: CGFloat = 185
-        let inset = (canvasSize - artworkSize) / 2
-        let artworkRect = NSRect(x: inset, y: inset, width: artworkSize, height: artworkSize)
-
-        let image = NSImage(size: NSSize(width: canvasSize, height: canvasSize))
-        image.lockFocus()
-        let path = NSBezierPath(roundedRect: artworkRect, xRadius: cornerRadius, yRadius: cornerRadius)
-        path.addClip()
-        source.draw(in: artworkRect,
-                    from: .zero,
-                    operation: .sourceOver,
-                    fraction: 1.0,
-                    respectFlipped: true,
-                    hints: [.interpolation: NSImageInterpolation.high.rawValue])
-        image.unlockFocus()
-        return image
-    }
-    #endif
 
     /// Whether to show a checkmark badge on fully watched video thumbnails.
     /// Default is true (enabled).
@@ -638,7 +578,6 @@ extension SettingsManager {
 
     // MARK: - Video Tap Actions (iOS/macOS only)
 
-    #if !os(tvOS)
     /// Action to perform when tapping on video thumbnails. Default is playVideo.
     var thumbnailTapAction: VideoTapAction {
         get {
@@ -703,27 +642,9 @@ extension SettingsManager {
             localDefaults.set(newValue.rawValue, forKey: "videoInfoPrimaryAction")
         }
     }
-    #endif
 
     // MARK: - Video Tap Action (tvOS only)
 
-    #if os(tvOS)
-    /// Action to perform when clicking a video cell on tvOS. Default is openInfo.
-    var tvOSVideoTapAction: VideoTapAction {
-        get {
-            if let cached = _tvOSVideoTapAction { return cached }
-            guard let rawValue = localDefaults.string(forKey: "tvOSVideoTapAction"),
-                  let action = VideoTapAction(rawValue: rawValue) else {
-                return .openInfo
-            }
-            return action
-        }
-        set {
-            _tvOSVideoTapAction = newValue
-            localDefaults.set(newValue.rawValue, forKey: "tvOSVideoTapAction")
-        }
-    }
-    #endif
 
     // MARK: - Onboarding
 

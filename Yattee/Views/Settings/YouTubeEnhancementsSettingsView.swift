@@ -16,19 +16,13 @@ struct YouTubeEnhancementsSettingsView: View {
                 SponsorBlockSection(settings: settings)
                 ReturnYouTubeDislikeSection(settings: settings)
                 DeArrowSection(settings: settings)
-                #if !os(tvOS)
                 // tvOS has no in-description link tapping or system browser,
                 // so short-link resolution would have nothing to act on.
                 ResolveShortLinksSection(settings: settings)
-                #endif
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.youtubeEnhancements.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 

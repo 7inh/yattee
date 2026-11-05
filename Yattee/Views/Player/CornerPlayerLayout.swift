@@ -11,7 +11,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct CornerPlayerLayout<PlayerContent: View>: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -74,11 +73,7 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
     /// Minimum width kept for the video column. macOS needs room for the
     /// floating control bar (up to 500pt wide plus its edge margins).
     static var minVideoColumnWidth: CGFloat {
-        #if os(macOS)
-        560
-        #else
         480
-        #endif
     }
     /// Maximum fraction of the window height the video area may take when a
     /// below-video region needs space.
@@ -126,9 +121,7 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
     /// reflow the panels mid-transition; only the video grows into the
     /// strip.
     @State private var stableTopInset: CGFloat = 0
-    #if os(iOS)
     @Environment(\.statusBarVisibilityController) private var statusBarController
-    #endif
 
     /// Trailing screen-edge strip that starts the reveal swipe while the
     /// column is collapsed; drags from anywhere else keep seeking.
@@ -184,11 +177,7 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
     }
 
     private var panelBackgroundColor: Color {
-        #if os(iOS)
         Color(uiColor: .systemBackground)
-        #else
-        Color(nsColor: .windowBackgroundColor)
-        #endif
     }
 
     private func clampColumnWidth(_ width: CGFloat, availableWidth: CGFloat) -> CGFloat {
@@ -205,17 +194,12 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
     var body: some View {
         GeometryReader { outer in
             let liveTopInset = outer.safeAreaInsets.top
-            #if os(iOS)
             // iPhone (Duo interior) never shows the status bar in this
             // layout, so there is no strip to hold: pad by the live inset
             // only. Remembering a past inset here would keep the 82pt top
             // inset seen transiently while unfolding.
             let holdsStatusBarStrip = UIDevice.current.userInterfaceIdiom == .pad
             let knownTopInset = holdsStatusBarStrip ? (statusBarController?.knownStatusBarHeight ?? 0) : 0
-            #else
-            let holdsStatusBarStrip = true
-            let knownTopInset: CGFloat = 0
-            #endif
             let topInset = liveTopInset > 0 || !holdsStatusBarStrip ? liveTopInset : max(stableTopInset, knownTopInset)
 
             layout(topInset: topInset)
@@ -667,7 +651,6 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
     @ViewBuilder
     private func belowVideoInfoPanel(video: Video, hideTravel: CGFloat, publishesFrame: Bool, pillsLeadingInset: CGFloat) -> some View {
         Group {
-            #if os(iOS)
             PortraitDetailsPanel(
                 onChannelTap: onChannelTap,
                 playerControlsLayout: playerControlsLayout,
@@ -770,23 +753,6 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
                     }
                 }
             )
-            #else
-            // macOS: static info panel, no drag-to-hide
-            InfoPanelPage(
-                context: PanelPageContext(
-                    appEnvironment: appEnvironment,
-                    video: video,
-                    accentColor: accentColor,
-                    onChannelTap: onChannelTap
-                ),
-                settings: infoPageSettings,
-                scrollConfig: PanelScrollConfig(
-                    topInset: 4,
-                    bottomInset: 16
-                )
-            )
-            .background(panelBackgroundColor.ignoresSafeArea(edges: .vertical))
-            #endif
         }
         // Publish the panel frame so the window-level dismiss pan gesture
         // doesn't begin from touches inside this panel (drag handle conflict).
@@ -927,5 +893,3 @@ struct CornerPlayerLayout<PlayerContent: View>: View {
         belowPanelDragOffset = 0
     }
 }
-
-#endif

@@ -49,11 +49,6 @@ struct InstanceAccountsSection: View {
     /// the section rather than the row, and matched back to a row by ID.
     @State private var renameRequest: AccountRenameRequest?
 
-    #if os(tvOS)
-    /// The account whose actions dialog is up. tvOS only: everywhere else the
-    /// row grows a context menu instead of a press target.
-    @State private var actionsAccountID: UUID?
-    #endif
 
     private var accounts: [Account] {
         appEnvironment?.accountsManager.accounts(forInstance: instance.id) ?? []
@@ -77,9 +72,6 @@ struct InstanceAccountsSection: View {
                     systemImage: "person.badge.plus"
                 )
             }
-            #if os(tvOS)
-            .buttonStyle(TVSettingsButtonStyle())
-            #endif
         } header: {
             Text(String(localized: "login.header.account"))
         } footer: {
@@ -117,9 +109,7 @@ struct InstanceAccountsSection: View {
             } message: {
                 Text(String(localized: "accounts.remove.confirm.message"))
             }
-            #if !os(tvOS)
             .presentationCompactAdaptation(.sheet)
-            #endif
             // Attached to the row for the same reason the dialog above it is, and
             // narrowed to the row that raised it so only one alert is ever live.
             .accountRenameAlert(
@@ -134,33 +124,10 @@ struct InstanceAccountsSection: View {
 
     @ViewBuilder
     private func rowBase(_ account: Account) -> some View {
-        #if os(tvOS)
-        // One focusable row per account: pressing it raises the actions as a
-        // dialog. Spelling them out as sibling rows made every account four
-        // rows tall, which is a lot of clicking past on a remote.
-        Button {
-            actionsAccountID = account.id
-        } label: {
-            rowContent(account)
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        .confirmationDialog(
-            displayName(for: account),
-            isPresented: Binding(
-                get: { actionsAccountID == account.id },
-                set: { if !$0 { actionsAccountID = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            rowActions(account)
-            Button(String(localized: "common.cancel"), role: .cancel) {}
-        }
-        #else
         rowContent(account)
             .contextMenu {
                 rowActions(account)
             }
-        #endif
     }
 
     private func rowContent(_ account: Account) -> some View {
@@ -203,18 +170,7 @@ struct InstanceAccountsSection: View {
         Button {
             loginTarget = .existing(account)
         } label: {
-            #if os(tvOS)
-            Label(
-                String(
-                    localized: status(for: account) == .credentialMissing
-                        ? "accounts.signInOnThisDevice"
-                        : "login.signInAgain"
-                ),
-                systemImage: "person.badge.key"
-            )
-            #else
             Label(String(localized: "login.signInAgain"), systemImage: "person.badge.key")
-            #endif
         }
 
         Button {

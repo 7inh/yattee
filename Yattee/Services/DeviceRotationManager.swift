@@ -6,7 +6,6 @@
 //  even when screen rotation is locked.
 //
 
-#if os(iOS)
 import CoreMotion
 import SwiftUI
 
@@ -257,4 +256,3 @@ final class DeviceRotationManager {
         detectedOrientation == .portrait || detectedOrientation == .portraitUpsideDown
     }
 }
-#endif

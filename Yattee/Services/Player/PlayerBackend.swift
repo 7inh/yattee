@@ -2,7 +2,7 @@
 //  PlayerBackend.swift
 //  Yattee
 //
-//  Abstract interface for video playback backends.
+//  Abstract interface for audio playback backends.
 //
 
 import Foundation
@@ -77,25 +77,12 @@ enum StreamFormat: String, CaseIterable, Sendable {
 
 /// Available player backend types.
 enum PlayerBackendType: String, CaseIterable, Codable, Sendable {
-    case mpv = "mpv"
+    case avFoundation
 
-    var displayName: String {
-        "MPV"
-    }
-
-    var supportedFormats: Set<StreamFormat> {
-        Set(StreamFormat.allCases)
-    }
-
-    /// Whether this backend supports AirPlay.
-    var supportsAirPlay: Bool {
-        false
-    }
-
-    /// Whether this backend supports Picture-in-Picture.
-    var supportsPiP: Bool {
-        false // MPV PiP requires additional work
-    }
+    var displayName: String { "AVFoundation" }
+    var supportedFormats: Set<StreamFormat> { [.audioAAC, .audioMP3, .hls] }
+    var supportsAirPlay: Bool { true }
+    var supportsPiP: Bool { false }
 }
 
 // MARK: - Backend Delegate
@@ -111,18 +98,14 @@ protocol PlayerBackendDelegate: AnyObject {
     func backend(_ backend: any PlayerBackend, didUpdateVideoSize width: Int, height: Int)
     func backend(_ backend: any PlayerBackend, didUpdateRetryState currentRetry: Int, maxRetries: Int, isRetrying: Bool, exhausted: Bool)
     func backend(_ backend: any PlayerBackend, didRequestStreamRefresh atTime: TimeInterval?)
-    func backend(_ backend: any PlayerBackend, didUpdateTracks tracks: [MPVTrack])
     func backendDidBecomeReady(_ backend: any PlayerBackend)
     func backendDidFinishPlaying(_ backend: any PlayerBackend)
-    /// Hardware decoding stopped mid-playback for a file that was hardware decoded.
-    /// Only reported while "Enable Logging" is on, and only once the app is active.
-    func backendDidFallBackToSoftwareDecoding(_ backend: any PlayerBackend)
 }
 
 // MARK: - Player Backend Protocol
 
-/// Abstract interface for video playback backends.
-/// Currently implemented by MPVBackend.
+/// Abstract interface for audio playback backends.
+/// Implemented by AVAudioBackend.
 @MainActor
 protocol PlayerBackend: AnyObject {
     /// The type of this backend.
@@ -144,11 +127,10 @@ protocol PlayerBackend: AnyObject {
 
     /// Load a stream for playback.
     /// - Parameters:
-    ///   - stream: The video (or muxed video+audio) stream to play
-    ///   - audioStream: Optional separate audio stream (for video-only streams)
+    ///   - stream: The standalone audio stream to play
+    ///   - audioStream: A separate audio rendition, preferred over stream
     ///   - autoplay: Whether to start playback automatically
-    ///   - useEDL: For MPV, whether to use EDL combined streams (ignored by AVPlayer)
-    func load(stream: Stream, audioStream: Stream?, autoplay: Bool, useEDL: Bool) async throws
+    func load(stream: Stream, audioStream: Stream?, autoplay: Bool) async throws
 
     /// Start or resume playback.
     func play()
@@ -166,15 +148,13 @@ protocol PlayerBackend: AnyObject {
     func seek(to time: TimeInterval, showLoading: Bool) async
 
     /// Signal that an initial seek will be performed after load completes.
-    /// This allows the backend to defer ready callbacks until the seek completes,
-    /// preventing a flash of the video at position 0 before jumping to resume position.
+    /// Defer ready callbacks until the resume position is reached.
     func prepareForInitialSeek()
 
     // MARK: - Background Playback
 
     /// Handle scene phase changes for background playback.
-    /// Backends should pause rendering while the app is in the background;
-    /// whether playback itself continues is decided by PlayerService.
+    /// PlayerService decides whether audio continues in the background.
     /// - Parameters:
     ///   - phase: The new scene phase
     ///   - isPiPActive: Whether Picture-in-Picture is currently active
@@ -193,7 +173,7 @@ extension PlayerBackend {
 // MARK: - Backend Errors
 
 /// Errors that can occur during backend operations.
-enum BackendError: LocalizedError {
+enum BackendError: Error, LocalizedError, Equatable, Sendable {
     case unsupportedFormat(StreamFormat)
     case loadFailed(String)
     case seekFailed

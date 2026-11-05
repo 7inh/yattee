@@ -15,11 +15,7 @@
 //
 
 import Foundation
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct XCallback: Equatable {
     static let host = "x-callback-url"
@@ -70,11 +66,7 @@ struct XCallback: Equatable {
     func open(for result: LinkActionResult) {
         guard let url = url(for: result) else { return }
         LoggingService.shared.info("x-callback-url: returning to \(url.scheme ?? "?")://", category: .general)
-        #if os(macOS)
-        NSWorkspace.shared.open(url)
-        #else
         UIApplication.shared.open(url)
-        #endif
     }
 
     // MARK: - Helpers

@@ -42,17 +42,12 @@ struct LegacyAccountsImportView: View {
                 contentList
             }
         }
-        #if !os(tvOS)
         // On tvOS the title comes from the TVSidebarDetailContainer sidebar;
         // a navigationTitle would render as a giant ghost behind the form.
         .navigationTitle(String(localized: "migration.accounts.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .opaqueSettingsFormBackground()
         .toolbar {
-            #if !os(tvOS)
             if showsDoneButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.done")) {
@@ -60,7 +55,6 @@ struct LegacyAccountsImportView: View {
                     }
                 }
             }
-            #endif
         }
         .task {
             loadLegacyData()
@@ -125,12 +119,7 @@ struct LegacyAccountsImportView: View {
                 }
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
     }
 
     private var emptyState: some View {
@@ -139,14 +128,6 @@ struct LegacyAccountsImportView: View {
         } description: {
             Text(String(localized: "migration.accounts.empty.description"))
         } actions: {
-            #if os(tvOS)
-            // The toolbar Done is iOS/macOS only. Once the last item is
-            // imported or removed nothing else is focusable, and the remote
-            // would be stuck — in the full screen cover and when pushed alike.
-            Button(String(localized: "common.done")) {
-                dismiss()
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -297,41 +278,6 @@ private struct LegacyAccountImportRow: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        // On tvOS a Form row is a single focusable unit, so packing the whole card
-        // into one row makes the first button (Remove) swallow every click.
-        // Emit each interactive element as its own row instead.
-        infoHeader
-            .padding(.vertical, 8)
-
-        credentialsFields
-
-        if let errorMessage = state.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
-
-        Button(action: onImport) {
-            if state.isImporting {
-                HStack(spacing: 6) {
-                    ProgressView()
-                    Text(String(localized: "migration.importing"))
-                }
-            } else {
-                Text(String(localized: "migration.import"))
-            }
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        .disabled(!canImport)
-
-        Button(role: .destructive, action: onRemove) {
-            Text(String(localized: "common.remove"))
-                .foregroundStyle(.red)
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        .disabled(state.isImporting)
-        #else
         VStack(alignment: .leading, spacing: 12) {
             infoHeader
 
@@ -369,25 +315,17 @@ private struct LegacyAccountImportRow: View {
             }
         }
         .padding(.vertical, 8)
-        #endif
     }
 
     @ViewBuilder
     private var credentialsFields: some View {
-        #if os(tvOS)
-        TVSettingsTextField(title: String(localized: "login.username"), text: $state.username)
-        TVSettingsTextField(title: String(localized: "login.password"), text: $state.password, isSecure: true)
-        #else
         TextField(String(localized: "login.username"), text: $state.username)
             .textContentType(.username)
-            #if os(iOS)
             .textInputAutocapitalization(.never)
-            #endif
             .autocorrectionDisabled()
 
         SecureField(String(localized: "login.password"), text: $state.password)
             .textContentType(.password)
-        #endif
     }
 }
 
@@ -424,21 +362,6 @@ private struct LegacyInstanceImportRow: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        infoHeader
-            .padding(.vertical, 8)
-
-        Button(action: onImport) {
-            Text(String(localized: "migration.import"))
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-
-        Button(role: .destructive, action: onRemove) {
-            Text(String(localized: "common.remove"))
-                .foregroundStyle(.red)
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        #else
         VStack(alignment: .leading, spacing: 12) {
             infoHeader
 
@@ -458,17 +381,12 @@ private struct LegacyInstanceImportRow: View {
             }
         }
         .padding(.vertical, 8)
-        #endif
     }
 }
 
 /// tvOS renders .title2 glyphs far larger than the 28pt frame used on other platforms.
 private var legacyRowIconWidth: CGFloat {
-    #if os(tvOS)
-    return 64
-    #else
     return 28
-    #endif
 }
 
 private func legacyInstanceIcon(for type: InstanceType) -> String {

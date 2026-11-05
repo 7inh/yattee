@@ -8776,7 +8776,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MPV Debug Stats"
+            "value" : "Audio Debug Stats"
           }
         }
       }
@@ -8786,7 +8786,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MPV Debug"
+            "value" : "Audio Debug"
           }
         }
       }
@@ -10978,26 +10978,6 @@
         }
       }
     },
-    "settings.about.mpvInfo" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Info"
-          }
-        }
-      }
-    },
-    "settings.about.mpvInfoHint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play a video to see MPV info"
-          }
-        }
-      }
-    },
     "settings.about.title" : {
       "localizations" : {
         "en" : {
@@ -11252,39 +11232,6 @@
         }
       }
     },
-    "settings.advanced.debug.libmpvAPI" : {
-      "comment" : "Label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "libmpv API"
-          }
-        }
-      }
-    },
-    "settings.advanced.debug.mpvConfiguration" : {
-      "comment" : "Disclosure group label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Configuration"
-          }
-        }
-      }
-    },
-    "settings.advanced.debug.mpvVersion" : {
-      "comment" : "Label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Version"
-          }
-        }
-      }
-    },
     "settings.advanced.debug.osVersion" : {
       "localizations" : {
         "en" : {
@@ -11334,17 +11281,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Show Debug Button in Player"
-          }
-        }
-      }
-    },
-    "settings.advanced.debug.verboseMPV" : {
-      "comment" : "Toggle label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verbose MPV Logging"
           }
         }
       }
@@ -11819,71 +11755,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Logs"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.buffer" : {
-      "comment" : "Picker label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Playback buffer"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.bufferSecond" : {
-      "comment" : "Buffer option singular",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 second"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.bufferSeconds %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld seconds"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.edl" : {
-      "comment" : "Toggle label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "EDL Combined Streams"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.options" : {
-      "comment" : "Navigation link label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Options"
-          }
-        }
-      }
-    },
-    "settings.advanced.mpv.title" : {
-      "comment" : "Section header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Player"
           }
         }
       }
@@ -14035,160 +13906,6 @@
         }
       }
     },
-    "settings.mpvOptions.addOption" : {
-      "comment" : "Button label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add Option"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.addOption.footer" : {
-      "comment" : "Section footer",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter the MPV option name (e.g., volume-max) and its value (e.g., 200)."
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.addOption.title" : {
-      "comment" : "Sheet title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add MPV Option"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.customOptions" : {
-      "comment" : "Section header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Custom Options"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.customOptions.empty" : {
-      "comment" : "Empty state text",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No custom options"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.customOptions.footer" : {
-      "comment" : "Section footer",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Custom options are applied after defaults and can override them. Changes take effect on the next video playback."
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.defaultOptions" : {
-      "comment" : "Section header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Default Options"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.defaultOptions.footer" : {
-      "comment" : "Section footer",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These options are applied automatically by Yattee but can be overwritten"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.deleteOption" : {
-      "comment" : "Button label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete Option"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.deleteOption.confirmation" : {
-      "comment" : "Confirmation dialog title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete this option?"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.editOption.title" : {
-      "comment" : "Sheet title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edit MPV Option"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.optionName" : {
-      "comment" : "Text field label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option Name"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.optionValue" : {
-      "comment" : "Text field label",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option Value"
-          }
-        }
-      }
-    },
-    "settings.mpvOptions.title" : {
-      "comment" : "Navigation title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MPV Options"
-          }
-        }
-      }
-    },
     "settings.navigationStyle" : {
       "comment" : "Picker label for choosing sidebar or tab bar navigation",
       "localizations" : {
@@ -14979,7 +14696,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Audio Delay shifts audio relative to video to compensate for fixed HDMI/AVR output lag (positive = audio later). Video Sync Mode changes how MPV reconciles video frames with display refresh; the default is recommended unless you are debugging."
+            "value" : "Audio Delay shifts audio relative to video to compensate for fixed HDMI/AVR output lag (positive = audio later). Video Sync Mode changes how audio player reconciles video frames with display refresh; the default is recommended unless you are debugging."
           }
         }
       }
@@ -15096,7 +14813,7 @@
         }
       }
     },
-    "settings.playback.volume.mpv.footer" : {
+    "settings.playback.volume.inApp.footer" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17265,39 +16982,6 @@
         }
       }
     },
-    "settings.topShelf.sections.footer" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Enabled sections appear in the Apple TV Home top shelf when Yattee is focused."
-          }
-        }
-      }
-    },
-    "settings.topShelf.sections.header" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Sections"
-          }
-        }
-      }
-    },
-    "settings.topShelf.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Top Shelf"
-          }
-        }
-      }
-    },
     "settings.translators.empty" : {
       "localizations" : {
         "en" : {
@@ -19432,7 +19116,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MPEG-DASH (Best for MPV)"
+            "value" : "MPEG-DASH"
           }
         }
       }

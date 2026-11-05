@@ -8,7 +8,6 @@
 import SwiftUI
 import NukeUI
 
-#if os(iOS) || os(macOS)
 struct MiniPlayerView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
@@ -31,43 +30,9 @@ struct MiniPlayerView: View {
     /// Whether PiP is currently active
     private var isPiPActive: Bool { playerState?.pipState == .active }
 
-    /// Whether video preview should be shown (video ready and player not expanded/expanding)
-    private var shouldShowVideoPreview: Bool {
-        guard let state = playerState else { return false }
-        guard let nav = navigationCoordinator else { return false }
-        // Check if video preview is enabled in settings
-        guard miniPlayerSettings.showVideo else { return false }
-        // Don't show video preview for audio-only streams - keep thumbnail visible
-        let isAudioOnly = state.currentStream?.isAudioOnly == true
-        guard !isAudioOnly else { return false }
-        let isVideoReady = state.isFirstFrameReady && state.isBufferReady
-        // Don't show video preview when player is expanded or expanding (but OK during collapse)
-        // This prevents stealing the MPV player view from the expanded player during expand
-        let isPlayerActive = nav.isPlayerExpanded || nav.isPlayerExpanding
-        return isVideoReady && !isPlayerActive
-    }
-
-    /// Whether the thumbnail is hidden: live video shows instead, or the
-    /// expanded player is morphing its video into this preview.
-    private var isThumbnailHidden: Bool {
-        if navigationCoordinator?.isPlayerMorphingToMini == true { return true }
-        return shouldShowVideoPreview && !isPiPActive
-    }
-
-    /// Whether we should include the MPVRenderView in the hierarchy (even if hidden)
-    /// During collapse, we want the view mounted so it can receive the player view immediately
-    private var shouldMountVideoView: Bool {
-        guard playerService?.currentBackend is MPVBackend else { return false }
-        guard let nav = navigationCoordinator else { return false }
-        // Don't mount video view if setting is disabled
-        guard miniPlayerSettings.showVideo else { return false }
-        // Mount when: not expanding AND (collapsing OR should show preview)
-        // This ensures the container exists during collapse to receive the player view
-        // (not while still expanded: the mini player stays mounted under the
-        // player window, and a slide-off dismiss collapses before un-expanding)
-        return !nav.isPlayerExpanding && ((nav.isPlayerCollapsing && !nav.isPlayerExpanded) || shouldShowVideoPreview)
-    }
-
+    private var shouldShowVideoPreview: Bool { false }
+    private var isThumbnailHidden: Bool { false }
+    private var shouldMountVideoView: Bool { false }
     /// The title to display, preferring DeArrow title if available.
     private var displayTitle: String {
         if let video = currentVideo, let deArrowTitle = deArrowProvider?.title(for: video) {
@@ -85,34 +50,7 @@ struct MiniPlayerView: View {
 
     // MARK: - Actions
 
-    /// Handle tap on video preview - action based on settings (PiP or expand)
-    /// When video is disabled, always expand player since PiP needs the video view mounted
-    private func handleVideoPreviewTap() {
-        // Don't start PiP while the expanded player is open (or opening) — PiP
-        // would play alongside the player window. Bring the window forward instead.
-        if let nav = navigationCoordinator, nav.isPlayerExpanded || nav.isPlayerExpanding {
-            nav.expandPlayer()
-            return
-        }
-
-        // If video is disabled in mini player, always expand (can't start PiP without video view)
-        guard miniPlayerSettings.showVideo else {
-            navigationCoordinator?.expandPlayer()
-            return
-        }
-
-        switch miniPlayerSettings.videoTapAction {
-        case .startPiP:
-            if let backend = playerService?.currentBackend as? MPVBackend {
-                backend.startPiP()
-            } else {
-                navigationCoordinator?.expandPlayer()
-            }
-        case .expandPlayer:
-            navigationCoordinator?.expandPlayer()
-        }
-    }
-
+    private func handleVideoPreviewTap() { navigationCoordinator?.expandPlayer() }
     /// Closes the current video: stops playback, clears the queue, and dismisses
     /// the expanded player (so the separate macOS player window is hidden too).
     private func closeVideo() {
@@ -123,41 +61,21 @@ struct MiniPlayerView: View {
         navigationCoordinator?.isPlayerExpanded = false
     }
 
-    /// Expand player, restoring from PiP first if needed
-    /// If PiP is active, stops PiP and waits for it to close before expanding
-    private func expandPlayerWithPiPRestore() {
-        if let backend = playerService?.currentBackend as? MPVBackend, backend.isPiPActive {
-            // Stop PiP first, wait for it to close, then expand
-            backend.stopPiP()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(400))
-                navigationCoordinator?.expandPlayer()
-            }
-        } else {
-            navigationCoordinator?.expandPlayer()
-        }
-    }
-
+    private func expandPlayerWithPiPRestore() { navigationCoordinator?.expandPlayer() }
     var body: some View {
         let _ = PerfCounter.body("MiniPlayerView")
         Group {
-            #if os(macOS)
-            capsuleLayout
-            #else
             if isTabAccessory {
                 accessoryLayout
             } else {
                 capsuleLayout
             }
-            #endif
         }
         .accessibilityIdentifier("player.miniPlayer")
         .accessibilityLabel("player.miniPlayer")
-        #if !os(macOS)
         // Hidden under the expanded player: stop the scrolling titles.
         // (macOS shows the expanded player in its own window.)
         .environment(\.isMarqueePaused, navigationCoordinator?.isPlayerExpanded == true)
-        #endif
         .modifier(MiniPlayerContextMenuModifier(video: currentVideo) {
             closeVideo()
         })
@@ -233,11 +151,7 @@ struct MiniPlayerView: View {
 
     /// Preview size for the capsule: slightly larger on iOS for touch.
     private var capsulePreviewSize: CGSize {
-        #if os(macOS)
-        CGSize(width: 44, height: 26)
-        #else
         CGSize(width: 56, height: 32)
-        #endif
     }
 
     /// Compact, centered capsule (Music.app style). On macOS it floats in the main
@@ -341,55 +255,9 @@ struct MiniPlayerView: View {
         }
     }
 
-    /// Video preview that shows live video when available, or thumbnail as fallback.
-    @ViewBuilder
     private var videoPreviewView: some View {
-        ZStack {
-            // Video layer - mounted during collapse or when ready to show
-            // Keep it in hierarchy during collapse so the container can receive the player view
-            if let backend = playerService?.currentBackend as? MPVBackend,
-               let playerState,
-               shouldMountVideoView {
-                #if os(iOS)
-                MPVRenderViewRepresentable(backend: backend, playerState: playerState, fillsFrame: true)
-                    .allowsHitTesting(false)
-                #else
-                MPVRenderViewRepresentable(backend: backend, playerState: playerState)
-                    .allowsHitTesting(false)
-                #endif
-            }
-
-            // Thumbnail layer - on top so it can cover the black MPV view during PiP
-            // Shown when video not ready, during expand animation, or during PiP
-            thumbnailView
-                .opacity(isThumbnailHidden ? 0 : 1)
-                .animation(.easeInOut(duration: 0.15), value: shouldShowVideoPreview)
-                .animation(.easeInOut(duration: 0.25), value: isPiPActive)
-                .allowsHitTesting(false)
-        }
-        .onChange(of: navigationCoordinator?.isPlayerCollapsing) { _, isCollapsing in
-            // When collapse animation finishes, resume rendering if video preview should be shown
-            // This must happen AFTER playerSheetDidDisappear pauses rendering
-            if isCollapsing == false, shouldShowVideoPreview,
-               let backend = playerService?.currentBackend as? MPVBackend {
-                backend.resumeRendering()
-            }
-        }
-        .onChange(of: shouldShowVideoPreview) { _, showPreview in
-            // Resume/pause rendering based on whether mini player video is visible
-            // Only act when not in the middle of collapse animation
-            if navigationCoordinator?.isPlayerCollapsing == false {
-                if let backend = playerService?.currentBackend as? MPVBackend {
-                    if showPreview {
-                        backend.resumeRendering()
-                    } else {
-                        backend.pauseRendering()
-                    }
-                }
-            }
-        }
+        thumbnailView.allowsHitTesting(false)
     }
-
     @ViewBuilder
     private var thumbnailView: some View {
         FallbackLazyImage(urls: displayThumbnailURLs) { state in
@@ -586,36 +454,13 @@ struct MiniPlayerView: View {
 
     @ViewBuilder
     private var airplayButton: some View {
-        #if os(iOS)
         AirPlayButton(tintColor: .label)
             .frame(width: 32, height: 32)
-        #elseif os(macOS)
-        AirPlayButton()
-            .frame(width: 32, height: 32)
-        #endif
     }
 
     private func pipButton(config: ControlButtonConfiguration) -> some View {
-        Button {
-            incrementTapCount(for: config)
-            // Don't start PiP while the expanded player is open (or opening) — PiP
-            // would play alongside the player window. Bring the window forward instead.
-            if let nav = navigationCoordinator, nav.isPlayerExpanded || nav.isPlayerExpanding {
-                nav.expandPlayer()
-                return
-            }
-            if let backend = playerService?.currentBackend as? MPVBackend {
-                backend.startPiP()
-            }
-        } label: {
-            Image(systemName: "pip.enter")
-                .font(isTabAccessory ? .title3 : .title2)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        EmptyView()
     }
-
     private func playbackSpeedButton(config: ControlButtonConfiguration) -> some View {
         let currentRate = playerState?.rate ?? .x1
         return Menu {
@@ -691,7 +536,6 @@ private extension View {
     /// morph target (iOS only; macOS's player is a separate window or overlay).
     @ViewBuilder
     func reportsMiniPlayerVideoFrame(cornerRadius: CGFloat, navigationCoordinator: NavigationCoordinator?) -> some View {
-        #if os(iOS)
         onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
             guard let navigationCoordinator, navigationCoordinator.miniPlayerVideoFrame != frame else { return }
             navigationCoordinator.miniPlayerVideoFrame = frame
@@ -700,9 +544,6 @@ private extension View {
         .onDisappear {
             navigationCoordinator?.miniPlayerVideoFrame = .zero
         }
-        #else
-        self
-        #endif
     }
 }
 
@@ -748,4 +589,3 @@ private struct MiniPlayerContextMenuModifier: ViewModifier {
     MiniPlayerView(isTabAccessory: true)
         .appEnvironment(.preview)
 }
-#endif

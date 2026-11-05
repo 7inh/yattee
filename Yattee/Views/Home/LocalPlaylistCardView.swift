@@ -19,11 +19,7 @@ struct LocalPlaylistCardView: View {
     private var metadataFont: Font { isCompact ? .caption2 : .caption }
 
     private var metadataHeight: CGFloat {
-        #if os(tvOS)
-        isCompact ? 90 : 110
-        #else
         isCompact ? 50 : 58
-        #endif
     }
 
     var body: some View {

@@ -5,7 +5,6 @@
 //  Settings view for configuring horizontal seek gesture.
 //
 
-#if os(iOS)
 import SwiftUI
 
 /// Settings view for configuring horizontal seek gesture on the player.
@@ -108,4 +107,3 @@ struct SeekGestureSettingsView: View {
         )
     }
 }
-#endif

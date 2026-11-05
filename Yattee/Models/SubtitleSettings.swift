@@ -2,7 +2,7 @@
 //  SubtitleSettings.swift
 //  Yattee
 //
-//  Settings for subtitle appearance in MPV player.
+//  Settings for subtitle appearance in player player.
 //
 
 import Foundation
@@ -27,24 +27,12 @@ enum SubtitleFont: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
-    /// MPV font name for this font option.
-    var mpvFontName: String {
-        switch self {
-        case .sansSerif:
-            return "sans-serif"
-        case .serif:
-            return "serif"
-        case .monospaced:
-            return "monospace"
-        }
-    }
-
 }
 
 
 // MARK: - Subtitle Settings
 
-/// Settings for subtitle appearance in MPV.
+/// Settings for subtitle appearance in player.
 struct SubtitleSettings: Codable, Hashable, Sendable {
     /// Font for subtitles.
     var font: SubtitleFont
@@ -104,47 +92,4 @@ struct SubtitleSettings: Codable, Hashable, Sendable {
     /// Default subtitle settings.
     static let `default` = SubtitleSettings()
 
-    /// Converts settings to MPV options dictionary.
-    /// - Returns: Dictionary of MPV option names to values.
-    func mpvOptions() -> [String: String] {
-        var options: [String: String] = [:]
-
-        // Font
-        options["sub-font"] = font.mpvFontName
-        options["sub-font-size"] = String(fontSize)
-
-        // Text color (BBGGRR format for MPV with alpha as separate component)
-        options["sub-color"] = mpvColorString(textColor)
-
-        // Border
-        options["sub-border-color"] = mpvColorString(borderColor)
-        options["sub-border-size"] = String(format: "%.1f", borderSize)
-
-        // Background
-        if showBackground {
-            options["sub-back-color"] = mpvColorString(backgroundColor)
-            options["sub-border-style"] = "background-box"
-        } else {
-            options["sub-back-color"] = "#00000000"  // Transparent
-            options["sub-border-style"] = "outline-and-shadow"  // Default style
-        }
-
-        // Style
-        options["sub-bold"] = isBold ? "yes" : "no"
-        options["sub-italic"] = isItalic ? "yes" : "no"
-
-        // Position
-        options["sub-margin-y"] = String(bottomMargin)
-
-        return options
-    }
-
-    /// Converts CodableColor to MPV color string format (#AARRGGBB).
-    private func mpvColorString(_ color: CodableColor) -> String {
-        let r = Int(color.red * 255)
-        let g = Int(color.green * 255)
-        let b = Int(color.blue * 255)
-        let a = Int(color.opacity * 255)
-        return String(format: "#%02X%02X%02X%02X", a, r, g, b)
-    }
 }

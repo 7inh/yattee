@@ -14,7 +14,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct WideScreenPlayerLayout<PlayerContent: View>: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -112,7 +111,6 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
         settingsManager?.landscapeDetailsPanelLastVisible = false
     }
 
-    #if os(iOS)
     /// The app's window, looked up from any foreground scene. Notification
     /// Center and Control Center move the scene to `.foregroundInactive`, so
     /// requiring `.foregroundActive` would drop the safe area to zero while
@@ -120,50 +118,34 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
     private var foregroundWindow: UIWindow? {
         UIApplication.shared.foregroundWindow
     }
-    #endif
 
     /// Get safe area insets from window scene (geometry reader insets are 0 when .ignoresSafeArea is used)
     private var windowSafeAreaInsets: EdgeInsets {
-        #if os(iOS)
         guard let window = foregroundWindow else { return EdgeInsets() }
         let insets = window.safeAreaInsets
         return EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
-        #else
-        return EdgeInsets()
-        #endif
     }
 
     /// Get full screen bounds from window scene (ignores safe area constraints from parent)
     /// On macOS, this is not used - geometry reader size is used directly
     private func windowSceneBounds(fallback: CGSize) -> CGSize {
-        #if os(iOS)
         guard let window = foregroundWindow else {
             // Fallback to the space this view was actually offered
             return fallback
         }
         // Window frame gives actual size including orientation
         return window.frame.size
-        #else
-        return .zero // Not used on macOS - geometry reader size is used directly
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
             // On iOS: Use window bounds to get full size (avoids safe area constraint from parent)
             // On macOS: Use geometry reader size directly (no safe area concerns, window is the source of truth)
-            #if os(iOS)
             let windowBounds = windowSceneBounds(fallback: geometry.size)
             let availableWidth = windowBounds.width
             let availableHeight = windowBounds.height
             let safeAreaLeft = windowSafeAreaInsets.leading
             let safeAreaRight = windowSafeAreaInsets.trailing
-            #else
-            let availableWidth = geometry.size.width
-            let availableHeight = geometry.size.height
-            let safeAreaLeft: CGFloat = 0
-            let safeAreaRight: CGFloat = 0
-            #endif
 
             // Safe area strategy:
             // - Left side (Dynamic Island): Always respect full safe area - content would be cut off
@@ -175,7 +157,6 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
 
             // Detect which side has Dynamic Island based on interface orientation
             // Note: Can't use safe area comparison because both sides have similar values (~62px each)
-            #if os(iOS)
             // TODO: Modernization - This distinguishes landscapeLeft from landscapeRight to locate
             // the Dynamic Island, which window bounds/size classes cannot express. Read the
             // orientation from the hosting scene's `effectiveGeometry.interfaceOrientation`
@@ -189,10 +170,6 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
             // landscapeRight = home/gesture bar on right = Dynamic Island on LEFT
             let isDynamicIslandOnLeft = interfaceOrientation == .landscapeRight
             let isDynamicIslandOnRight = interfaceOrientation == .landscapeLeft
-            #else
-            let isDynamicIslandOnLeft = safeAreaLeft > safeAreaRight
-            let isDynamicIslandOnRight = safeAreaRight > safeAreaLeft
-            #endif
 
             // Calculate Dynamic Island safe area on the side opposite to panel
             // Video must not extend into Dynamic Island
@@ -319,10 +296,8 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
             }
         }
         .ignoresSafeArea(.all)
-        #if os(iOS)
         .persistentSystemOverlays(.hidden)
         .playerStatusBarHidden(true)
-        #endif
     }
 
     // MARK: - Panel Container
@@ -379,5 +354,3 @@ struct WideScreenPlayerLayout<PlayerContent: View>: View {
         )
     }
 }
-
-#endif

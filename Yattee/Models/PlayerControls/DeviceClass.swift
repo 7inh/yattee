@@ -23,13 +23,7 @@ enum DeviceClass: String, Codable, Hashable, Sendable {
 
     /// The device class for the current platform.
     static var current: DeviceClass {
-        #if os(iOS)
         return .iOS
-        #elseif os(macOS)
-        return .macOS
-        #elseif os(tvOS)
-        return .tvOS
-        #endif
     }
 
     // MARK: - Display

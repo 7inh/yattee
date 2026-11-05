@@ -55,20 +55,6 @@ struct VideoContextMenuModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            #if os(tvOS)
-            .contextMenu {
-                VideoContextMenuContent(
-                    video: video,
-                    customActions: customActions,
-                    context: context,
-                    startTime: startTime,
-                    showingDeleteDownloadConfirmation: $showingDeleteDownloadConfirmation,
-                    downloadToDelete: $downloadToDelete,
-                    appEnvironment: appEnvironment
-                )
-                .id(menuRefreshID)
-            }
-            #else
             .contextMenu(menuItems: {
                 VideoContextMenuContent(
                     video: video,
@@ -91,8 +77,6 @@ struct VideoContextMenuModifier: ViewModifier {
                 .padding()
                 .environment(\.appEnvironment, appEnvironment)
             })
-            #endif
-            #if !os(tvOS)
             .alert(String(localized: "videoInfo.download.remove.title"), isPresented: $showingDeleteDownloadConfirmation) {
                 Button(String(localized: "common.cancel"), role: .cancel) {}
                 Button(String(localized: "videoInfo.download.remove.confirm"), role: .destructive) {
@@ -105,7 +89,6 @@ struct VideoContextMenuModifier: ViewModifier {
             } message: {
                 Text(String(localized: "videoInfo.download.remove.message"))
             }
-            #endif
             .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
                 menuRefreshID = UUID()
             }
@@ -233,7 +216,6 @@ struct VideoContextMenuContent: View {
             }
         }
 
-        #if !os(tvOS)
         // Download / Cancel download / Downloaded
         if showDownloadOption {
             if isDownloading, let download = activeDownload {
@@ -259,25 +241,13 @@ struct VideoContextMenuContent: View {
                 }
             }
         }
-        #endif
 
         // Share
-        #if !os(tvOS)
         ShareLink(item: appEnvironment?.shareURL(for: video) ?? video.shareURL) {
             Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
         }
-        #endif
 
         // The macOS ShareLink menu has no Copy Link item (#972)
-        #if os(macOS)
-        Button {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString((appEnvironment?.shareURL(for: video) ?? video.shareURL).absoluteString, forType: .string)
-        } label: {
-            Label(String(localized: "video.context.copyLink"), systemImage: "link")
-        }
-        #endif
     }
 
     var body: some View {
@@ -296,13 +266,9 @@ struct VideoContextMenuContent: View {
             Divider()
         }
         
-        #if os(iOS)
         ControlGroup {
             playDownloadShareButtons
         }
-        #else
-        playDownloadShareButtons
-        #endif
 
         // Play from Beginning (only shown when there's saved progress)
         if showPlayAction, let startTime, startTime > 0 {
@@ -429,7 +395,6 @@ struct VideoContextMenuContent: View {
 
     // MARK: - Download
 
-    #if !os(tvOS)
     /// Starts a download either automatically or by showing the quality sheet.
     private func startDownload(for video: Video) {
         guard let appEnvironment else {
@@ -490,7 +455,6 @@ struct VideoContextMenuContent: View {
             presentAppSheet(.downloadOptions(video))
         }
     }
-    #endif
 
     // MARK: - Remote Control
 
@@ -594,7 +558,6 @@ extension View {
 
 // MARK: - Dropdown Menu View
 
-#if !os(tvOS)
 /// A dropdown menu view for videos, showing context menu actions.
 /// Used in player views where the video is already playing.
 struct VideoContextMenuView: View {
@@ -628,12 +591,6 @@ struct VideoContextMenuView: View {
         }
         .id(refreshID)
         .menuIndicator(.hidden)
-        #if os(macOS)
-        // The default macOS menu style renders as a bordered pull-down that
-        // stretches to fill available width on macOS 15 (Sequoia).
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        #endif
         .alert(String(localized: "videoInfo.download.remove.title"), isPresented: $showingDeleteDownloadConfirmation) {
             Button(String(localized: "common.cancel"), role: .cancel) {}
             Button(String(localized: "videoInfo.download.remove.confirm"), role: .destructive) {
@@ -672,4 +629,3 @@ struct VideoContextMenuView: View {
         }
     }
 }
-#endif

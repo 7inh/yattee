@@ -21,10 +21,6 @@ struct MediaBrowserView: View {
     @State private var sortOrder: MediaBrowserSortOrder
     @State private var sortAscending: Bool
     @State private var showViewOptions = false
-    #if os(tvOS)
-    @State private var unsupportedFile: MediaFile?
-    @FocusState private var firstFileFocused: Bool
-    #endif
 
     private var listStyle: VideoListStyle {
         appEnvironment?.settingsManager.listStyle ?? .inset
@@ -68,21 +64,14 @@ struct MediaBrowserView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         content
-            #if !os(tvOS)
             .navigationTitle(navigationTitle)
             .toolbarTitleDisplayMode(.inlineLarge)
-            #endif
             .toolbar {
-                #if !os(tvOS)
                 ToolbarItem(placement: .primaryAction) {
                     if isLoading {
                         ProgressView()
@@ -107,20 +96,12 @@ struct MediaBrowserView: View {
                         )
                     }
                     .liquidGlassTransitionSource(id: "mediaBrowserViewOptions", in: sheetTransition)
-                    #if os(macOS)
-                    .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                        viewOptionsSheetContent
-                    }
-                    #endif
                 }
-                #endif
             }
-            #if !os(macOS)
             .sheet(isPresented: $showViewOptions) {
                 viewOptionsSheetContent
                     .liquidGlassSheetContent(sourceID: "mediaBrowserViewOptions", in: sheetTransition)
             }
-            #endif
             .task {
                 await loadFiles()
             }
@@ -133,58 +114,11 @@ struct MediaBrowserView: View {
             .onChange(of: showOnlyPlayable) { _, newValue in
                 savePreference(newValue, forKey: "showOnlyPlayable")
             }
-            #if os(tvOS)
-            .onChange(of: displayedFiles.isEmpty) { wasEmpty, isEmpty in
-                if wasEmpty && !isEmpty {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        firstFileFocused = true
-                    }
-                }
-            }
-            #endif
     }
 
     @ViewBuilder
     private var content: some View {
-        #if os(tvOS)
-        TVSidebarDetailContainer(
-            systemImage: "folder",
-            title: navigationTitle
-        ) {
-            VStack(spacing: 0) {
-                // Shown while the first listing loads too: an SMB or WebDAV
-                // connection can hang for a long time, and the spinner alone
-                // gives the remote nothing to focus.
-                HStack(spacing: 24) {
-                    Button {
-                        guard !isLoading else { return }
-                        Task { await loadFiles() }
-                    } label: {
-                        Label(String(localized: "common.refresh"), systemImage: "arrow.clockwise")
-                    }
-                    Button {
-                        showViewOptions = true
-                    } label: {
-                        Label(
-                            String(localized: "viewOptions.title"),
-                            systemImage: showOnlyPlayable
-                                ? "line.3.horizontal.decrease.circle.fill"
-                                : "line.3.horizontal.decrease.circle"
-                        )
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                .focusSection()
-                inner
-                    .focusSection()
-            }
-        }
-        #else
         inner
-        #endif
     }
 
     @ViewBuilder
@@ -242,26 +176,13 @@ struct MediaBrowserView: View {
                                 NavigationLink(value: NavigationDestination.mediaBrowser(source, path: file.path, showOnlyPlayable: showOnlyPlayable)) {
                                     MediaFileRow(file: file, sortOrder: sortOrder)
                                 }
-                                #if os(macOS)
-                                .buttonStyle(.plain)
-                                #else
                                 .foregroundStyle(.primary)
-                                #endif
                             } else if file.isPlayable {
                                 playableFileRow(for: file)
                             } else {
-                                #if os(tvOS)
-                                MediaFileTVOSUnsupportedButton(onTap: { unsupportedFile = file }) {
-                                    MediaFileRow(file: file, sortOrder: sortOrder)
-                                }
-                                #else
                                 MediaFileRow(file: file, sortOrder: sortOrder)
-                                #endif
                             }
                         }
-                        #if os(tvOS)
-                        .modifier(FirstRowFocusModifier(isFirst: isFirst, focus: $firstFileFocused))
-                        #endif
                     }
                 }
             }
@@ -271,44 +192,13 @@ struct MediaBrowserView: View {
 
     @ViewBuilder
     private var fileList: some View {
-        #if os(tvOS)
-        // On tvOS do NOT ignoreSafeArea — otherwise the ScrollView extends
-        // under TVSidebarDetailContainer's 400pt leading inset, and left-press
-        // from a file row escapes to the outer sidebarAdaptable TabView
-        // instead of reaching the inline Refresh / View Options buttons.
-        fileListBackground
-            .overlay(fileListScrollView)
-            .alert(
-                String(localized: "mediaBrowser.unsupportedFile.title"),
-                isPresented: Binding(
-                    get: { unsupportedFile != nil },
-                    set: { if !$0 { unsupportedFile = nil } }
-                ),
-                presenting: unsupportedFile
-            ) { _ in
-                Button(String(localized: "common.ok"), role: .cancel) { unsupportedFile = nil }
-            } message: { file in
-                Text(String(localized: "mediaBrowser.unsupportedFile.message \(file.name)"))
-            }
-        #else
         fileListBackground
             .ignoresSafeArea()
             .overlay(fileListScrollView)
-        #endif
     }
 
     @ViewBuilder
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        #if os(macOS)
-        VStack(spacing: 0) {
-            Divider()
-            LazyVStack(spacing: 0) {
-                content()
-            }
-            Divider()
-        }
-        .padding(.bottom, 12)
-        #else
         if listStyle == .inset {
             LazyVStack(spacing: 0) {
                 content()
@@ -323,7 +213,6 @@ struct MediaBrowserView: View {
             }
             .padding(.bottom, 16)
         }
-        #endif
     }
 
     // MARK: - Preferences
@@ -408,15 +297,6 @@ struct MediaBrowserView: View {
 
     @ViewBuilder
     private func playableFileRow(for file: MediaFile) -> some View {
-        #if os(tvOS)
-        MediaFileTVOSTapButton(
-            onPlay: { playFile(file) },
-            onOpenInfo: { openInfo(for: file) }
-        ) {
-            MediaFileRow(file: file, sortOrder: sortOrder)
-        }
-        .videoContextMenu(video: file.toVideo(), context: .mediaBrowser)
-        #else
         MediaFileRow(
             file: file,
             sortOrder: sortOrder,
@@ -442,7 +322,6 @@ struct MediaBrowserView: View {
         .contentShape(Rectangle())
         .onTapGesture { playFile(file) }
         .videoContextMenu(video: file.toVideo(), context: .mediaBrowser)
-        #endif
     }
 
     // MARK: - Playback
@@ -497,20 +376,6 @@ struct MediaBrowserView: View {
     }
 }
 
-#if os(tvOS)
-private struct FirstRowFocusModifier: ViewModifier {
-    let isFirst: Bool
-    var focus: FocusState<Bool>.Binding
-
-    func body(content: Content) -> some View {
-        if isFirst {
-            content.focused(focus)
-        } else {
-            content
-        }
-    }
-}
-#endif
 
 // MARK: - Preview
 

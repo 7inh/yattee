@@ -35,63 +35,11 @@ struct LoadingView: View {
                     .padding(.horizontal)
             }
 
-            #if os(tvOS)
-            if let onCancel {
-                TVStalledLoadCancelButton(action: onCancel)
-                    .padding(.top, 24)
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-#if os(tvOS)
-// MARK: - Stalled Load Cancel
-
-/// A Cancel button that appears under a tvOS loading spinner once the load has
-/// taken a while.
-///
-/// A screen showing only a spinner has nothing focusable: the focus engine has
-/// nowhere to land, the remote cannot reach the sidebar and Menu cannot pop the
-/// screen, so a hung request strands the user until it times out. Delayed so
-/// a normal load never flashes the button.
-struct TVStalledLoadCancelButton: View {
-    var delay: Duration = .seconds(3)
-    let action: () -> Void
-
-    @State private var isShown = false
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        Group {
-            if isShown {
-                Button(String(localized: "common.cancel"), action: action)
-                    .focused($isFocused)
-            }
-        }
-        .task {
-            guard (try? await Task.sleep(for: delay)) != nil else { return }
-            isShown = true
-            // Focus was already lost by the time the button appears, and the
-            // focus engine is not guaranteed to pick up a late arrival.
-            guard (try? await Task.sleep(for: .milliseconds(100))) != nil else { return }
-            isFocused = true
-        }
-    }
-}
-
-extension View {
-    /// Puts a delayed Cancel under a tvOS loading spinner. See
-    /// `TVStalledLoadCancelButton`.
-    func tvStalledLoadCancel(action: @escaping () -> Void) -> some View {
-        VStack(spacing: 40) {
-            self
-            TVStalledLoadCancelButton(action: action)
-        }
-    }
-}
-#endif
 
 // MARK: - Error State View
 

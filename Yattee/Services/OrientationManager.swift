@@ -6,7 +6,6 @@
 //  Supports in-app orientation locking when the player is visible.
 //
 
-#if os(iOS)
 
 import Observation
 import UIKit
@@ -148,5 +147,3 @@ final class OrientationManager {
         }
     }
 }
-
-#endif

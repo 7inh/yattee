@@ -275,20 +275,6 @@ struct SubscriptionDestinationRows: View {
     private func row(for context: DataContext) -> some View {
         let title = DataContextSwitcherLabels.title(for: context, in: appEnvironment)
 
-        #if os(tvOS)
-        Button {
-            toggle(context)
-            onSelect?()
-        } label: {
-            if membership.isSubscribed(on: context) == true {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        .disabled(isRefusing(context))
-        #else
         // The mark is the menu's own, not a drawn glyph: an image inside a
         // macOS menu row is dropped, and a toggle is what both platforms render
         // — and report to VoiceOver — as a checked row.
@@ -296,7 +282,6 @@ struct SubscriptionDestinationRows: View {
             Text(title)
         }
         .disabled(isRefusing(context))
-        #endif
     }
 
     private func subscribed(on context: DataContext) -> Binding<Bool> {
@@ -333,7 +318,6 @@ struct SubscriptionDestinationRows: View {
 
 // MARK: - Menu
 
-#if !os(tvOS)
 /// The destination submenu, for placing inside the channel menu.
 struct SubscriptionDestinationMenu: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -359,50 +343,5 @@ struct SubscriptionDestinationMenu: View {
         }
     }
 }
-#endif
 
 // MARK: - tvOS picker
-
-#if os(tvOS)
-/// The tvOS destination list, presented in a `fullScreenCover`: menus are
-/// unusable there, and a sheet is a card too small to read.
-struct SubscriptionDestinationPicker: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let channel: Channel
-    let membership: SubscriptionDestinationMembershipLoader
-    var onToggled: ((DataContext, Bool) -> Void)?
-
-    var body: some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 24) {
-                Text(String(localized: "channel.menu.subscribeOn"))
-                    .font(.title2.bold())
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // The picker stays open across a toggle: checkmarks are
-                        // the whole point of the list, and closing it would hide
-                        // the change the user just made.
-                        SubscriptionDestinationRows(
-                            channel: channel,
-                            membership: membership,
-                            onToggled: onToggled
-                        )
-                    }
-                }
-
-                Button(String(localized: "common.close")) {
-                    dismiss()
-                }
-                .buttonStyle(TVSettingsButtonStyle())
-            }
-            .frame(maxWidth: 900)
-            .padding(.horizontal, 80)
-            .padding(.vertical, 60)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .tvFullScreenCoverBackground()
-    }
-}
-#endif

@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 extension ExpandedPlayerSheet {
     // MARK: - Playback Actions
@@ -221,5 +220,3 @@ extension ExpandedPlayerSheet {
         }
     }
 }
-
-#endif

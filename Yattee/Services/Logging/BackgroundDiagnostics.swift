@@ -33,7 +33,6 @@ final class RenderDiagnosticsCounters: @unchecked Sendable {
     }
 }
 
-#if os(iOS)
 import AVFoundation
 import UIKit
 
@@ -104,9 +103,6 @@ final class BackgroundDiagnostics {
                 + " backend=\(playerService.currentBackendType) video=\(state.currentVideo?.id.videoID ?? "none")"
                 + " time=\(Int(state.currentTime))/\(Int(state.duration))"
                 + " publishesTime=\(state.publishesTimeUpdates)")
-            if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                lines.append("decoder: " + mpvBackend.decoderDiagnosticsSummary)
-            }
         }
 
         let session = AVAudioSession.sharedInstance()
@@ -115,13 +111,6 @@ final class BackgroundDiagnostics {
             + " otherAudioPlaying=\(session.isOtherAudioPlaying)"
             + " silenceSecondaryHint=\(session.secondaryAudioShouldBeSilencedHint)"
             + " route=[\(outputs.joined(separator: ","))]")
-
-        let renderViews = MPVRenderView.diagnosticsInstances
-        if renderViews.isEmpty {
-            lines.append("render: no MPV render views")
-        } else {
-            lines.append(contentsOf: renderViews.map { "render: " + $0.diagnosticsSummary() })
-        }
 
         return lines.joined(separator: "\n")
     }
@@ -390,4 +379,3 @@ private final class ResponseFlag: @unchecked Sendable {
         lock.withLock { value = true }
     }
 }
-#endif

@@ -360,7 +360,6 @@ struct DownloadManagerTests {
         #expect(available >= 0)
     }
 
-    #if !os(tvOS)
     @Test("Enqueue prevents duplicate downloads")
     func enqueueDuplicatePrevention() async throws {
         // Clear state before test
@@ -471,7 +470,6 @@ struct DownloadManagerTests {
 
         #expect(manager.activeDownloads.first?.videoID.videoID == "move3")
     }
-    #endif
 
     private func makeTestVideo(id: String) -> Video {
         Video(

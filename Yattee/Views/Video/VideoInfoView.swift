@@ -7,9 +7,7 @@
 
 import SwiftUI
 import NukeUI
-#if !os(tvOS)
 import TipKit
-#endif
 
 /// Initialization mode for VideoInfoView - either a loaded video or just an ID to fetch.
 enum VideoInfoInitMode: Sendable {
@@ -21,9 +19,6 @@ struct VideoInfoView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
     @Environment(\.videoQueueContext) private var videoQueueContext
-    #if os(tvOS)
-    @Environment(\.dismiss) private var dismiss
-    #endif
 
     private let initMode: VideoInfoInitMode
 
@@ -38,12 +33,10 @@ struct VideoInfoView: View {
     @State private var scrollOffset: CGFloat = 0
 
     // Carousel scroll state (iOS only) - separate from currentVideoIndex to avoid mid-scroll updates
-    #if os(iOS)
     @State private var carouselScrollPosition: Int?
     @State private var clearsCarouselPositionWhenIdle = false
     /// Last scroll offset, kept in a box so tracking it doesn't re-render the view every frame
     @State private var carouselOffset = CarouselOffsetBox()
-    #endif
     
     // Continuation loading state
     @State private var extendedVideoList: [Video] = []
@@ -60,10 +53,6 @@ struct VideoInfoView: View {
     @State private var isEditingBookmarkNote = false
     @State private var isEditingBookmarkTags = false
     @FocusState private var isBookmarkNoteFocused: Bool
-    #if os(tvOS)
-    @FocusState private var isPlayFocused: Bool
-    @State private var isDescriptionScrollLocked = false
-    #endif
 
     // Comments state (independent from PlayerState)
     @State private var comments: [Comment] = []
@@ -159,9 +148,7 @@ struct VideoInfoView: View {
     private var navigationCoordinator: NavigationCoordinator? { appEnvironment?.navigationCoordinator }
     private var playerService: PlayerService? { appEnvironment?.playerService }
     private var queueManager: QueueManager? { appEnvironment?.queueManager }
-    #if !os(tvOS)
     private var downloadManager: DownloadManager? { appEnvironment?.downloadManager }
-    #endif
 
     /// Returns the first enabled Yattee Server instance URL, if any.
     private var yatteeServerURL: URL? {
@@ -299,41 +286,10 @@ struct VideoInfoView: View {
         .task {
             await loadInitialVideoIfNeeded()
         }
-        #if os(tvOS)
-        .navigationTitle("")
-        #else
         .navigationTitle(displayTitle)
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
-        #if !os(tvOS)
         .toolbar {
             if usesToolbarActions, displayedVideo != nil {
-                #if os(macOS)
-                // macOS has room for every action, so show them all as toolbar items.
-                // Explicit items rather than ForEach: a ForEach inside the toolbar builder
-                // is evaluated once and never picks up state changes (bookmark/download icons).
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarActionView(.play, inMenu: false)
-                }
-                // Separate Play from the secondary actions so it gets its own glass pill.
-                if #available(macOS 26, *) {
-                    ToolbarSpacer(.fixed, placement: .primaryAction)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarActionView(.download, inMenu: false)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarActionView(.share, inMenu: false)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarActionView(.addToPlaylist, inMenu: false)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarActionView(.bookmark, inMenu: false)
-                }
-                #else
                 ToolbarItem(placement: .primaryAction) {
                     toolbarActionView(primaryAction, inMenu: false)
                 }
@@ -349,14 +305,10 @@ struct VideoInfoView: View {
                         Label(String(localized: "videoInfo.toolbar.moreActions"), systemImage: "ellipsis")
                     }
                 }
-                #endif
             }
         }
-        #endif
         .onAppear {
-            #if !os(tvOS)
             VideoInfoPlayThumbnailTip.isToolbarLayout = showsThumbnailPlayTip
-            #endif
             // Initialize current index from queue context, resuming where this
             // page was before a layout swap rebuilt it
             if currentVideoIndex == nil, let context = videoQueueContext {
@@ -366,27 +318,7 @@ struct VideoInfoView: View {
             
             // Load initial video data (only if video is already loaded)
             guard displayedVideo != nil else { return }
-            #if !os(tvOS)
             loadVideoData()
-            #else
-            if let video = displayedVideo {
-                isBookmarked = dataManager?.isBookmarked(videoID: video.id.videoID) ?? false
-                if isBookmarked, let bookmark = dataManager?.bookmark(for: video.id.videoID) {
-                    currentBookmark = bookmark
-                    bookmarkTags = bookmark.tags
-                    bookmarkNote = bookmark.note ?? ""
-                } else {
-                    currentBookmark = nil
-                    bookmarkTags = []
-                    bookmarkNote = ""
-                }
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
-            }
-            loadComments()
-            DispatchQueue.main.async {
-                isPlayFocused = true
-            }
-            #endif
 
             // Load full video details from API
             Task {
@@ -416,7 +348,6 @@ struct VideoInfoView: View {
             // Resetting to 0 causes the blur to jump to an incorrect position briefly
             
             // Load new video data
-            #if !os(tvOS)
             loadVideoData()
             
             // Pre-load more videos if we're at 95% of the list
@@ -425,41 +356,15 @@ struct VideoInfoView: View {
                     await loadMoreVideos()
                 }
             }
-            #else
-            if let video = displayedVideo {
-                isBookmarked = dataManager?.isBookmarked(videoID: video.id.videoID) ?? false
-                if isBookmarked, let bookmark = dataManager?.bookmark(for: video.id.videoID) {
-                    currentBookmark = bookmark
-                    bookmarkTags = bookmark.tags
-                    bookmarkNote = bookmark.note ?? ""
-                } else {
-                    currentBookmark = nil
-                    bookmarkTags = []
-                    bookmarkNote = ""
-                }
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
-            }
-            loadComments()
-            DispatchQueue.main.async {
-                isPlayFocused = true
-            }
-            #endif
 
             // Load full video details from API
             Task {
                 await loadVideoDetails()
             }
         }
-        #if os(tvOS)
-        .fullScreenCover(isPresented: $showingCommentsSheet) {
-            commentsSheetContent
-        }
-        #else
         .sheet(isPresented: $showingCommentsSheet) {
             commentsSheetContent
         }
-        #endif
-        #if !os(tvOS)
         .onChange(of: downloadManager?.completedDownloads) { _, newValue in
             // Update download state when completedDownloads changes
             if let video = displayedVideo {
@@ -472,7 +377,6 @@ struct VideoInfoView: View {
                 download = downloadManager?.download(for: video.id)
             }
         }
-        #endif
         .alert(String(localized: "bookmark.remove.title"), isPresented: $showingRemoveBookmarkAlert) {
             Button(String(localized: "common.cancel"), role: .cancel) {}
             Button(String(localized: "bookmark.remove.confirm"), role: .destructive) {
@@ -481,7 +385,6 @@ struct VideoInfoView: View {
         } message: {
             Text(String(localized: "bookmark.remove.message"))
         }
-        #if !os(tvOS)
         .alert(String(localized: "videoInfo.download.remove.title"), isPresented: $showingRemoveDownloadConfirmation) {
             Button(String(localized: "common.cancel"), role: .cancel) {}
             Button(String(localized: "videoInfo.download.remove.confirm"), role: .destructive) {
@@ -494,7 +397,6 @@ struct VideoInfoView: View {
         } message: {
             Text(String(localized: "videoInfo.download.remove.message"))
         }
-        #endif
     }
     
     // MARK: - Video Content
@@ -502,14 +404,9 @@ struct VideoInfoView: View {
     /// Main video content view (shown after video is loaded).
     @ViewBuilder
     private var videoContent: some View {
-        #if os(tvOS)
-        tvOSVideoContent
-        #else
         iOSVideoContent
-        #endif
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private var iOSVideoContent: some View {
         GeometryReader { geometry in
@@ -616,7 +513,6 @@ struct VideoInfoView: View {
                                 watchHistorySection(entry)
                             }
 
-                            #if !os(tvOS)
                             // Download section (only show if downloaded)
                             if let download = download, download.status == .completed {
                                 Divider()
@@ -624,254 +520,22 @@ struct VideoInfoView: View {
 
                                 downloadSection(download)
                             }
-                            #endif
                         }
                         .id(currentVideoIndex) // Force re-render when video changes
                     }
                 }
-                #if !os(tvOS)
                 .scrollDismissesKeyboard(.interactively)
-                #endif
                 .softTopScrollEdgeEffect()
                 .modifier(VideoInfoScrollOffsetModifier(scrollOffset: $scrollOffset))
 
-                #if os(macOS)
-                videoNavigationKeyboardShortcuts
-                #endif
-            }
-        }
-    }
-    #endif
-
-    #if os(macOS)
-    // Bare left/right arrow keys switch to previous/next video in the queue.
-    // Command-modified arrows are reserved for player seek shortcuts (see PlaybackCommands),
-    // so these don't collide. Disabled buttons don't fire their shortcuts, which also
-    // prevents activation when no queue context exists.
-    @ViewBuilder
-    private var videoNavigationKeyboardShortcuts: some View {
-        Group {
-            Button(action: navigateToPrevious) { EmptyView() }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-                .disabled(!canNavigatePrevious)
-
-            Button(action: navigateToNext) { EmptyView() }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-                .disabled(!canNavigateNext)
-        }
-        .frame(width: 0, height: 0)
-        .opacity(0)
-        .accessibilityHidden(true)
-    }
-    #endif
-
-    #if os(tvOS)
-    // MARK: - tvOS Two-Column Layout
-
-    @ViewBuilder
-    private var tvOSVideoContent: some View {
-        GeometryReader { geometry in
-            let leftWidth = geometry.size.width * 0.30
-            HStack(alignment: .top, spacing: 40) {
-                tvOSLeftColumn
-                    .frame(width: leftWidth, alignment: .leading)
-                    .focusSection()
-
-                tvOSRightColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .focusSection()
-            }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 40)
-        }
-    }
-
-    private var tvOSLeftColumn: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if let video = displayedVideo {
-                tvOSThumbnail(for: video)
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                Text(video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                tvOSChannelRow(for: video)
-
-                Button(action: playVideo) {
-                    Label(playButtonLabel, systemImage: "play.fill")
-                        .frame(maxWidth: .infinity, minHeight: 60)
-                        .font(.headline)
-                }
-                .buttonStyle(.borderedProminent)
-                .focused($isPlayFocused)
-
-                Button {
-                    presentAddToPlaylist()
-                } label: {
-                    Label(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    toggleBookmark()
-                } label: {
-                    Label(
-                        isBookmarked ? String(localized: "video.removeBookmark") : String(localized: "video.bookmark"),
-                        systemImage: isBookmarked ? "bookmark.fill" : "bookmark"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.bordered)
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    @ViewBuilder
-    private func tvOSThumbnail(for video: Video) -> some View {
-        let deArrowURL = appEnvironment?.deArrowBrandingProvider.thumbnailURL(for: video)
-        let thumbnailURLs = [deArrowURL].compactMap { $0 } + video.thumbnailURLsByQuality
-
-        FallbackLazyImage(urls: thumbnailURLs) { state in
-            if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(16.0 / 9.0, contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(.quaternary)
-                    .overlay {
-                        Text(video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(8)
-                    }
             }
         }
     }
 
-    @ViewBuilder
-    private func tvOSChannelRow(for video: Video) -> some View {
-        if video.author.hasRealChannelInfo {
-            Button {
-                navigationCoordinator?.navigateToChannel(for: video)
-            } label: {
-                channelRowContent(for: video)
-            }
-            .buttonStyle(.plain)
-        } else {
-            channelRowContent(for: video)
-        }
-    }
 
-    private var tvOSRightColumn: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if !isDescriptionScrollLocked, isBookmarked, let bookmark = currentBookmark {
-                        bookmarkDetailsSection(bookmark)
-
-                        Divider()
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                    }
-
-                    if isLoadingVideoDetails {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                            Spacer()
-                        }
-                        .frame(height: 450)
-                        .padding(.horizontal)
-
-                        Divider()
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                    } else if let description = displayedVideo?.description, !description.isEmpty {
-                        TVScrollableDescription(
-                            description: description,
-                            isScrollLocked: $isDescriptionScrollLocked,
-                            showsHeader: false
-                        )
-                        .frame(height: isDescriptionScrollLocked ? geometry.size.height : 450)
-                        .padding(.horizontal)
-
-                        if !isDescriptionScrollLocked {
-                            Divider()
-                                .padding(.horizontal)
-                                .padding(.vertical, 16)
-                        }
-                    } else if shouldShowDetailsErrorSection {
-                        detailsErrorSection
-
-                        Divider()
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                    }
-
-                    if !isDescriptionScrollLocked {
-                        if shouldShowOriginalTitleSection {
-                            originalTitleSection
-
-                            Divider()
-                                .padding(.horizontal)
-                                .padding(.vertical, 16)
-                        }
-
-                        if shouldShowStatsSection {
-                            statsSection
-
-                            Divider()
-                                .padding(.horizontal)
-                                .padding(.vertical, 16)
-                        }
-
-                        commentsSection
-
-                        if let relatedVideos = displayedVideo?.relatedVideos, !relatedVideos.isEmpty {
-                            Divider()
-                                .padding(.horizontal)
-                                .padding(.vertical, 16)
-
-                            relatedVideosSection(relatedVideos)
-                        }
-
-                        if let entry = watchEntry {
-                            Divider()
-                                .padding(.horizontal)
-                                .padding(.vertical, 16)
-
-                            watchHistorySection(entry)
-                        }
-                    }
-                }
-                .padding(.vertical, 20)
-                .id(currentVideoIndex)
-                .animation(.easeInOut(duration: 0.25), value: isDescriptionScrollLocked)
-            }
-            .scrollClipDisabled()
-            .scrollDisabled(isDescriptionScrollLocked)
-        }
-    }
-    #endif
 
     private var loadingView: some View {
         ProgressView()
-            #if os(tvOS)
-            .tvStalledLoadCancel { dismiss() }
-            #endif
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -892,13 +556,11 @@ struct VideoInfoView: View {
                 }
             }
 
-            #if !os(tvOS)
             Button {
                 presentAppSheet(.errorDetails(videoDetailsLoadError ?? initialVideoLoadError ?? "Unknown error"))
             } label: {
                 Label(String(localized: "player.error.button"), systemImage: "info.circle")
             }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -907,7 +569,6 @@ struct VideoInfoView: View {
 
     private func headerSection(cardWidth: CGFloat) -> some View {
         VStack(alignment: .center, spacing: 0) {
-            #if os(iOS)
             if videoQueueContext != nil, let videos = allVideos, !videos.isEmpty {
                 // iOS with queue: full-width carousel with peek thumbnails
                 thumbnailCarousel(cardWidth: cardWidth)
@@ -915,10 +576,6 @@ struct VideoInfoView: View {
                 // iOS without queue or empty queue: just the thumbnail
                 singleVideoCard(cardWidth: cardWidth)
             }
-            #else
-            // Non-iOS platforms: just the thumbnail
-            singleVideoCard(cardWidth: cardWidth)
-            #endif
         }
         .padding(.top)
     }
@@ -955,13 +612,7 @@ struct VideoInfoView: View {
 
     /// Platform-specific background color for gradient fade
     private var headerBackgroundColor: Color {
-        #if os(iOS)
         Color(uiColor: .systemBackground)
-        #elseif os(macOS)
-        Color(nsColor: .windowBackgroundColor)
-        #else
-        Color.black
-        #endif
     }
     
     /// Single video card without carousel (used when no queue context or non-iOS)
@@ -985,7 +636,6 @@ struct VideoInfoView: View {
     /// Uses horizontal ScrollView with scrollTargetBehavior for native gesture handling
     @ViewBuilder
     private func thumbnailCarousel(cardWidth: CGFloat) -> some View {
-        #if os(iOS)
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: carouselSpacing) {
@@ -1091,7 +741,6 @@ struct VideoInfoView: View {
                 }
             }
         }
-        #endif
     }
     
     /// Height of thumbnail based on available width (minus horizontal padding), capped, and 16:9 aspect ratio
@@ -1154,15 +803,11 @@ struct VideoInfoView: View {
             .padding(.horizontal)
             .onTapGesture {
                 if isCurrent {
-                    #if !os(tvOS)
                     VideoInfoPlayThumbnailTip().invalidate(reason: .actionPerformed)
-                    #endif
                     playVideo()
                 }
             }
-            #if !os(tvOS)
             .modifier(VideoInfoPlayThumbnailTipModifier(enabled: isCurrent && showsThumbnailPlayTip, canSwipe: canSwipeThumbnails))
-            #endif
             
             // Title - full card width so long titles fit more characters per line.
             // Always reserves two lines of height so carousel cards don't shift
@@ -1288,12 +933,6 @@ struct VideoInfoView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            #if os(macOS)
-            Label(label, systemImage: icon)
-                .font(.body)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-            #else
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 18))
@@ -1301,18 +940,12 @@ struct VideoInfoView: View {
                     .font(.caption)
             }
             .frame(maxWidth: .infinity, minHeight: 50)
-            #endif
         }
-        #if os(macOS)
-        .buttonStyle(.bordered)
-        #else
         .buttonStyle(.borderedProminent)
-        #endif
     }
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            #if !os(tvOS)
             // Play, Download and Share (vertical layout)
             HStack(spacing: 12) {
                 // Play button
@@ -1321,9 +954,6 @@ struct VideoInfoView: View {
                     label: String(localized: "video.context.play"),
                     action: playVideo
                 )
-                #if os(macOS)
-                .tint(accentColor)
-                #endif
 
                 // Download button
                 verticalDownloadActionButton
@@ -1331,12 +961,6 @@ struct VideoInfoView: View {
                 // Share button
                 if let video = displayedVideo {
                     ShareLink(item: appEnvironment?.shareURL(for: video) ?? video.shareURL) {
-                        #if os(macOS)
-                        Label(String(localized: "video.share"), systemImage: "square.and.arrow.up")
-                            .font(.body)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 4)
-                        #else
                         VStack(spacing: 6) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 18))
@@ -1344,17 +968,11 @@ struct VideoInfoView: View {
                                 .font(.caption)
                         }
                         .frame(maxWidth: .infinity, minHeight: 50)
-                        #endif
                     }
-                    #if os(macOS)
-                    .buttonStyle(.bordered)
-                    #else
                     .buttonStyle(.borderedProminent)
-                    #endif
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            #endif
 
             // Add to Playlist and Bookmark
             HStack(spacing: 12) {
@@ -1380,9 +998,7 @@ struct VideoInfoView: View {
                 .buttonStyle(.bordered)
             }
         }
-        #if !os(macOS)
         .fontWeight(.semibold)
-        #endif
         // Leading-aligned to line up with the thumbnail/title column on wide screens
         .frame(maxWidth: 400)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1392,7 +1008,6 @@ struct VideoInfoView: View {
 
     // MARK: - Toolbar Actions (iOS/macOS)
 
-    #if !os(tvOS)
     /// True when the user chose the toolbar layout in Layout & Navigation settings.
     private var usesToolbarActions: Bool {
         appEnvironment?.settingsManager.videoInfoActionsLayout == .toolbar
@@ -1401,11 +1016,7 @@ struct VideoInfoView: View {
     /// The action pinned to the toolbar; every other action lives in the ellipsis menu.
     /// macOS shows every action in the toolbar, so the pinned action only matters on iOS.
     private var primaryAction: VideoInfoPrimaryAction {
-        #if os(macOS)
-        .play
-        #else
         appEnvironment?.settingsManager.videoInfoPrimaryAction ?? .play
-        #endif
     }
 
     /// The hero thumbnail is the only play affordance when the toolbar layout is active
@@ -1416,11 +1027,7 @@ struct VideoInfoView: View {
 
     /// The hero thumbnail is a swipeable carousel over the queue context (iOS only, see headerSection).
     private var canSwipeThumbnails: Bool {
-        #if os(iOS)
         videoQueueContext != nil && (allVideos?.count ?? 0) > 1
-        #else
-        false
-        #endif
     }
 
     /// One toolbar action rendered either as a standalone toolbar item or as a menu row.
@@ -1493,12 +1100,6 @@ struct VideoInfoView: View {
             Button(role: .destructive) {
                 showingRemoveDownloadConfirmation = true
             } label: {
-                #if os(macOS)
-                Label(String(localized: "video.downloaded"), systemImage: "checkmark.circle.fill")
-                    .font(.body)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                #else
                 VStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
@@ -1506,39 +1107,13 @@ struct VideoInfoView: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity, minHeight: 50)
-                #endif
             }
-            #if os(macOS)
-            .buttonStyle(.bordered)
-            #else
             .buttonStyle(.borderedProminent)
-            #endif
         } else if isDownloading || isEnqueuingDownload {
             // Downloading/enqueueing state - shows progress
             Button {
                 // No action while downloading
             } label: {
-                #if os(macOS)
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    if isEnqueuingDownload {
-                        Text(String(localized: "video.downloading"))
-                            .allowsTightening(true)
-                    } else if let video = displayedVideo,
-                              let progress = downloadManager?.downloadProgressByVideo[video.id],
-                              !progress.isIndeterminate {
-                        Text("\(Int(progress.progress * 100))%")
-                            .monospacedDigit()
-                    } else {
-                        Text(String(localized: "video.downloading"))
-                            .allowsTightening(true)
-                    }
-                }
-                .font(.body)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                #else
                 VStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.regular)
@@ -1559,25 +1134,14 @@ struct VideoInfoView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 50)
-                #endif
             }
-            #if os(macOS)
-            .buttonStyle(.bordered)
-            #else
             .buttonStyle(.borderedProminent)
-            #endif
             .disabled(true)
         } else if let video = displayedVideo {
             // Default state - download button
             Button {
                 startDownload(for: video)
             } label: {
-                #if os(macOS)
-                Label(String(localized: "video.download"), systemImage: "arrow.down.circle")
-                    .font(.body)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                #else
                 VStack(spacing: 6) {
                     Image(systemName: "arrow.down.circle")
                         .font(.system(size: 18))
@@ -1585,13 +1149,8 @@ struct VideoInfoView: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity, minHeight: 50)
-                #endif
             }
-            #if os(macOS)
-            .buttonStyle(.bordered)
-            #else
             .buttonStyle(.borderedProminent)
-            #endif
         }
     }
 
@@ -1749,7 +1308,6 @@ struct VideoInfoView: View {
             return String(format: "%d kbps", bitrate / 1000)
         }
     }
-    #endif
     // MARK: - Stats Section
 
     @ViewBuilder
@@ -1929,27 +1487,13 @@ struct VideoInfoView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     } else {
-                        #if os(tvOS)
-                        TextField(String(localized: "videoInfo.bookmark.notes"), text: $bookmarkNote, axis: .vertical)
-                            .frame(minHeight: 100)
-                            .font(.subheadline)
-                            .onChange(of: bookmarkNote) { _, _ in
-                                debouncedSaveBookmark()
-                            }
-                        #else
                         TextEditor(text: $bookmarkNote)
                             .focused($isBookmarkNoteFocused)
                             .frame(minHeight: 100)
                             .font(.subheadline)
-                            #if os(iOS)
                             .scrollContentBackground(.hidden)
                             .background(Color(uiColor: .secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                            #elseif os(macOS)
-                            .scrollContentBackground(.hidden)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            #endif
                             .onChange(of: bookmarkNote) { _, newValue in
                                 if newValue.isEmpty {
                                     // Save immediately when cleared to prevent data loss
@@ -1966,7 +1510,6 @@ struct VideoInfoView: View {
                                     isEditingBookmarkNote = false
                                 }
                             }
-                        #endif
 
                         // Character count when approaching limit
                         if bookmarkNote.count > 900 {
@@ -1987,19 +1530,11 @@ struct VideoInfoView: View {
     private func infoRow(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                #if os(macOS)
-                .font(.subheadline)
-                #else
                 .font(.caption)
-                #endif
                 .foregroundStyle(.secondary)
 
             Text(value)
-                #if os(macOS)
-                .font(.body)
-                #else
                 .font(.subheadline)
-                #endif
                 .fontWeight(.medium)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2030,14 +1565,12 @@ struct VideoInfoView: View {
                 }
                 .buttonStyle(.bordered)
 
-                #if !os(tvOS)
                 Button {
                     presentAppSheet(.errorDetails(videoDetailsLoadError ?? initialVideoLoadError ?? "Unknown error"))
                 } label: {
                     Label(String(localized: "player.error.button"), systemImage: "info.circle")
                 }
                 .buttonStyle(.bordered)
-                #endif
             }
         }
         .frame(maxWidth: .infinity)
@@ -2060,17 +1593,11 @@ struct VideoInfoView: View {
             } else if let description = displayedVideo?.description, !description.isEmpty {
                 // Description available
                 Text(DescriptionText.attributed(description, linkColor: accentColor))
-                    #if os(macOS)
-                    .font(.body)
-                    #else
                     .font(.subheadline)
-                    #endif
                     .foregroundStyle(.secondary)
                     .tint(accentColor)
                     .handleTimestampLinks(using: playerService)
-                    #if !os(tvOS)
                     .textSelection(.enabled)
-                    #endif
             }
         }
     }
@@ -2081,15 +1608,9 @@ struct VideoInfoView: View {
         CollapsibleSection(title: String(localized: "video.originalTitle"), isExpanded: $isOriginalTitleExpanded) {
             if let title = displayedVideo?.title {
                 Text(title)
-                    #if os(macOS)
-                    .font(.body)
-                    #else
                     .font(.subheadline)
-                    #endif
                     .foregroundStyle(.secondary)
-                    #if !os(tvOS)
                     .textSelection(.enabled)
-                    #endif
             }
         }
     }
@@ -2097,11 +1618,7 @@ struct VideoInfoView: View {
     // MARK: - Related Videos Section
 
     private func relatedVideosSection(_ videos: [Video]) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 32
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
         return CollapsibleSection(title: String(localized: "videoInfo.section.relatedVideos"), isExpanded: $isRelatedExpanded) {
             LazyVStack(spacing: rowSpacing) {
                 ForEach(Array(videos.enumerated()), id: \.element.id) { index, relatedVideo in
@@ -2114,16 +1631,12 @@ struct VideoInfoView: View {
                             videoIndex: index,
                             loadMoreVideos: nil
                         )
-                        #if !os(tvOS)
                         .videoSwipeActions(video: relatedVideo)
-                        #endif
 
-                    #if !os(tvOS)
                     if index < videos.count - 1 {
                         Divider()
                             .padding(.leading, VideoRowStyle.regular.thumbnailWidth + 12)
                     }
-                    #endif
                 }
             }
         }
@@ -2152,11 +1665,7 @@ struct VideoInfoView: View {
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                             Text(String(localized: "videoInfo.comments.disabled"))
-                                #if os(macOS)
-                                .font(.body)
-                                #else
                                 .font(.subheadline)
-                                #endif
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -2171,11 +1680,7 @@ struct VideoInfoView: View {
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                             Text(String(localized: "videoInfo.comments.error"))
-                                #if os(macOS)
-                                .font(.body)
-                                #else
                                 .font(.subheadline)
-                                #endif
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -2187,11 +1692,7 @@ struct VideoInfoView: View {
                         HStack {
                             Spacer()
                             Text(String(localized: "videoInfo.comments.empty"))
-                                #if os(macOS)
-                                .font(.body)
-                                #else
                                 .font(.subheadline)
-                                #endif
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -2219,21 +1720,11 @@ struct VideoInfoView: View {
                                             .fontWeight(.medium)
                                         Image(systemName: "chevron.right")
                                     }
-                                    #if os(macOS)
-                                    .font(.body)
-                                    #else
                                     .font(.subheadline)
-                                    #endif
-                                    #if !os(tvOS)
                                     .foregroundStyle(accentColor)
-                                    #endif
                                 }
                                 .buttonStyle(.plain)
-                                #if os(tvOS)
-                                .padding(.vertical, 16)
-                                #else
                                 .padding(.top, 12)
-                                #endif
                             }
                         }
                     }
@@ -2278,20 +1769,12 @@ struct VideoInfoView: View {
                         }
                     }
                 }
-                .tvFullScreenCoverBackground()
                 .navigationTitle(String(localized: "videoInfo.section.comments"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
-                #if !os(tvOS)
                 .toolbar {
                     sheetCloseToolbarItem { showingCommentsSheet = false }
                 }
-                #endif
             }
-            #if os(macOS)
-            .frame(minWidth: 500, minHeight: 550)
-            #endif
         }
     }
 
@@ -2569,15 +2052,7 @@ struct VideoInfoView: View {
             isLoadingInitialVideo = false
             
             // Now that video is loaded, trigger initial data loading
-            #if !os(tvOS)
             loadVideoData()
-            #else
-            if let video = displayedVideo {
-                isBookmarked = dataManager?.isBookmarked(videoID: video.id.videoID) ?? false
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
-            }
-            loadComments()
-            #endif
         } catch {
             initialVideoLoadError = error.localizedDescription
             isLoadingInitialVideo = false
@@ -2692,7 +2167,6 @@ struct VideoInfoView: View {
     
     // MARK: - Video Navigation
     
-    #if !os(tvOS)
     /// Whether we can navigate to the previous video
     private var canNavigatePrevious: Bool {
         guard let index = currentVideoIndex else { return false }
@@ -2807,12 +2281,9 @@ struct VideoInfoView: View {
         }
         
         watchEntry = dataManager?.watchEntry(for: video.id.videoID)
-        #if !os(tvOS)
         download = downloadManager?.download(for: video.id)
-        #endif
         loadComments()
     }
-    #endif
 }
 
 // MARK: - Collapsible Section
@@ -2885,8 +2356,6 @@ private struct VideoInfoScrollOffsetModifier: ViewModifier {
     }
 }
 
-#if os(iOS)
 private final class CarouselOffsetBox {
     var value: CGFloat = 0
 }
-#endif

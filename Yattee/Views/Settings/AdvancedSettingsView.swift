@@ -27,26 +27,13 @@ struct AdvancedSettingsView: View {
 
     var body: some View {
         SettingsFormContainer {
-            #if SPARKLE && os(macOS)
-            updatesSection
-            #endif
             streamDetailsSection
-            mpvSection
-            #if os(tvOS)
-            avSyncSection
-            #endif
             settingsSection
-            #if !os(tvOS)
             downloadsStorageSection
-            #endif
             developerSection
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.advanced.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .confirmationDialog(
             String(localized: "settings.advanced.data.clearCache.confirmation"),
             isPresented: $showingClearDataConfirmation,
@@ -60,11 +47,8 @@ struct AdvancedSettingsView: View {
         .presentationCompactAdaptation(.sheet)
         .onAppear {
             userAgentText = settingsManager.customUserAgent
-            #if !os(tvOS)
             scanForOrphanedFiles()
-            #endif
         }
-        #if !os(tvOS)
         .confirmationDialog(
             String(localized: "settings.advanced.storage.deleteOrphaned.title"),
             isPresented: $showingOrphanCleanupConfirmation,
@@ -88,7 +72,6 @@ struct AdvancedSettingsView: View {
                 Text(String(localized: "settings.advanced.storage.cleanupResult \(result.deleted) \(formatBytes(result.freed))"))
             }
         }
-        #endif
     }
 
     // MARK: - Sections
@@ -146,9 +129,7 @@ struct AdvancedSettingsView: View {
                     text: $userAgentText,
                     axis: .vertical
                 )
-                #if os(iOS)
                 .textInputAutocapitalization(.never)
-                #endif
                 .autocorrectionDisabled()
                 .lineLimit(3...6)
                 .onChange(of: userAgentText) { _, newValue in
@@ -184,79 +165,7 @@ struct AdvancedSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var mpvSection: some View {
-        if let settingsManager = appEnvironment?.settingsManager {
-            SettingsFormSection("settings.advanced.mpv.title") {
-                PlatformMenuPicker(selection: Binding(
-                    get: { settingsManager.mpvBufferSeconds },
-                    set: { settingsManager.mpvBufferSeconds = $0 }
-                )) {
-                    ForEach(Self.mpvBufferOptions, id: \.self) { seconds in
-                        Text(formatBufferOption(seconds)).tag(seconds)
-                    }
-                } label: {
-                    Label(String(localized: "settings.advanced.mpv.buffer"), systemImage: "hourglass")
-                }
 
-                Toggle(isOn: Binding(
-                    get: { settingsManager.mpvUseEDLStreams },
-                    set: { settingsManager.mpvUseEDLStreams = $0 }
-                )) {
-                    Label(String(localized: "settings.advanced.mpv.edl"), systemImage: "arrow.trianglehead.merge")
-                }
-
-                #if os(tvOS)
-                NavigationLink {
-                    TVSidebarDetailContainer(
-                        systemImage: "slider.horizontal.3",
-                        title: String(localized: "settings.advanced.mpv.options")
-                    ) {
-                        MPVOptionsSettingsView()
-                    }
-                } label: {
-                    Label(String(localized: "settings.advanced.mpv.options"), systemImage: "slider.horizontal.3")
-                }
-                #else
-                SettingsNavigationRow("settings.advanced.mpv.options", systemImage: "slider.horizontal.3") {
-                    MPVOptionsSettingsView()
-                }
-                #endif
-            }
-        }
-    }
-
-    #if os(tvOS)
-    @ViewBuilder
-    private var avSyncSection: some View {
-        if let settings = appEnvironment?.settingsManager {
-            SettingsFormSection {
-                NavigationLink {
-                    TVSidebarDetailContainer(
-                        systemImage: "wave.3.right",
-                        title: String(localized: "settings.playback.tvSyncDiagnostics.header")
-                    ) {
-                        AVSyncDiagnosticsView(settings: settings)
-                    }
-                } label: {
-                    Label(String(localized: "settings.playback.tvSyncDiagnostics.row"), systemImage: "wave.3.right")
-                }
-            }
-        }
-    }
-    #endif
-
-    private static let mpvBufferOptions: [Double] = [1.0, 2.0, 3.0, 4.0, 5.0]
-
-    private func formatBufferOption(_ seconds: Double) -> String {
-        if seconds == 1.0 {
-            return String(localized: "settings.advanced.mpv.bufferSecond")
-        } else {
-            return String(localized: "settings.advanced.mpv.bufferSeconds \(Int(seconds))")
-        }
-    }
-
-    #if !os(tvOS)
     @ViewBuilder
     private var downloadsStorageSection: some View {
         SettingsFormSection("settings.advanced.storage.title") {
@@ -332,7 +241,6 @@ struct AdvancedSettingsView: View {
             }
         }
     }
-    #endif
 
     @ViewBuilder
     private var deviceNameSection: some View {
@@ -348,25 +256,19 @@ struct AdvancedSettingsView: View {
                         }
                     )
                 )
-                #if os(iOS)
                 .textInputAutocapitalization(.words)
-                #endif
                 .autocorrectionDisabled()
 
-                #if os(iOS) || os(tvOS)
                 Toggle(isOn: Binding(
                     get: { settingsManager.remoteControlHideWhenBackgrounded },
                     set: { settingsManager.remoteControlHideWhenBackgrounded = $0 }
                 )) {
                     Label(String(localized: "remoteControl.hideWhenBackgrounded"), systemImage: "moon.fill")
                 }
-                #endif
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "settings.advanced.remoteControl.footer"))
-                    #if os(iOS) || os(tvOS)
                     Text(String(localized: "settings.advanced.remoteControl.hideWhenBackgrounded.footer"))
-                    #endif
                 }
             }
         }
@@ -374,58 +276,18 @@ struct AdvancedSettingsView: View {
 
 
 
-    #if SPARKLE && os(macOS)
-    @ViewBuilder
-    private var updatesSection: some View {
-        SettingsFormSection("settings.updates.title", footer: "settings.updates.footer") {
-            Toggle(isOn: Binding(
-                get: { AppUpdater.shared.wantsBetaChannel },
-                set: { AppUpdater.shared.wantsBetaChannel = $0 }
-            )) {
-                Label(String(localized: "settings.updates.receiveBeta"), systemImage: "testtube.2")
-            }
-            Button {
-                AppUpdater.shared.checkForUpdates()
-            } label: {
-                Label(String(localized: "menu.app.checkForUpdates"), systemImage: "arrow.triangle.2.circlepath")
-            }
-            .disabled(!AppUpdater.shared.canCheckForUpdates)
-        }
-    }
-    #endif
 
     @ViewBuilder
     private var developerSection: some View {
         SettingsFormSection(footer: "settings.developer.footer") {
-            #if os(tvOS)
-            NavigationLink {
-                DeveloperSettingsView()
-            } label: {
-                Label(String(localized: "settings.developer.title"), systemImage: "hammer")
-            }
-            #else
             SettingsNavigationRow("settings.developer.title", systemImage: "hammer") {
                 DeveloperSettingsView()
             }
-            #endif
 
             if appEnvironment?.legacyMigrationService.hasLegacyDataToImport() == true {
-                #if os(tvOS)
-                NavigationLink {
-                    TVSidebarDetailContainer(
-                        systemImage: "person.badge.key",
-                        title: String(localized: "migration.accounts.title")
-                    ) {
-                        LegacyDataImportView()
-                    }
-                } label: {
-                    Label(String(localized: "migration.accounts.title"), systemImage: "person.badge.key")
-                }
-                #else
                 SettingsNavigationRow("migration.accounts.title", systemImage: "person.badge.key") {
                     LegacyDataImportView()
                 }
-                #endif
             }
         }
     }
@@ -497,7 +359,6 @@ struct AdvancedSettingsView: View {
         }
     }
 
-    #if !os(tvOS)
     private func scanForOrphanedFiles() {
         guard let downloadManager = appEnvironment?.downloadManager else { return }
         isScanning = true
@@ -533,7 +394,6 @@ struct AdvancedSettingsView: View {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
-    #endif
 }
 
 // MARK: - Preview

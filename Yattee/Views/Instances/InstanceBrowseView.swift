@@ -162,7 +162,6 @@ struct InstanceBrowseView: View {
             accountsMenuContent
         }
 
-        #if !os(tvOS)
         Divider()
 
         Button {
@@ -176,7 +175,6 @@ struct InstanceBrowseView: View {
         } label: {
             Label(String(localized: "instance.browse.openInBrowser"), systemImage: "safari")
         }
-        #endif
 
         Divider()
 
@@ -253,150 +251,27 @@ struct InstanceBrowseView: View {
     }
 
     private func copyInstanceURL() {
-        #if os(iOS)
         UIPasteboard.general.string = instance.browseURL.absoluteString
-        #elseif os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(instance.browseURL.absoluteString, forType: .string)
-        #endif
     }
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         let backgroundStyle: ListBackgroundStyle = listStyle == .inset ? .grouped : .plain
         GeometryReader { geometry in
-            #if os(tvOS)
-            VStack(spacing: 0) {
-                // tvOS: Search field, type filter, search filters, view options
-                HStack(spacing: 24) {
-                    TextField("instance.browse.search.placeholder", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .onSubmit {
-                            searchViewModel?.cancelSuggestions()
-                            Task { await searchViewModel?.search(query: searchText) }
-                        }
-
-                    if isInSearchMode {
-                        // Type filter
-                        filterMenu(
-                            title: (searchViewModel?.filters.type ?? .video).title,
-                            selection: Binding(
-                                get: { searchViewModel?.filters.type ?? .video },
-                                set: { searchViewModel?.filters.type = $0 }
-                            ),
-                            options: SearchContentType.allCases,
-                            labelForOption: { $0.title }
-                        )
-
-                        // Combined search filters menu
-                        tvOSFiltersMenu
-                    }
-
-                    Menu {
-                        instanceMenuContent
-                    } label: {
-                        Label(String(localized: "common.more"), systemImage: "ellipsis")
-                    }
-                }
-                .focusSection()
-                .padding(.horizontal, 48)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
-                // Content
-                ScrollView {
-                    VStack(spacing: 0) {
-                        Spacer()
-                            .frame(height: 20)
-
-                        // Tab picker (hidden during search)
-                        if !isInSearchMode {
-                            tabPicker
-                                .padding()
-                        }
-
-                        // Content
-                        Group {
-                            if isInSearchMode, let vm = searchViewModel {
-                                if !vm.hasSearched {
-                                    if vm.suggestions.isEmpty {
-                                        searchHintView
-                                    } else {
-                                        suggestionsView
-                                    }
-                                } else if vm.isSearching && !vm.hasResults {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, minHeight: 200)
-                                } else if let error = vm.errorMessage, !vm.hasResults {
-                                    searchErrorView(error)
-                                } else if vm.hasResults {
-                                    searchResultsContent
-                                } else {
-                                    searchEmptyView
-                                }
-                            } else if selectedTab == .playlists {
-                                if isLoading && userPlaylists.isEmpty {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, minHeight: 200)
-                                } else if let error = errorMessage, userPlaylists.isEmpty {
-                                    errorView(error)
-                                } else if !userPlaylists.isEmpty {
-                                    switch layout {
-                                    case .list:
-                                        playlistsListContent
-                                    case .grid:
-                                        playlistsGridContent
-                                    }
-                                } else {
-                                    playlistsEmptyView
-                                }
-                            } else if isLoading && currentVideos.isEmpty {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, minHeight: 200)
-                            } else if let error = errorMessage, currentVideos.isEmpty {
-                                errorView(error)
-                            } else if !currentVideos.isEmpty {
-                                switch layout {
-                                case .list:
-                                    listContent
-                                case .grid:
-                                    gridContent
-                                }
-                            } else {
-                                emptyView
-                            }
-                        }
-                    }
-                }
-                .scrollClipDisabled()
-                .refreshable {
-                    await startContentLoad(forceRefresh: true)
-                }
-                .focusSection()
-            }
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            #else
             backgroundStyle.color
                 .ignoresSafeArea()
                 .overlay(
                     ScrollView {
                         VStack(spacing: 0) {
                             // Tab picker (hidden during search; lives in the toolbar on macOS)
-                            #if !os(macOS)
                             if !isInSearchMode {
                                 tabPicker
                                     .padding()
                             }
-                            #endif
 
                             // Feed channel filter strip (hidden during search)
                             if selectedTab == .feed && !feedSubscriptions.isEmpty && !isInSearchMode {
@@ -404,11 +279,9 @@ struct InstanceBrowseView: View {
                             }
 
                             // Search filter strip (shown persistently after search submitted; lives in the toolbar on macOS)
-                            #if !os(macOS)
                             if isInSearchMode && (searchViewModel?.hasSearched ?? false) && instance.supportsSearchFilters {
                                 searchFiltersStrip
                             }
-                            #endif
 
                             // Content
                             Group {
@@ -474,9 +347,7 @@ struct InstanceBrowseView: View {
             .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                 viewWidth = newWidth
             }
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(instance.displayName)
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
@@ -488,74 +359,15 @@ struct InstanceBrowseView: View {
                     Label(String(localized: "common.more"), systemImage: "ellipsis")
                 }
                 .liquidGlassTransitionSource(id: "instanceBrowseViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
-            #if os(macOS)
-            if #available(macOS 26, *) {
-                // Render the items bare (conditional `if`, no opacity/disabled
-                // wrappers): wrapping a `.segmented` Picker inserts a hosting layer
-                // that makes the toolbar fall back to a Liquid-Glass pill instead of
-                // the native segmented control. The search filters button shows only
-                // while displaying search results; the principal picker swaps between
-                // the browse tab picker and the search content type picker.
-                if showsSearchFiltersInToolbar {
-                    ToolbarItem(placement: .navigation) {
-                        searchFiltersToolbarButton
-                    }
-                }
-                if isToolbarPickerVisible {
-                    ToolbarItem(placement: .principal) {
-                        if showsSearchFiltersInToolbar {
-                            searchContentTypePicker
-                        } else {
-                            tabPicker
-                        }
-                    }
-                }
-            } else if showsSearchFiltersInToolbar {
-                ToolbarItem(placement: .navigation) {
-                    searchFiltersToolbarButton
-                }
-                ToolbarItem(placement: .principal) {
-                    searchContentTypePicker
-                        .fixedSize()
-                }
-            } else if !isInSearchMode {
-                ToolbarItem(placement: .principal) {
-                    tabPicker
-                        .fixedSize()
-                }
-            }
-            // Pin the trailing group (search field) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
         }
-        #endif
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "instanceBrowseViewOptions", in: sheetTransition)
         }
-        #endif
-        #if os(tvOS)
-        .fullScreenCover(isPresented: $showEditInstance) {
-            TVSidebarDetailContainer(systemImage: "pencil.circle", title: String(localized: "sources.editSource")) {
-                EditSourceView(source: .remoteServer(instance))
-            }
-            .tvFullScreenCoverBackground()
-        }
-        #else
         .sheet(isPresented: $showEditInstance) {
             EditSourceView(source: .remoteServer(instance))
         }
-        #endif
         .confirmationDialog(
             String(localized: "sources.delete.confirmation.single \(instance.displayName)"),
             isPresented: $showRemoveConfirmation,
@@ -665,7 +477,6 @@ struct InstanceBrowseView: View {
             errorMessage = nil
             Task { await startContentLoad() }
         }
-        #if os(iOS)
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .automatic),
@@ -677,18 +488,6 @@ struct InstanceBrowseView: View {
                 await searchViewModel?.search(query: searchText)
             }
         }
-        #elseif !os(tvOS)
-        .searchable(
-            text: $searchText,
-            prompt: Text(String(localized: "instance.browse.search.placeholder"))
-        )
-        .onSubmit(of: .search) {
-            searchViewModel?.cancelSuggestions()
-            Task {
-                await searchViewModel?.search(query: searchText)
-            }
-        }
-        #endif
         .onChange(of: searchText) { _, newValue in
             if newValue.isEmpty {
                 searchViewModel?.clearResults()
@@ -696,14 +495,10 @@ struct InstanceBrowseView: View {
                 searchViewModel?.fetchSuggestions(for: newValue)
             }
         }
-        #if !os(macOS)
         .sheet(isPresented: $showFilterSheet) {
             searchFiltersSheetContent
-            #if !os(tvOS)
                 .presentationDetents([.medium, .large])
-            #endif
         }
-        #endif
     }
 
     // MARK: - Computed Properties
@@ -719,63 +514,12 @@ struct InstanceBrowseView: View {
         ))
     }
 
-    #if os(macOS)
-    private var isShowingSearchResults: Bool {
-        isInSearchMode && (searchViewModel?.hasSearched ?? false)
-    }
-
-    private var showsSearchFiltersInToolbar: Bool {
-        isShowingSearchResults && instance.supportsSearchFilters
-    }
-
-    private var isToolbarPickerVisible: Bool {
-        // Tab picker stays visible while typing; it swaps to the search content
-        // type picker only once a search has been submitted
-        !isShowingSearchResults || showsSearchFiltersInToolbar
-    }
-
-    private var searchContentTypePicker: some View {
-        Picker("", selection: Binding(
-            get: { searchViewModel?.filters.type ?? .video },
-            set: { searchViewModel?.filters.type = $0 }
-        )) {
-            ForEach(SearchContentType.allCases) { type in
-                Text(type.title).tag(type)
-            }
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: searchViewModel?.filters.type) { _, _ in
-            Task {
-                await searchViewModel?.search(query: searchText)
-            }
-        }
-    }
-
-    private var searchFiltersToolbarButton: some View {
-        Button {
-            showFilterSheet = true
-        } label: {
-            Label(String(localized: "search.filters"), systemImage: (searchViewModel?.filters.isDefault ?? true)
-                ? "line.3.horizontal.decrease.circle"
-                : "line.3.horizontal.decrease.circle.fill")
-        }
-        .popover(isPresented: $showFilterSheet, arrowEdge: .bottom) {
-            searchFiltersSheetContent
-        }
-    }
-    #endif
 
     private var tabPicker: some View {
         Picker("", selection: $selectedTab) {
             ForEach(availableTabs) { tab in
-                #if os(macOS)
-                // Labels render icon-only in a macOS toolbar segmented control
-                Text(tab.title)
-                    .tag(tab)
-                #else
                 Label(tab.title, systemImage: tab.systemImage)
                     .tag(tab)
-                #endif
             }
         }
         .pickerStyle(.segmented)
@@ -887,94 +631,6 @@ struct InstanceBrowseView: View {
 
     // MARK: - Search Filters Strip
 
-    #if os(tvOS)
-    private func filterMenu<T: Hashable & Identifiable & CaseIterable>(
-        title: String,
-        selection: Binding<T>,
-        options: [T],
-        labelForOption: @escaping (T) -> String
-    ) -> some View {
-        Menu {
-            ForEach(options) { option in
-                Button {
-                    selection.wrappedValue = option
-                    Task { await searchViewModel?.search(query: searchText) }
-                } label: {
-                    if option == selection.wrappedValue {
-                        Label(labelForOption(option), systemImage: "checkmark")
-                    } else {
-                        Text(labelForOption(option))
-                    }
-                }
-            }
-        } label: {
-            Text(title)
-        }
-    }
-
-    private var tvOSFiltersMenu: some View {
-        Menu {
-            Menu(String(localized: "search.sort")) {
-                ForEach(SearchSortOption.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.sort = option
-                        Task { await searchViewModel?.search(query: searchText) }
-                    } label: {
-                        if searchViewModel?.filters.sort == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            Menu(String(localized: "search.uploadDate")) {
-                ForEach(SearchDateFilter.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.date = option
-                        Task { await searchViewModel?.search(query: searchText) }
-                    } label: {
-                        if searchViewModel?.filters.date == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            Menu(String(localized: "search.duration")) {
-                ForEach(SearchDurationFilter.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.duration = option
-                        Task { await searchViewModel?.search(query: searchText) }
-                    } label: {
-                        if searchViewModel?.filters.duration == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            Button(role: .destructive) {
-                let currentType = searchViewModel?.filters.type ?? .video
-                searchViewModel?.filters = .defaults
-                searchViewModel?.filters.type = currentType
-                Task { await searchViewModel?.search(query: searchText) }
-            } label: {
-                Label(String(localized: "search.filters.reset"), systemImage: "arrow.counterclockwise")
-            }
-            .disabled(searchViewModel?.filters.isDefault ?? true)
-        } label: {
-            Label(String(localized: "search.filters"), systemImage: "line.3.horizontal.decrease")
-        }
-    }
-    #else
     private var searchFiltersStrip: some View {
         HStack(spacing: 12) {
             Button {
@@ -1004,7 +660,6 @@ struct InstanceBrowseView: View {
             }
         }
     }
-    #endif
 
     // MARK: - Feed Channel Filter Strip
 
@@ -1039,13 +694,9 @@ struct InstanceBrowseView: View {
             .padding(.horizontal)
             .padding(.vertical, 12)
         }
-        #if os(tvOS)
-        .background(Color.black.opacity(0.3))
-        #else
         .background(.bar)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 16)
-        #endif
     }
 
     // MARK: - List Layout
@@ -1072,9 +723,7 @@ struct InstanceBrowseView: View {
                         videoIndex: index
                     )
                 }
-                #if !os(tvOS)
                 .videoSwipeActions(video: video)
-                #endif
             }
 
             // Feed tab load more
@@ -1244,9 +893,7 @@ struct InstanceBrowseView: View {
                             videoList: vm.videos,
                             videoIndex: videoIndex
                         )
-                        #if !os(tvOS)
                         .videoSwipeActions(video: video)
-                        #endif
                         .onAppear {
                             if resultIndex >= vm.resultItems.count - 3 {
                                 Task { await vm.loadMore() }
@@ -1800,9 +1447,7 @@ struct InstanceBrowseView: View {
     }
 
     private func dismissKeyboard() {
-        #if os(iOS)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #endif
     }
 
 }

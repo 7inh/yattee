@@ -25,9 +25,7 @@ struct PlayerPillEditorView: View {
             addButtonSection
         }
         .navigationTitle(String(localized: "settings.playerControls.playerPill"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .opaqueSettingsFormBackground()
         .onAppear {
             syncLocalState()

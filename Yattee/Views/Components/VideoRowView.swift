@@ -32,35 +32,10 @@ struct VideoRowView: View {
 
     /// Indexed rows are playlist rows; other platforms retain their usual layout.
     private var usesCompactPlaylistLayout: Bool {
-        #if os(iOS)
         index != nil
-        #else
-        false
-        #endif
     }
 
     // Platform-specific fonts
-    #if os(tvOS)
-    private var titleFont: Font {
-        style == .compact ? .caption : .body
-    }
-    private var authorFont: Font {
-        style == .compact ? .caption2 : .subheadline
-    }
-    private var metadataFont: Font {
-        style == .compact ? .caption2 : .caption
-    }
-    #elseif os(macOS)
-    private var titleFont: Font {
-        style == .compact ? .subheadline : .body
-    }
-    private var authorFont: Font {
-        style == .compact ? .caption : .subheadline
-    }
-    private var metadataFont: Font {
-        style == .compact ? .caption2 : .caption
-    }
-    #else
     private var titleFont: Font {
         .subheadline
     }
@@ -70,9 +45,7 @@ struct VideoRowView: View {
     private var metadataFont: Font {
         style == .compact ? .caption2 : .caption2
     }
-    #endif
     
-    #if !os(tvOS)
     private var thumbnailTapAction: VideoTapAction {
         appEnvironment?.settingsManager.thumbnailTapAction ?? .playVideo
     }
@@ -80,7 +53,6 @@ struct VideoRowView: View {
     private var textAreaTapAction: VideoTapAction {
         appEnvironment?.settingsManager.textAreaTapAction ?? .openInfo
     }
-    #endif
 
     private var accessibilityLabelText: String {
         var parts = [video.displayTitle(using: appEnvironment?.deArrowBrandingProvider), video.author.name]
@@ -98,16 +70,9 @@ struct VideoRowView: View {
                 Text("\(index)")
                     .font(usesCompactPlaylistLayout ? .caption : .subheadline)
                     .foregroundStyle(.secondary)
-                    #if os(tvOS)
-                    .lineLimit(1)
-                    .frame(width: 60, alignment: .trailing)
-                    #else
-                    #if os(iOS)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    #endif
                     .frame(width: usesCompactPlaylistLayout ? 20 : 32)
-                    #endif
             }
             
             // Thumbnail
@@ -136,7 +101,6 @@ struct VideoRowView: View {
             width: style.thumbnailWidth,
             height: usesCompactPlaylistLayout ? style.thumbnailWidth * 9 / 16 : style.thumbnailHeight
         )
-        #if !os(tvOS)
         .contentShape(Rectangle())
         .if(thumbnailTapAction != .playVideo && !disableInternalTapHandling) { view in
             view.highPriorityGesture(
@@ -145,7 +109,6 @@ struct VideoRowView: View {
                 }
             )
         }
-        #endif
     }
     
     @ViewBuilder
@@ -165,7 +128,6 @@ struct VideoRowView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        #if !os(tvOS)
         .contentShape(Rectangle())
         .if(textAreaTapAction != .playVideo && !disableInternalTapHandling) { view in
             view.highPriorityGesture(
@@ -174,7 +136,6 @@ struct VideoRowView: View {
                 }
             )
         }
-        #endif
     }
 
     private var playlistMetadataText: String {
@@ -221,7 +182,6 @@ struct VideoRowView: View {
         }
     }
     
-    #if !os(tvOS)
     private func handleTapAction(_ action: VideoTapAction) {
         guard let env = appEnvironment else { return }
         
@@ -236,7 +196,6 @@ struct VideoRowView: View {
             break
         }
     }
-    #endif
 }
 
 // MARK: - Preview

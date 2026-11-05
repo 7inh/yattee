@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 struct CompactTabView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
@@ -138,4 +137,3 @@ struct CompactTabView: View {
     CompactTabView(router: NavigationRouter())
         .appEnvironment(.preview)
 }
-#endif

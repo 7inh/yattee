@@ -9,18 +9,13 @@ import NukeUI
 import SwiftUI
 
 struct TranslationContributorsView: View {
-    #if os(tvOS)
-    @Environment(\.dismiss) private var dismiss
-    #endif
     @State private var contributors: [TranslationContributor] = []
 
     var body: some View {
         content
             .opaqueWindowBackground()
             .navigationTitle(String(localized: "settings.translators.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .task {
                 contributors = TranslationContributorsLoader.load()
             }
@@ -34,12 +29,6 @@ struct TranslationContributorsView: View {
             ContentUnavailableView {
                 Label(String(localized: "settings.translators.empty"), systemImage: "globe")
             } actions: {
-                #if os(tvOS)
-                // Nothing else here is focusable; without it the remote is stuck.
-                Button(String(localized: "common.done")) {
-                    dismiss()
-                }
-                #endif
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -58,13 +47,7 @@ struct TranslationContributorsView: View {
     }
 
     private func contributorRow(_ contributor: TranslationContributor) -> some View {
-        #if os(tvOS)
-        Button {} label: {
-            contributorRowContent(contributor)
-        }
-        #else
         contributorRowContent(contributor)
-        #endif
     }
 
     private func contributorRowContent(_ contributor: TranslationContributor) -> some View {

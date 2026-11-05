@@ -9,7 +9,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 struct HingeLayoutObserver: ViewModifier {
     @Binding var isTabletop: Bool
@@ -104,11 +103,3 @@ extension View {
         modifier(HingePresenceObserver(hasHinge: hasHinge))
     }
 }
-
-#else
-
-extension View {
-    func observeHinge(hasHinge: Binding<Bool>) -> some View { self }
-}
-
-#endif

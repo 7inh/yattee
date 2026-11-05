@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 // MARK: - Controls Theme Modifier
 
@@ -97,12 +96,12 @@ struct PlayerControlsView: View {
     var onCaptionSelected: ((Caption?) -> Void)? = nil
     /// Callback when stream is selected (for quality selector integration)
     var onStreamSelected: ((Stream, Stream?) -> Void)? = nil
-    /// Embedded (in-container) tracks reported by mpv for the loaded file
-    var embeddedAudioTracks: [MPVTrack] = []
-    var embeddedSubtitleTracks: [MPVTrack] = []
+    /// Embedded (in-container) tracks reported by player for the loaded file
+    var embeddedAudioTracks: [MediaTrack] = []
+    var embeddedSubtitleTracks: [MediaTrack] = []
     var currentEmbeddedAudioTrackID: Int? = nil
     var currentEmbeddedSubtitleTrackID: Int? = nil
-    var embeddedVideoTrack: MPVTrack? = nil
+    var embeddedVideoTrack: MediaTrack? = nil
     /// Callback when an embedded audio track is selected
     var onEmbeddedAudioTrackSelected: ((Int) -> Void)? = nil
     /// Callback when an embedded subtitle track is selected (nil = off)
@@ -413,9 +412,9 @@ struct PlayerControlsView: View {
             .safeAreaInsets ?? .zero
     }
 
-    /// Whether to show in-app volume controls (only when volume mode is .mpv)
+    /// Whether to show in-app volume controls (only when volume mode is .inApp)
     private var showVolumeControls: Bool {
-        GlobalLayoutSettings.cached.volumeMode == .mpv
+        GlobalLayoutSettings.cached.volumeMode == .inApp
     }
 
     /// Build the consolidated actions for the section renderer
@@ -1818,5 +1817,3 @@ private struct HostWindowReader: UIViewRepresentable {
         }
     }
 }
-
-#endif

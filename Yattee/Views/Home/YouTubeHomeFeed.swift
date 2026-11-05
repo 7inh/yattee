@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 
-#if os(iOS)
 @MainActor
 struct YouTubeHomeFeed: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -296,4 +295,3 @@ struct YouTubeHomeFeed: View {
         await cache.refresh(using: appEnvironment)
     }
 }
-#endif

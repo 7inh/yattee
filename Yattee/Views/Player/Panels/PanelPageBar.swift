@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 /// Pin control shown at the leading edge of the page bar.
 struct PanelPageBarPinAction {
@@ -66,9 +65,7 @@ struct PanelPageBar: View {
     @ViewBuilder
     private func pinButton(_ pin: PanelPageBarPinAction) -> some View {
         Button {
-            #if os(iOS)
             appEnvironment?.settingsManager.triggerHapticFeedback(for: .subscribeButton)
-            #endif
             pin.toggle()
         } label: {
             Image(systemName: pin.isPinned ? "pin.fill" : "pin")
@@ -121,5 +118,3 @@ struct PanelPageBar: View {
         .buttonStyle(.plain)
     }
 }
-
-#endif

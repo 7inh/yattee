@@ -7,7 +7,6 @@
 
 import Foundation
 
-#if !os(tvOS)
 
 // MARK: - URLSessionDownloadDelegate
 
@@ -217,5 +216,3 @@ extension DownloadManager: URLSessionDownloadDelegate {
         // Could be used to update UI or show notification
     }
 }
-
-#endif

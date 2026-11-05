@@ -5,7 +5,6 @@
 //  Settings view for configuring tap gestures.
 //
 
-#if os(iOS)
 import SwiftUI
 
 /// Settings view for configuring tap gestures on the player.
@@ -32,9 +31,7 @@ struct TapGesturesSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "gestures.tap.title", defaultValue: "Tap Gestures"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .onAppear {
             syncFromViewModel()
         }
@@ -233,4 +230,3 @@ struct TapGesturesSettingsView: View {
         )
     }
 }
-#endif

@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 /// Playback-related menu bar commands.
 /// Works on both macOS and iPadOS 26+.
 struct PlaybackCommands: Commands {
@@ -306,9 +305,6 @@ struct PlaybackCommands: Commands {
 
     private var pipButton: some View {
         Button {
-            if let mpvBackend = playerService.currentBackend as? MPVBackend {
-                mpvBackend.togglePiP()
-            }
         } label: {
             Text(String(localized: "menu.playback.pip"))
         }
@@ -381,4 +377,3 @@ struct PlaybackCommands: Commands {
         navigationCoordinator.isPlayerExpanded = false
     }
 }
-#endif

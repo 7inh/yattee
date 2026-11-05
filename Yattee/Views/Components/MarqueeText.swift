@@ -71,25 +71,6 @@ struct MarqueeText: View {
 
     // MARK: - Scrolling Content
 
-    #if os(macOS)
-    private var scrollingContent: some View {
-        // Paused outside the active scene or when the container says it is
-        // hidden: the timeline otherwise re-renders every frame regardless.
-        TimelineView(.animation(paused: scenePhase != .active || isMarqueePaused)) { context in
-            let _ = PerfCounter.body("MarqueeText.frame")
-            HStack(spacing: spacing) {
-                textView
-                textView
-            }
-            .offset(x: calculateOffset(at: context.date))
-            .onAppear {
-                if startTime == nil {
-                    startTime = context.date
-                }
-            }
-        }
-    }
-    #else
     private var scrollingContent: some View {
         // The text is drawn once and Core Animation slides it, so scrolling
         // costs no per-frame work in the app. A TimelineView here re-rendered
@@ -112,7 +93,6 @@ struct MarqueeText: View {
             textView.hidden()
         }
     }
-    #endif
 
     // MARK: - Text View
 
@@ -136,13 +116,8 @@ struct MarqueeText: View {
     // MARK: - Text Height
 
     private var textHeight: CGFloat {
-        #if os(macOS)
-        let nsFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        return nsFont.boundingRectForFont.height
-        #else
         let uiFont = UIFont.preferredFont(forTextStyle: .subheadline)
         return uiFont.lineHeight
-        #endif
     }
 
     // MARK: - Offset Calculation

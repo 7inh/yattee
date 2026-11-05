@@ -19,13 +19,7 @@ import SwiftUI
 /// behind themselves while the rest stays on the window material.
 struct OpaqueWindowBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {
-        #if os(macOS)
         content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-        #else
-        content
-        #endif
     }
 }
 

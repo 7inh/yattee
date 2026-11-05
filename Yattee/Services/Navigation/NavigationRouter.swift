@@ -171,7 +171,6 @@ final class NavigationRouter {
 
 // MARK: - Layout Choice
 
-#if os(iOS)
 enum NavigationLayout {
     /// Whether the sidebar layout fits: regular width and height (iPad, the
     /// iPhone Duo inner screen in either orientation). A large iPhone in
@@ -187,4 +186,3 @@ enum NavigationLayout {
         return verticalSizeClass == .regular || UIDevice.current.userInterfaceIdiom == .pad
     }
 }
-#endif

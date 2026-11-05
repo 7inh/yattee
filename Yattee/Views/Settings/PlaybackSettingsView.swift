@@ -9,9 +9,7 @@ import SwiftUI
 
 struct PlaybackSettingsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(iOS)
     @State private var hasHinge = HingeLayoutObserver.forceTabletop
-    #endif
 
     var body: some View {
         SettingsFormContainer {
@@ -20,29 +18,18 @@ struct PlaybackSettingsView: View {
                 AudioSection(settings: settings)
                 SubtitlesSection(settings: settings)
                 BehaviorSection(settings: settings)
-                #if os(tvOS)
-                TVDisplayMatchingSection(settings: settings)
-                #endif
                 QueueSection(settings: settings)
-                #if os(iOS)
                 OrientationSection(settings: settings)
                 if hasHinge {
                     FoldableSection(settings: settings)
                 }
-                #endif
             }
         }
-        #if os(iOS)
         // Observed on the always-present form: an observer on the hidden
         // section itself would have no view to attach to and never fire.
         .observeHinge(hasHinge: $hasHinge)
-        #endif
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.playback.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
@@ -65,7 +52,6 @@ private struct QualitySection: View {
                 }
             }
 
-            #if os(iOS)
             Picker(
                 String(localized: "settings.playback.quality.cellular"),
                 selection: $settings.cellularQuality
@@ -74,7 +60,6 @@ private struct QualitySection: View {
                     Text(quality.displayName).tag(quality)
                 }
             }
-            #endif
 
             Toggle(
                 String(localized: "settings.playback.quality.allowSoftwareDecoded"),
@@ -253,24 +238,9 @@ private struct BehaviorSection: View {
     @Bindable var settings: SettingsManager
 
     var body: some View {
-        #if os(tvOS)
-        let footer: LocalizedStringKey? = "settings.playback.tvOSMenuButtonClosesVideo.footer"
-        #else
         let footer: LocalizedStringKey? = nil
-        #endif
 
         SettingsFormSection("settings.playback.behavior.header", footer: footer) {
-            #if os(macOS)
-            Toggle(
-                String(localized: "settings.playback.macOS.separateWindow"),
-                isOn: $settings.macPlayerSeparateWindow
-            )
-
-            Toggle(
-                String(localized: "settings.playback.macOS.autoResizePlayer"),
-                isOn: $settings.playerSheetAutoResize
-            )
-            #endif
 
             PlatformMenuPicker(
                 String(localized: "settings.playback.resumeAction"),
@@ -281,49 +251,19 @@ private struct BehaviorSection: View {
                 }
             }
 
-            #if !os(macOS)
             // macOS never suspends apps, so playback always continues in the
             // background — the toggle would have no effect there
             Toggle(
                 String(localized: "settings.playback.backgroundPlayback"),
                 isOn: $settings.backgroundPlaybackEnabled
             )
-            #endif
 
-            #if os(tvOS)
-            Toggle(
-                String(localized: "settings.playback.tvOSMenuButtonClosesVideo"),
-                isOn: $settings.tvOSMenuButtonClosesVideo
-            )
-            #endif
         }
     }
 }
 
 // MARK: - TV Display Matching Section
 
-#if os(tvOS)
-private struct TVDisplayMatchingSection: View {
-    @Bindable var settings: SettingsManager
-
-    var body: some View {
-        SettingsFormSection(
-            "settings.playback.tvDisplayMatching.header",
-            footer: "settings.playback.tvDisplayMatching.footer"
-        ) {
-            Toggle(
-                String(localized: "settings.playback.tvDisplayMatching.frameRate"),
-                isOn: $settings.tvMatchDisplayFrameRate
-            )
-
-            Toggle(
-                String(localized: "settings.playback.tvDisplayMatching.dynamicRange"),
-                isOn: $settings.tvMatchDisplayDynamicRange
-            )
-        }
-    }
-}
-#endif
 
 // MARK: - Queue Section
 
@@ -337,25 +277,6 @@ private struct QueueSection: View {
                 isOn: $settings.queueEnabled
             )
 
-            #if os(tvOS)
-            PlatformMenuPicker(
-                String(localized: "settings.playback.queue.autoPlayCountdown"),
-                selection: $settings.queueAutoPlayCountdown
-            ) {
-                ForEach(1...15, id: \.self) { value in
-                    Text("\(value)s").tag(value)
-                }
-            }
-            .disabled(!settings.queueEnabled)
-            #elseif os(macOS)
-            // macOS: Use simple string label (custom HStack label breaks Form rendering)
-            Stepper(
-                "\(String(localized: "settings.playback.queue.autoPlayCountdown")): \(settings.queueAutoPlayCountdown)s",
-                value: $settings.queueAutoPlayCountdown,
-                in: 1...15
-            )
-            .disabled(!settings.queueEnabled)
-            #else
             Stepper(
                 value: $settings.queueAutoPlayCountdown,
                 in: 1...15
@@ -368,14 +289,12 @@ private struct QueueSection: View {
                 }
             }
             .disabled(!settings.queueEnabled)
-            #endif
         }
     }
 }
 
 // MARK: - Foldable Section (iOS)
 
-#if os(iOS)
 /// iPhone Duo only: options for the tabletop (laptop-like) player layout.
 private struct FoldableSection: View {
     @Bindable var settings: SettingsManager
@@ -392,11 +311,9 @@ private struct FoldableSection: View {
         }
     }
 }
-#endif
 
 // MARK: - Orientation Section (iOS)
 
-#if os(iOS)
 private struct OrientationSection: View {
     @Bindable var settings: SettingsManager
 
@@ -420,7 +337,6 @@ private struct OrientationSection: View {
         }
     }
 }
-#endif
 
 // MARK: - VideoQuality Extension
 

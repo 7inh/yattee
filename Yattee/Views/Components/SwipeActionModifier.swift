@@ -7,28 +7,6 @@
 
 import SwiftUI
 
-#if !os(iOS)
-
-extension View {
-    /// Swipe actions are iOS-only; on macOS/tvOS this returns the view unmodified.
-    @ViewBuilder
-    func swipeActions(
-        config _: SwipeActionConfig = .init(),
-        @SwipeActionBuilder actions _: () -> [SwipeAction]
-    ) -> some View {
-        self
-    }
-
-    @ViewBuilder
-    func swipeActions(
-        config _: SwipeActionConfig = .init(),
-        actionsArray _: [SwipeAction]
-    ) -> some View {
-        self
-    }
-}
-
-#else
 
 extension View {
     /// Adds swipe actions to a view (trailing swipe to reveal action buttons).
@@ -87,7 +65,6 @@ struct SwipeActionModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         Group {
-            #if os(iOS)
             if #available(iOS 18, *) {
                 swipeableContent(content)
                     .gesture(
@@ -100,9 +77,6 @@ struct SwipeActionModifier: ViewModifier {
             } else {
                 fallbackSwipeableContent(content)
             }
-            #else
-            fallbackSwipeableContent(content)
-            #endif
         }
         .onChange(of: resetPositionTrigger) { _, _ in
             reset()
@@ -255,5 +229,3 @@ struct SwipeActionModifier: ViewModifier {
         return totalActionSize + spacing + config.leadingPadding + config.trailingPadding
     }
 }
-
-#endif

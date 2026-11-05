@@ -38,11 +38,6 @@ struct AccountsListView: View {
     @State private var pendingRemoval: PendingAccountRemoval?
     @State private var renameRequest: AccountRenameRequest?
 
-    #if os(tvOS)
-    /// The account whose actions dialog is up. tvOS only: everywhere else the
-    /// row grows a context menu instead of a press target.
-    @State private var actionsAccountID: UUID?
-    #endif
 
     /// Bumped whenever a credential is replaced, purely to re-read the login
     /// identifier the rows display.
@@ -62,23 +57,10 @@ struct AccountsListView: View {
 
     var body: some View {
         Group {
-            #if os(tvOS)
-            TVSidebarDetailContainer(
-                systemImage: "person.crop.circle",
-                title: String(localized: "accounts.title")
-            ) {
-                content
-            }
-            #else
             content
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "accounts.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .platformSheet(item: $login) { login in
             loginSheet(login)
         }
@@ -105,9 +87,7 @@ struct AccountsListView: View {
                 )
             )
         }
-        #if !os(tvOS)
         .presentationCompactAdaptation(.sheet)
-        #endif
         .accountRenameAlert($renameRequest) { accountID, name in
             appEnvironment?.accountsManager.updateDisplayName(name, for: accountID)
         }
@@ -146,9 +126,6 @@ struct AccountsListView: View {
 
                 pickerVisibilitySection
             }
-            #if os(macOS)
-            .formStyle(.grouped)
-            #endif
             .opaqueSettingsFormBackground()
         }
     }
@@ -159,16 +136,6 @@ struct AccountsListView: View {
         } description: {
             Text(String(localized: "accounts.empty.description"))
         } actions: {
-            #if os(tvOS)
-            // Without a focusable element the focus engine has nowhere to
-            // land, and the remote can no longer reach the sidebar either.
-            // Sources is also where an account is actually signed in.
-            NavigationLink {
-                SourcesListView()
-            } label: {
-                Label(String(localized: "accounts.empty.openSources"), systemImage: "server.rack")
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -266,35 +233,10 @@ struct AccountsListView: View {
 
     @ViewBuilder
     private func accountRow(_ account: Account, instance: Instance?) -> some View {
-        #if os(tvOS)
-        // One focusable row per account: pressing it raises the actions as a
-        // dialog. Spelling them out as sibling rows made every account four
-        // rows tall, which is a lot of clicking past on a remote.
-        Button {
-            actionsAccountID = account.id
-        } label: {
-            rowContent(account, instance: instance)
-        }
-        .buttonStyle(TVSettingsButtonStyle())
-        .confirmationDialog(
-            title(for: account, instance: instance),
-            isPresented: Binding(
-                // By ID: a label edit arriving from another device while the
-                // dialog is up would otherwise close it.
-                get: { actionsAccountID == account.id },
-                set: { if !$0 { actionsAccountID = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            rowActions(account, instance: instance)
-            Button(String(localized: "common.cancel"), role: .cancel) {}
-        }
-        #else
         rowContent(account, instance: instance)
             .contextMenu {
                 rowActions(account, instance: instance)
             }
-        #endif
     }
 
     private func rowContent(_ account: Account, instance: Instance?) -> some View {

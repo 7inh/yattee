@@ -436,7 +436,7 @@ struct GlobalLayoutSettings: Codable, Hashable, Sendable {
         controlsFadeOpacity = try container.decodeIfPresent(Double.self, forKey: .controlsFadeOpacity) ?? 0.5
         systemControlsMode = try container.decodeIfPresent(SystemControlsMode.self, forKey: .systemControlsMode) ?? .seek
         systemControlsSeekDuration = try container.decodeIfPresent(SystemControlsSeekDuration.self, forKey: .systemControlsSeekDuration) ?? .tenSeconds
-        volumeMode = try container.decodeIfPresent(VolumeMode.self, forKey: .volumeMode) ?? .mpv
+        volumeMode = try container.decodeIfPresent(VolumeMode.self, forKey: .volumeMode) ?? .inApp
         controlBarTheme = try container.decodeIfPresent(ControlsTheme.self, forKey: .controlBarTheme) ?? .system
     }
 
@@ -463,7 +463,7 @@ struct GlobalLayoutSettings: Codable, Hashable, Sendable {
         controlsFadeOpacity: Double = 0.5,
         systemControlsMode: SystemControlsMode = .seek,
         systemControlsSeekDuration: SystemControlsSeekDuration = .tenSeconds,
-        volumeMode: VolumeMode = .mpv,
+        volumeMode: VolumeMode = .inApp,
         controlBarTheme: ControlsTheme = .system
     ) {
         self.style = style

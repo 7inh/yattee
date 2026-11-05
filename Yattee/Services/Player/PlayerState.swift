@@ -247,7 +247,7 @@ final class PlayerState {
 
     /// When false, `currentTime` and `bufferedTime` keep updating without
     /// invalidating views that read them. Turned off while the app is in the
-    /// background: every mpv time-pos tick otherwise re-renders the hidden
+    /// background: every player time-pos tick otherwise re-renders the hidden
     /// player UI (progress bar, time labels, chapter segments) several times
     /// per second, which drains the battery during long background or
     /// audio-only playback.
@@ -466,7 +466,7 @@ final class PlayerState {
     /// Whether the video is being closed (used to hide UI before dismissal).
     var isClosingVideo: Bool = false
 
-    /// Whether the MPV debug overlay is visible.
+    /// Whether the player debug overlay is visible.
     var showDebugOverlay: Bool = false
 
     /// Whether player controls are locked (buttons/gestures disabled except settings and dismiss).
@@ -486,7 +486,7 @@ final class PlayerState {
     var isBufferReady: Bool = false
 
     /// Current buffer progress as a percentage (0-100).
-    /// Updated by MPV's cache-buffering-state property during initial buffering.
+    /// Updated by player's cache-buffering-state property during initial buffering.
     /// nil when not buffering or when using AVPlayer backend.
     var bufferProgress: Int?
 
@@ -572,7 +572,7 @@ final class PlayerState {
     }
 
     /// Locks duration from API metadata, preventing backend updates.
-    /// Used for fast endpoint streams where MPV can't determine accurate duration
+    /// Used for fast endpoint streams where player can't determine accurate duration
     /// because the file is being progressively downloaded.
     func lockDuration(_ duration: TimeInterval) {
         self.duration = duration

@@ -197,7 +197,6 @@ struct PlayerPillButtonView: View {
 
     // MARK: - Special Buttons
 
-    #if !os(tvOS)
     private var shareButton: some View {
         Group {
             if let video {
@@ -210,11 +209,6 @@ struct PlayerPillButtonView: View {
             }
         }
     }
-    #else
-    private var shareButton: some View {
-        standardButton
-    }
-    #endif
 
     private var playbackSpeedMenu: some View {
         Menu {
@@ -246,7 +240,6 @@ struct PlayerPillButtonView: View {
             .contentShape(Rectangle())
     }
 
-    #if !os(tvOS)
     @ViewBuilder
     private var contextMenuButton: some View {
         if let video {
@@ -255,11 +248,6 @@ struct PlayerPillButtonView: View {
             standardButton
         }
     }
-    #else
-    private var contextMenuButton: some View {
-        standardButton
-    }
-    #endif
 
     private var addToPlaylistButton: some View {
         Button {
@@ -283,15 +271,8 @@ struct PlayerPillButtonView: View {
 
     @ViewBuilder
     private var airplayButton: some View {
-        #if os(iOS)
         AirPlayButton(tintColor: .label)
             .frame(width: 36, height: 36)
-        #elseif os(macOS)
-        AirPlayButton()
-            .frame(width: 36, height: 36)
-        #else
-        standardButton
-        #endif
     }
 
     private var genericButtonLabel: some View {

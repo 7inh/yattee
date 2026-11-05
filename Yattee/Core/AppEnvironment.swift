@@ -386,9 +386,7 @@ final class AppEnvironment {
 
         // Initialize Notification & Background Refresh managers
         let notifManager = NotificationManager()
-        #if !os(tvOS)
         notifManager.registerNotificationCategories()
-        #endif
         self.notificationManager = notifManager
 
         let bgRefreshManager = BackgroundRefreshManager(notificationManager: notifManager)
@@ -412,9 +410,6 @@ final class AppEnvironment {
         // Wire up media services to player
         player.setMediaSourcesManager(mediaSources)
         self.navigationCoordinator.setMediaSourcesManager(mediaSources)
-        #if os(macOS)
-        self.navigationCoordinator.setSettingsManager(settings)
-        #endif
         player.setSMBClient(self.smbClient)
         player.setWebDAVClient(self.webDAVClient)
         player.setLocalFileClient(self.localFileClient)
@@ -708,11 +703,9 @@ final class AppEnvironment {
         cleanupAllTempSubtitles()
 
         // Run orphan diagnostics on startup to help debug storage issues
-        #if !os(tvOS)
         Task {
             self.downloadManager.logOrphanDiagnostics()
         }
-        #endif
     }
     
     /// Cleans up all temporary subtitle files from previous sessions.

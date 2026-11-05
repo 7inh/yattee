@@ -32,23 +32,6 @@ enum SidebarMainItem: String, CaseIterable, Codable, Identifiable, Sendable {
 
     /// Default visibility (all visible except subscriptions and channels).
     static var defaultVisibility: [SidebarMainItem: Bool] {
-        #if os(tvOS)
-        [
-            .search: true,
-            .home: true,
-            .subscriptions: false,
-            .bookmarks: false,
-            .history: false,
-            .downloads: true,
-            .channels: false,
-            .playlists: false,
-            .sources: true,
-            .settings: true,
-            .openURL: false,
-            .remoteControl: true,
-            .continueWatching: false
-        ]
-        #else
         [
             .search: true,
             .home: true,
@@ -64,7 +47,6 @@ enum SidebarMainItem: String, CaseIterable, Codable, Identifiable, Sendable {
             .remoteControl: false,
             .continueWatching: false
         ]
-        #endif
     }
 
     /// SF Symbol icon name.
@@ -112,11 +94,7 @@ enum SidebarMainItem: String, CaseIterable, Codable, Identifiable, Sendable {
             return true
         case .settings:
             // tvOS has no other route to Settings, so hiding it would lock the user out.
-            #if os(tvOS)
-            return true
-            #else
             return false
-            #endif
         default:
             return false
         }
@@ -126,17 +104,9 @@ enum SidebarMainItem: String, CaseIterable, Codable, Identifiable, Sendable {
     var isAvailableOnCurrentPlatform: Bool {
         switch self {
         case .downloads:
-            #if os(tvOS)
-            return false
-            #else
             return true
-            #endif
         case .settings:
-            #if os(macOS)
-            return false
-            #else
             return true
-            #endif
         default:
             return true
         }

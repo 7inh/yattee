@@ -27,11 +27,7 @@ struct ProgressBarSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.playerControls.progressBar"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #elseif os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .onAppear {
             loadSettings()
@@ -42,7 +38,6 @@ struct ProgressBarSettingsView: View {
 
     private var appearanceSection: some View {
         Section {
-            #if !os(tvOS)
             ColorPicker(
                 String(localized: "settings.playerControls.progressBar.playedColor"),
                 selection: $playedColor,
@@ -52,15 +47,6 @@ struct ProgressBarSettingsView: View {
                 viewModel.updateProgressBarSettingsSync { $0.playedColor = CodableColor(newValue) }
             }
             .disabled(!viewModel.canEditActivePreset)
-            #else
-            HStack {
-                Text(String(localized: "settings.playerControls.progressBar.playedColor"))
-                Spacer()
-                Circle()
-                    .fill(playedColor)
-                    .frame(width: 24, height: 24)
-            }
-            #endif
         } header: {
             Text(String(localized: "settings.playerControls.progressBar.appearance"))
         }
@@ -142,16 +128,9 @@ struct ProgressBarSettingsView: View {
 
             Spacer()
 
-            #if !os(tvOS)
             ColorPicker("", selection: color, supportsOpacity: false)
                 .labelsHidden()
                 .disabled(!viewModel.canEditActivePreset || !settings.isVisible)
-            #else
-            Circle()
-                .fill(color.wrappedValue)
-                .frame(width: 24, height: 24)
-                .opacity(settings.isVisible ? 1 : 0.4)
-            #endif
         }
     }
 

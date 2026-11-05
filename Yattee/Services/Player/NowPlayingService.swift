@@ -9,13 +9,8 @@ import Foundation
 import MediaPlayer
 import AVFoundation
 
-#if os(iOS) || os(tvOS)
 import UIKit
 typealias NowPlayingImage = UIImage
-#elseif os(macOS)
-import AppKit
-typealias NowPlayingImage = NSImage
-#endif
 
 /// Service for updating system Now Playing info (Control Center, Lock Screen).
 @MainActor
@@ -29,11 +24,6 @@ final class NowPlayingService {
     private var artworkImage: NowPlayingImage?
     private var cachedNowPlayingInfo: [String: Any]?
 
-    #if os(tvOS)
-    private var audioRouteChangeObserver: NSObjectProtocol?
-    private var hasActivatedAudioSessionForRouteEvaluation = false
-    private var suppressesSystemControlsForAirPlay = false
-    #endif
 
     weak var playerService: PlayerService?
     weak var deArrowBrandingProvider: DeArrowBrandingProvider?
@@ -42,20 +32,10 @@ final class NowPlayingService {
     // MARK: - Initialization
 
     init() {
-        #if os(tvOS)
-        startAudioRouteMonitoring()
-        clearPublishedMediaIntegration()
-        #else
         configureRemoteCommands()
-        #endif
     }
 
     deinit {
-        #if os(tvOS)
-        if let audioRouteChangeObserver {
-            NotificationCenter.default.removeObserver(audioRouteChangeObserver)
-        }
-        #endif
     }
 
     // MARK: - Public Methods
@@ -75,7 +55,7 @@ final class NowPlayingService {
         // Determine if this is a live stream
         let isLive = video.isLive
 
-        // Build the Now Playing info dictionary with all properties needed for tvOS
+        // Publish audio metadata for Control Center and the lock screen.
         var nowPlayingInfo: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyArtist: video.author.name,
@@ -83,8 +63,8 @@ final class NowPlayingService {
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackQueueCount: 1,
             MPNowPlayingInfoPropertyPlaybackQueueIndex: 0,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0,
             MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0
         ]
 
@@ -95,15 +75,9 @@ final class NowPlayingService {
 
         // Add artwork if available
         if let artwork = artworkImage {
-            #if os(iOS) || os(tvOS)
             nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
                 boundsSize: artwork.size
             ) { _ in artwork }
-            #elseif os(macOS)
-            nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
-                boundsSize: artwork.size
-            ) { _ in artwork }
-            #endif
         }
 
         LoggingService.shared.debug(
@@ -113,25 +87,10 @@ final class NowPlayingService {
 
         cachedNowPlayingInfo = nowPlayingInfo
 
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation, !suppressesSystemControlsForAirPlay else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Suppressed Now Playing update while AirPlay/HomePod route is active",
-                category: .player
-            )
-            return
-        }
-        #endif
 
         infoCenter.nowPlayingInfo = nowPlayingInfo
 
-        // Only set playbackState on non-tvOS platforms.
-        // tvOS requires com.apple.mediaremote.set-playback-state entitlement which is restricted.
-        // The MPNowPlayingInfoPropertyPlaybackRate property is sufficient to indicate state.
-        #if !os(tvOS)
         infoCenter.playbackState = isPlaying ? .playing : .paused
-        #endif
 
         LoggingService.shared.debug(
             "Updated Now Playing: \(video.id.id) - title: \(title), duration: \(duration), time: \(currentTime), playing: \(isPlaying), live: \(isLive)",
@@ -146,19 +105,14 @@ final class NowPlayingService {
 
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0
 
         cachedNowPlayingInfo = info
 
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation, !suppressesSystemControlsForAirPlay else { return }
-        #endif
 
         infoCenter.nowPlayingInfo = info
 
-        #if !os(tvOS)
         infoCenter.playbackState = isPlaying ? .playing : .paused
-        #endif
     }
 
     /// Updates playback rate (playing/paused state).
@@ -177,7 +131,7 @@ final class NowPlayingService {
             return
         }
 
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0
 
         // When pausing, we must also update the elapsed time to ensure iOS
         // properly preserves the Now Playing info in Control Center.
@@ -188,24 +142,13 @@ final class NowPlayingService {
 
         cachedNowPlayingInfo = info
 
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation, !suppressesSystemControlsForAirPlay else {
-            LoggingService.shared.debug(
-                "Suppressed playback rate update while AirPlay/HomePod route is active",
-                category: .player
-            )
-            return
-        }
-        #endif
 
         infoCenter.nowPlayingInfo = info
 
-        #if !os(tvOS)
         infoCenter.playbackState = isPlaying ? .playing : .paused
-        #endif
 
         LoggingService.shared.debug(
-            "updatePlaybackRate completed: rate=\(isPlaying ? 1.0 : 0.0), info keys=\(info.keys.count)",
+            "updatePlaybackRate completed: rate=\(isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0), info keys=\(info.keys.count)",
             category: .player
         )
     }
@@ -216,9 +159,6 @@ final class NowPlayingService {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
         cachedNowPlayingInfo = info
 
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation, !suppressesSystemControlsForAirPlay else { return }
-        #endif
 
         infoCenter.nowPlayingInfo = info
     }
@@ -232,7 +172,6 @@ final class NowPlayingService {
         if let localPath {
             do {
                 let data = try Data(contentsOf: localPath)
-                #if os(iOS) || os(tvOS)
                 if let image = UIImage(data: data) {
                     artworkImage = image
                     updateNowPlayingWithCurrentArtwork()
@@ -242,17 +181,6 @@ final class NowPlayingService {
                     )
                     return
                 }
-                #elseif os(macOS)
-                if let image = NSImage(data: data) {
-                    artworkImage = image
-                    updateNowPlayingWithCurrentArtwork()
-                    LoggingService.shared.debug(
-                        "Loaded artwork from local path: \(localPath.lastPathComponent)",
-                        category: .player
-                    )
-                    return
-                }
-                #endif
             } catch {
                 LoggingService.shared.debug(
                     "Local artwork not available, falling back to network: \(error.localizedDescription)",
@@ -270,11 +198,7 @@ final class NowPlayingService {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
 
-            #if os(iOS) || os(tvOS)
             artworkImage = UIImage(data: data)
-            #elseif os(macOS)
-            artworkImage = NSImage(data: data)
-            #endif
 
             updateNowPlayingWithCurrentArtwork()
         } catch {
@@ -305,13 +229,8 @@ final class NowPlayingService {
     func clearNowPlaying() {
         cachedNowPlayingInfo = nil
 
-        #if os(tvOS)
-        hasActivatedAudioSessionForRouteEvaluation = false
-        clearPublishedMediaIntegration()
-        #else
         infoCenter.nowPlayingInfo = nil
         infoCenter.playbackState = .stopped
-        #endif
 
         currentVideo = nil
         artworkImage = nil
@@ -319,94 +238,6 @@ final class NowPlayingService {
         LoggingService.shared.debug("Cleared Now Playing info", category: .player)
     }
 
-    #if os(tvOS)
-    /// Re-evaluates whether system media integration is safe for the current tvOS route.
-    /// AirPlay/HomePod routes add a downstream audio buffer when remote commands are enabled.
-    func refreshSystemControlsForCurrentAudioRoute(reason: String) {
-        let wasWaitingForActiveAudioRoute = !hasActivatedAudioSessionForRouteEvaluation
-        hasActivatedAudioSessionForRouteEvaluation = true
-
-        let shouldSuppress = isAirPlayOutputActive
-        let routeDescription = currentAudioRouteDescription()
-
-        guard shouldSuppress != suppressesSystemControlsForAirPlay || wasWaitingForActiveAudioRoute else {
-            if shouldSuppress {
-                clearPublishedMediaIntegration()
-            }
-            LoggingService.shared.debug(
-                "tvOS audio route unchanged (\(reason)): suppressSystemControls=\(shouldSuppress), route=\(routeDescription)",
-                category: .player
-            )
-            return
-        }
-
-        suppressesSystemControlsForAirPlay = shouldSuppress
-
-        if shouldSuppress {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.warning(
-                "Disabled Now Playing and remote commands for AirPlay/HomePod route (\(reason)): \(routeDescription)",
-                category: .player
-            )
-        } else {
-            LoggingService.shared.info(
-                "Restoring Now Playing and remote commands for tvOS route (\(reason)): \(routeDescription)",
-                category: .player
-            )
-            configureRemoteCommands()
-            if let cachedNowPlayingInfo {
-                infoCenter.nowPlayingInfo = cachedNowPlayingInfo
-            }
-        }
-    }
-
-    private func startAudioRouteMonitoring() {
-        audioRouteChangeObserver = NotificationCenter.default.addObserver(
-            forName: AVAudioSession.routeChangeNotification,
-            object: AVAudioSession.sharedInstance(),
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.handleAudioRouteChange()
-            }
-        }
-    }
-
-    private func handleAudioRouteChange() {
-        guard hasActivatedAudioSessionForRouteEvaluation else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Deferred tvOS route change until audio session activation: \(currentAudioRouteDescription())",
-                category: .player
-            )
-            return
-        }
-
-        refreshSystemControlsForCurrentAudioRoute(reason: "route change")
-    }
-
-    private var isAirPlayOutputActive: Bool {
-        AVAudioSession.sharedInstance().currentRoute.outputs.contains { output in
-            output.portType == .airPlay ||
-            output.portType.rawValue.localizedCaseInsensitiveContains("airplay") ||
-            output.portName.localizedCaseInsensitiveContains("HomePod")
-        }
-    }
-
-    private func currentAudioRouteDescription() -> String {
-        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
-        guard !outputs.isEmpty else { return "no outputs" }
-
-        return outputs
-            .map { "\($0.portName) (\($0.portType.rawValue))" }
-            .joined(separator: ", ")
-    }
-
-    private func clearPublishedMediaIntegration() {
-        infoCenter.nowPlayingInfo = nil
-        disableAllRemoteCommands()
-    }
-    #endif
 
     // MARK: - Remote Commands
 
@@ -462,25 +293,6 @@ final class NowPlayingService {
         mode: SystemControlsMode? = nil,
         duration: SystemControlsSeekDuration? = nil
     ) {
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Deferred remote command configuration until tvOS audio session activation",
-                category: .player
-            )
-            return
-        }
-
-        guard !suppressesSystemControlsForAirPlay else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Skipped remote command configuration while AirPlay/HomePod route is active",
-                category: .player
-            )
-            return
-        }
-        #endif
 
         // Remove existing targets to prevent duplicate handlers
         disableAllRemoteCommands()
@@ -517,25 +329,6 @@ final class NowPlayingService {
     ///   - mode: The system controls mode (seek or skip track).
     ///   - duration: The seek duration when mode is .seek.
     private func configureRemoteCommandsWithSettings(mode: SystemControlsMode, duration: SystemControlsSeekDuration) {
-        #if os(tvOS)
-        guard hasActivatedAudioSessionForRouteEvaluation else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Deferred remote command configuration with settings until tvOS audio session activation",
-                category: .player
-            )
-            return
-        }
-
-        guard !suppressesSystemControlsForAirPlay else {
-            clearPublishedMediaIntegration()
-            LoggingService.shared.debug(
-                "Skipped remote command configuration with settings while AirPlay/HomePod route is active",
-                category: .player
-            )
-            return
-        }
-        #endif
 
         // Remove existing targets (in case called from async path)
         disableAllRemoteCommands()

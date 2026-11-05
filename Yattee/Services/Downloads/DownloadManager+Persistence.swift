@@ -7,7 +7,6 @@
 
 import Foundation
 
-#if !os(tvOS)
 
 extension DownloadManager {
     // MARK: - Persistence
@@ -416,5 +415,3 @@ extension DownloadManager {
         }
     }
 }
-
-#endif

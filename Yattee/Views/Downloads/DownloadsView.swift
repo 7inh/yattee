@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct DownloadsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @State private var selectedDownload: Download?
@@ -29,11 +28,7 @@ struct DownloadsView: View {
 
     /// View options control lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
@@ -47,13 +42,6 @@ struct DownloadsView: View {
         .navigationTitle(String(localized: "downloads.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
-            #if os(macOS)
-            // Pin the trailing group (search field + toolbar buttons) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
             ToolbarItem(placement: viewOptionsPlacement) {
                 if let settings = downloadSettings {
                     sortAndGroupMenu(settings)
@@ -638,4 +626,3 @@ private struct DownloadsEmptyStateView: View {
     }
     .appEnvironment(.preview)
 }
-#endif

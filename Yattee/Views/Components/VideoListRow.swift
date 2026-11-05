@@ -90,20 +90,10 @@ struct VideoListRow<Content: View>: View {
 
     @ViewBuilder
     private var divider: some View {
-        #if os(iOS)
         Rectangle()
             .fill(Color(uiColor: .separator))
             .frame(height: 1 / displayScale)
             .padding(.leading, dividerLeadingPadding)
-        #elseif os(macOS)
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(height: 1)
-            .padding(.leading, dividerLeadingPadding)
-        #elseif !os(tvOS)
-        Divider()
-            .padding(.leading, dividerLeadingPadding)
-        #endif
     }
 }
 

@@ -16,10 +16,8 @@ struct ToastCardView: View {
     var onDragCancelled: (() -> Void)? = nil
 
     @State private var isAnimating = false
-    #if os(iOS)
     @State private var dragOffset: CGFloat = 0
     @State private var didNotifyDragBegan = false
-    #endif
 
     var body: some View {
         HStack(spacing: Self.iconSpacing) {
@@ -39,9 +37,6 @@ struct ToastCardView: View {
                 }
             }
 
-            #if os(macOS)
-            Spacer(minLength: 0)
-            #endif
 
             // Action button (if present)
             if let action = toast.action {
@@ -49,9 +44,6 @@ struct ToastCardView: View {
             }
 
             // Dismiss button (macOS only - iOS uses swipe)
-            #if os(macOS)
-            dismissButton
-            #endif
         }
         .padding(.horizontal, Self.horizontalPadding)
         .padding(.vertical, 12)
@@ -59,13 +51,11 @@ struct ToastCardView: View {
         .glassBackground(.regular, in: .capsule, fallback: .regularMaterial)
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .scaleEffect(isAnimating ? 1 : 0.9)
-        #if os(iOS)
         .compositingGroup()
         .opacity(Double(1 - min(abs(min(dragOffset, 0)) / 120, 1)))
         .offset(y: min(dragOffset, 0))
         .contentShape(Capsule())
         .simultaneousGesture(swipeGesture)
-        #endif
         .onAppear {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 isAnimating = true
@@ -73,7 +63,6 @@ struct ToastCardView: View {
         }
     }
 
-    #if os(iOS)
     private var swipeGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -106,7 +95,6 @@ struct ToastCardView: View {
                 }
             }
     }
-    #endif
 
     @ViewBuilder
     private var leadingIcon: some View {
@@ -121,36 +109,22 @@ struct ToastCardView: View {
                 // Show spinner for loading/remoteControl when no icon is set
                 ProgressView()
                     .controlSize(.small)
-                    #if os(iOS) || os(macOS)
                     .tint(.primary)
-                    #endif
             }
         }
         .frame(width: Self.iconSize, height: Self.iconSize)
     }
 
     private static var iconSpacing: CGFloat {
-        #if os(tvOS)
-        20
-        #else
         12
-        #endif
     }
 
     private static var horizontalPadding: CGFloat {
-        #if os(tvOS)
-        20
-        #else
         16
-        #endif
     }
 
     private static var iconSize: CGFloat {
-        #if os(tvOS)
-        32
-        #else
         22
-        #endif
     }
 
     @ViewBuilder
@@ -178,18 +152,6 @@ struct ToastCardView: View {
         .buttonStyle(.plain)
     }
 
-    #if os(macOS)
-    private var dismissButton: some View {
-        Button {
-            onDismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-    }
-    #endif
 }
 
 // MARK: - Preview

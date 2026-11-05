@@ -34,70 +34,9 @@ struct ViewOptionsSheet: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        tvOSContent
-        #else
         formContent
-        #endif
     }
 
-    #if os(tvOS)
-    private var tvOSContent: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Picker(selection: $layout) {
-                        ForEach(VideoListLayout.allCases, id: \.self) { option in
-                            Label(option.displayName, systemImage: option.systemImage)
-                                .tag(option)
-                        }
-                    } label: {
-                        Text("viewOptions.layout")
-                    }
-                    .pickerStyle(.segmented)
-
-                    if layout == .list {
-                        PlatformMenuPicker(String(localized: "viewOptions.rowSize"), selection: $rowStyle) {
-                            Text("viewOptions.rowSize.compact").tag(VideoRowStyle.compact)
-                            Text("viewOptions.rowSize.regular").tag(VideoRowStyle.regular)
-                            Text("viewOptions.rowSize.large").tag(VideoRowStyle.large)
-                        }
-                    }
-
-                    if layout == .grid {
-                        Picker("viewOptions.columns.header", selection: $gridColumns) {
-                            ForEach(GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, maxGridColumns), id: \.self) { count in
-                                Text("\(count)").tag(count)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-
-                    if let hideWatched = hideWatched {
-                        Toggle("viewOptions.hideWatched", isOn: hideWatched)
-                    }
-
-                    if let hideShorts = hideShorts {
-                        Toggle("viewOptions.hideShorts", isOn: hideShorts)
-                    }
-
-                    if let channelStripSize = channelStripSize {
-                        PlatformMenuPicker(String(localized: "viewOptions.channelStrip"), selection: channelStripSize) {
-                            ForEach(ChannelStripSize.allCases, id: \.self) { size in
-                                Text(size.displayName).tag(size)
-                            }
-                        }
-                    }
-                }
-            }
-            .scrollClipDisabled()
-            .padding(.horizontal, 40)
-            .padding(.vertical, 24)
-        }
-        .presentationDetents([.height(360), .large])
-        .presentationDragIndicator(.visible)
-    }
-    #endif
 
     private var formContent: some View {
         Form {
@@ -127,19 +66,11 @@ struct ViewOptionsSheet: View {
 
                 // Grid-specific options
                 if layout == .grid {
-                    #if os(tvOS)
-                    Picker("viewOptions.columns.header", selection: $gridColumns) {
-                        ForEach(GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, maxGridColumns), id: \.self) { count in
-                            Text("\(count)").tag(count)
-                        }
-                    }
-                    #else
                     Stepper(
                         "viewOptions.columns \(effectiveColumns)",
                         value: $gridColumns,
                         in: GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, maxGridColumns)
                     )
-                    #endif
                 }
 
                 // Filters (optional)
@@ -161,14 +92,8 @@ struct ViewOptionsSheet: View {
                 }
             }
         }
-        #if os(iOS)
         .presentationDetents([.height(260)])
         .presentationDragIndicator(.visible)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .frame(width: 300)
-        #endif
     }
 }
 

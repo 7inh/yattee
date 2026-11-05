@@ -22,9 +22,7 @@ struct ContributorsView: View {
         content
             .opaqueWindowBackground()
             .navigationTitle(String(localized: "settings.contributors.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .task {
                 await loadContributors()
             }
@@ -128,9 +126,6 @@ struct ContributorsView: View {
             }
             .contentShape(Rectangle())
         }
-        #if os(macOS)
-        .buttonStyle(.plain)
-        #endif
     }
 
     // MARK: - Data Loading

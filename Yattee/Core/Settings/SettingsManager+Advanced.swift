@@ -2,7 +2,7 @@
 //  SettingsManager+Advanced.swift
 //  Yattee
 //
-//  Advanced settings: debug, MPV, floating panel.
+//  Advanced settings: debug, player, floating panel.
 //
 
 import Foundation
@@ -36,33 +36,6 @@ extension SettingsManager {
         set {
             _showPlayerAreaDebug = newValue
             set(newValue, for: .showPlayerAreaDebug)
-        }
-    }
-
-    /// Whether to show the Debug button in the tvOS player bottom controls.
-    /// Opens the MPV debug overlay. Default is false (hidden).
-    var showTVDebugButton: Bool {
-        get {
-            if let cached = _showTVDebugButton { return cached }
-            return bool(for: .showTVDebugButton, default: false)
-        }
-        set {
-            _showTVDebugButton = newValue
-            set(newValue, for: .showTVDebugButton)
-        }
-    }
-
-    /// Whether verbose MPV rendering logging is enabled.
-    /// When enabled, logs detailed OpenGL context, framebuffer, and display link state
-    /// to help diagnose rendering issues. Default is false (disabled).
-    var verboseMPVLogging: Bool {
-        get {
-            if let cached = _verboseMPVLogging { return cached }
-            return bool(for: .verboseMPVLogging, default: false)
-        }
-        set {
-            _verboseMPVLogging = newValue
-            set(newValue, for: .verboseMPVLogging)
         }
     }
 
@@ -111,111 +84,6 @@ extension SettingsManager {
     /// Minimum buffer time in seconds before video playback starts.
     /// Higher values reduce initial stuttering but increase startup delay.
     /// Default is 3.0 seconds.
-    static let defaultMpvBufferSeconds: Double = 3.0
-
-    var mpvBufferSeconds: Double {
-        get {
-            if let cached = _mpvBufferSeconds { return cached }
-            let value = double(for: .mpvBufferSeconds)
-            return value > 0 ? value : Self.defaultMpvBufferSeconds
-        }
-        set {
-            _mpvBufferSeconds = newValue
-            set(newValue, for: .mpvBufferSeconds)
-        }
-    }
-
-    /// Whether to use EDL combined streams for separate video/audio.
-    /// When enabled, video and audio streams are combined into a single EDL URL
-    /// for unified caching and better A/V synchronization.
-    /// When disabled, falls back to loading video first then adding audio via audio-add.
-    /// Default is false (disabled) due to EDL demuxer issues with backward seeking.
-    var mpvUseEDLStreams: Bool {
-        get {
-            if let cached = _mpvUseEDLStreams { return cached }
-            return bool(for: .mpvUseEDLStreams, default: false)
-        }
-        set {
-            _mpvUseEDLStreams = newValue
-            set(newValue, for: .mpvUseEDLStreams)
-        }
-    }
-
-    /// Whether tvOS should request the Apple TV switch its HDMI output to match the
-    /// playing video's frame rate. Has no effect unless the user also enables
-    /// "Match Content → Frame Rate" in tvOS Settings → Video and Audio.
-    /// Default is true on tvOS (no-op on other platforms).
-    var tvMatchDisplayFrameRate: Bool {
-        get {
-            if let cached = _tvMatchDisplayFrameRate { return cached }
-            return bool(for: .tvMatchDisplayFrameRate, default: false)
-        }
-        set {
-            _tvMatchDisplayFrameRate = newValue
-            set(newValue, for: .tvMatchDisplayFrameRate)
-        }
-    }
-
-    /// Fixed audio-pipeline offset (in milliseconds) applied as MPV's `audio-delay`
-    /// on tvOS. Useful for compensating fixed HDMI/AVR output latency where MPV's
-    /// internal `avsync` reads 0 but audio is perceptibly ahead/behind video.
-    /// Positive values shift audio later; negative values shift it earlier.
-    /// Default is 0 (no offset). Setting is local-only and tvOS-only.
-    var tvAudioDelayMs: Double {
-        get {
-            if let cached = _tvAudioDelayMs { return cached }
-            let raw = localDefaults.object(forKey: "tvAudioDelayMs") as? Double
-            return raw ?? 0
-        }
-        set {
-            _tvAudioDelayMs = newValue
-            localDefaults.set(newValue, forKey: "tvAudioDelayMs")
-        }
-    }
-
-    /// Read tvOS audio-delay setting from a nonisolated context (e.g. MPVClient init).
-    /// Returns milliseconds; convert to seconds before passing to MPV.
-    nonisolated static func tvAudioDelayMsSync() -> Double {
-        guard UserDefaults.standard.object(forKey: "tvAudioDelayMs") != nil else { return 0 }
-        return UserDefaults.standard.double(forKey: "tvAudioDelayMs")
-    }
-
-    /// MPV `video-sync` mode override for tvOS (debug toggle). The shipped default
-    /// remains `display-vdrop`; this is exposed so we can A/B alternative modes on
-    /// real hardware when investigating A/V sync issues.
-    var tvVideoSyncMode: TVVideoSyncMode {
-        get {
-            if let cached = _tvVideoSyncMode { return cached }
-            guard let raw = localDefaults.string(forKey: "tvVideoSyncMode"),
-                  let mode = TVVideoSyncMode(rawValue: raw) else { return .displayVdrop }
-            return mode
-        }
-        set {
-            _tvVideoSyncMode = newValue
-            localDefaults.set(newValue.rawValue, forKey: "tvVideoSyncMode")
-        }
-    }
-
-    nonisolated static func tvVideoSyncModeSync() -> TVVideoSyncMode {
-        guard let raw = UserDefaults.standard.string(forKey: "tvVideoSyncMode"),
-              let mode = TVVideoSyncMode(rawValue: raw) else { return .displayVdrop }
-        return mode
-    }
-
-    /// Whether tvOS should request the Apple TV switch its HDMI output to match the
-    /// playing video's dynamic range (SDR / HDR10 / HLG). Has no effect unless the
-    /// user also enables "Match Content → Dynamic Range" in tvOS Settings.
-    /// Default is true on tvOS (no-op on other platforms).
-    var tvMatchDisplayDynamicRange: Bool {
-        get {
-            if let cached = _tvMatchDisplayDynamicRange { return cached }
-            return bool(for: .tvMatchDisplayDynamicRange, default: false)
-        }
-        set {
-            _tvMatchDisplayDynamicRange = newValue
-            set(newValue, for: .tvMatchDisplayDynamicRange)
-        }
-    }
 
     /// Whether zoom navigation transitions are enabled (iOS only).
     /// When enabled, navigating to video/channel/playlist details shows a zoom animation
@@ -347,9 +215,6 @@ extension SettingsManager {
     /// Default is plain. Synced per-platform via iCloud.
     var listStyle: VideoListStyle {
         get {
-            #if os(tvOS)
-            return .plain
-            #else
             if let cached = _listStyle { return cached }
             guard let rawValue = string(for: .listStyle),
                   let style = VideoListStyle(rawValue: rawValue) else {
@@ -357,7 +222,6 @@ extension SettingsManager {
             }
             _listStyle = style
             return style
-            #endif
         }
         set {
             _listStyle = newValue
@@ -367,7 +231,6 @@ extension SettingsManager {
 
     // MARK: - Video Swipe Actions
 
-    #if !os(tvOS)
     /// Order of video swipe actions. Actions appear in this order from left to right.
     /// New actions are merged in at their default positions if not already present.
     var videoSwipeActionOrder: [VideoSwipeAction] {
@@ -437,5 +300,4 @@ extension SettingsManager {
     func visibleVideoSwipeActions() -> [VideoSwipeAction] {
         videoSwipeActionOrder.filter { videoSwipeActionVisibility[$0] ?? false }
     }
-    #endif
 }

@@ -21,43 +21,22 @@ struct MediaBrowserViewOptionsSheet: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        // Popover content: no navigation chrome, click-outside dismisses.
-        formContent
-            .formStyle(.grouped)
-            .frame(width: 300)
-            .onAppear {
-                // Reset sort order if current selection is not available for this source type
-                if !availableSortOptions.contains(sortOrder) {
-                    sortOrder = .name
-                }
-            }
-        #else
         NavigationStack {
-            #if os(tvOS)
-            listContent
-            #else
             formContent
                 .navigationTitle("mediaBrowser.viewOptions.title")
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     sheetCloseToolbarItem { dismiss() }
                 }
-            #endif
         }
-        #if os(iOS)
         .presentationDetents([.height(280)])
         .presentationDragIndicator(.visible)
-        #endif
         .onAppear {
             // Reset sort order if current selection is not available for this source type
             if !availableSortOptions.contains(sortOrder) {
                 sortOrder = .name
             }
         }
-        #endif
     }
 
     @ViewBuilder
@@ -81,18 +60,6 @@ struct MediaBrowserViewOptionsSheet: View {
         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
     }
 
-    #if os(tvOS)
-    private var listContent: some View {
-        List {
-            Section {
-                sharedOptions
-            }
-        }
-        .scrollClipDisabled()
-        .padding(.horizontal, 40)
-        .padding(.vertical, 24)
-    }
-    #endif
 
     private var formContent: some View {
         Form {

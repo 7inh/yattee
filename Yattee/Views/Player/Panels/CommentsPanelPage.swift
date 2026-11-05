@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct CommentsPanelPage: View {
     let context: PanelPageContext
@@ -36,5 +35,3 @@ struct CommentsPanelPage: View {
         }
     }
 }
-
-#endif

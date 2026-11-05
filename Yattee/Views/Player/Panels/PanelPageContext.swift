@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 // MARK: - Page Context
 
@@ -159,7 +158,6 @@ struct PanelPageScrollView<Content: View>: View {
                 }
             }
             .coordinateSpace(name: "panelPageScroll")
-            #if os(iOS)
             .background {
                 if config.onOverscrollDragChanged != nil || config.onOverscrollDragEnded != nil {
                     OverscrollGestureView(
@@ -173,7 +171,6 @@ struct PanelPageScrollView<Content: View>: View {
                     )
                 }
             }
-            #endif
             .scrollDisabled(config.isScrollDisabled)
             .onChange(of: config.scrollToTopTrigger) { _, _ in
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -191,5 +188,3 @@ struct PanelPageScrollView<Content: View>: View {
         }
     }
 }
-
-#endif

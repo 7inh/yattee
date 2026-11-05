@@ -54,10 +54,8 @@ struct VideoListContent<Content: View>: View {
 
         if listStyle == .inset {
             list
-                #if !os(tvOS)
                 .background(ListBackgroundStyle.card.color)
                 .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius))
-                #endif
                 .padding(.horizontal, cardHorizontalPadding)
                 .padding(.bottom, bottomPadding)
         } else {
@@ -95,9 +93,7 @@ struct VideoListContent<Content: View>: View {
             }
         }
     }
-    #if os(iOS)
     .background(Color(uiColor: .systemGroupedBackground))
-    #endif
 }
 
 #Preview("Plain Style") {

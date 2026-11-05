@@ -33,7 +33,6 @@ struct SourceTestResultSection: View {
 
 // MARK: - Folder Picker (iOS)
 
-#if os(iOS)
 import UniformTypeIdentifiers
 
 struct FolderPickerView: UIViewControllerRepresentable {
@@ -69,4 +68,3 @@ struct FolderPickerView: UIViewControllerRepresentable {
         }
     }
 }
-#endif

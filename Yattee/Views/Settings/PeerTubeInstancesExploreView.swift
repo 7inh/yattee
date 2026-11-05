@@ -66,18 +66,10 @@ struct PeerTubeInstancesExploreView: View {
 
     var body: some View {
         Group {
-            #if os(tvOS)
-            content
-                .onChange(of: searchText) { _, _ in
-                    displayLimit = pageSize
-                }
-            #else
             NavigationStack {
                 content
                     .navigationTitle(String(localized: "peertube.explore.title"))
-                    #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                    #endif
                     .toolbar { toolbarContent }
                     .searchable(text: $searchText, prompt: Text(String(localized: "peertube.explore.search")))
                     .onChange(of: searchText) { _, _ in
@@ -85,19 +77,13 @@ struct PeerTubeInstancesExploreView: View {
                         displayLimit = pageSize
                     }
             }
-            #endif
         }
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 400)
-        #endif
         .task {
             await loadAllInstances()
         }
-        #if !os(macOS)
         .sheet(isPresented: $showFiltersSheet) {
             filtersSheetContent
         }
-        #endif
     }
 
     private var filtersSheetContent: some View {
@@ -116,16 +102,7 @@ struct PeerTubeInstancesExploreView: View {
 
     @ViewBuilder
     private var content: some View {
-        #if os(tvOS)
-        VStack(spacing: 0) {
-            if !allInstances.isEmpty {
-                tvOSSearchHeader
-            }
-            contentBody
-        }
-        #else
         contentBody
-        #endif
     }
 
     @ViewBuilder
@@ -153,17 +130,6 @@ struct PeerTubeInstancesExploreView: View {
             } description: {
                 Text(String(localized: "peertube.explore.noResults.description"))
             } actions: {
-                #if os(tvOS)
-                // With nothing loaded the search header is hidden too, so
-                // without this the remote would have nothing to focus.
-                if allInstances.isEmpty {
-                    Button(String(localized: "common.retry")) {
-                        Task {
-                            await loadAllInstances()
-                        }
-                    }
-                }
-                #endif
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -171,32 +137,6 @@ struct PeerTubeInstancesExploreView: View {
         }
     }
 
-    #if os(tvOS)
-    @ViewBuilder
-    private var tvOSSearchHeader: some View {
-        HStack(spacing: 16) {
-            TextField(
-                "",
-                text: $searchText,
-                prompt: Text(String(localized: "peertube.explore.search"))
-            )
-            .textFieldStyle(.plain)
-            .focusSection()
-
-            Button {
-                showFiltersSheet = true
-            } label: {
-                Label(
-                    String(localized: "peertube.explore.filters"),
-                    systemImage: filters.isDefault ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
-                )
-            }
-            .focusSection()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-    #endif
 
     private var instancesList: some View {
         List {
@@ -232,17 +172,8 @@ struct PeerTubeInstancesExploreView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        #if !os(tvOS)
         sheetCloseToolbarItem { dismiss() }
-        #endif
 
-        #if os(macOS)
-        // Pin the trailing group (search field + toolbar buttons) to the right edge,
-        // matching the global Search view.
-        if #available(macOS 26, *) {
-            ToolbarSpacer(.flexible, placement: .primaryAction)
-        }
-        #endif
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showFiltersSheet = true
@@ -252,11 +183,6 @@ struct PeerTubeInstancesExploreView: View {
                     systemImage: filters.isDefault ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
                 )
             }
-            #if os(macOS)
-            .popover(isPresented: $showFiltersSheet, arrowEdge: .bottom) {
-                filtersSheetContent
-            }
-            #endif
         }
     }
 

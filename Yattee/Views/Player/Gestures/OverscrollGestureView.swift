@@ -6,7 +6,6 @@
 //  Place this as a background on a SwiftUI ScrollView to intercept pull-down overscroll gestures.
 //
 
-#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -165,4 +164,3 @@ struct OverscrollGestureView: UIViewRepresentable {
         }
     }
 }
-#endif

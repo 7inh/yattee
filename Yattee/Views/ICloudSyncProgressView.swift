@@ -29,9 +29,6 @@ struct ICloudSyncProgressView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 260)
-        #endif
         .interactiveDismissDisabled()
     }
 

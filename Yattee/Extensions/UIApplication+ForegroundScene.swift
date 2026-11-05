@@ -7,7 +7,6 @@
 //  Duo it can be the other panel's scene, and it ignores which one is active.
 //
 
-#if canImport(UIKit)
 import UIKit
 
 extension UIApplication {
@@ -27,4 +26,3 @@ extension UIApplication {
         return scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
     }
 }
-#endif

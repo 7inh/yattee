@@ -7,7 +7,6 @@
 
 import Foundation
 
-#if !os(tvOS)
 
 extension DownloadManager {
     // MARK: - Storage Management
@@ -275,5 +274,3 @@ extension DownloadManager {
         return formatter.string(fromByteCount: bytes)
     }
 }
-
-#endif

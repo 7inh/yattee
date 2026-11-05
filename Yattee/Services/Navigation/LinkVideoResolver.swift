@@ -47,7 +47,7 @@ struct LinkVideoResolver {
             if destination == nil, router.isYouTubeHost(url.host) {
                 throw LinkResolveError.unsupportedYouTubeLink
             }
-            // A file mpv plays as-is needs no extraction, no captions/storyboards
+            // A file player plays as-is needs no extraction, no captions/storyboards
             if let probe = await DirectMediaProbe.probe(url) {
                 let video = DirectMediaHelper.createVideo(from: url, probe: probe)
                 let stream = DirectMediaHelper.createStream(from: url, probe: probe)
@@ -163,7 +163,6 @@ struct LinkVideoResolver {
         return try await appEnvironment.contentService.playlist(id: playlistID.playlistID, instance: instance)
     }
 
-    #if !os(tvOS)
     /// Enqueues a single video for download with already-fetched streams.
     func enqueueDownload(
         video: Video,
@@ -306,7 +305,6 @@ struct LinkVideoResolver {
         }
         return nil
     }
-    #endif
 }
 
 // MARK: - Errors

@@ -45,11 +45,7 @@ struct QueueItemRow: View {
                     cornerRadius: 6,
                     duration: queuedVideo.video.formattedDuration
                 )
-                #if os(tvOS)
-                .frame(width: 160, height: 90)
-                #else
                 .frame(width: 80, height: 45)
-                #endif
                 .opacity(isCurrentlyPlaying ? 0.6 : 1.0)
 
                 // Video info
@@ -71,7 +67,6 @@ struct QueueItemRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        #if os(iOS)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onRemove()
@@ -79,7 +74,6 @@ struct QueueItemRow: View {
                 Label(String(localized: "queue.item.remove"), systemImage: "trash")
             }
         }
-        #endif
         .opacity(isCurrentlyPlaying ? 0.8 : 1.0)
     }
 }

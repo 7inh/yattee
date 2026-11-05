@@ -17,9 +17,7 @@ struct DeviceCapabilitiesView: View {
             effectiveSettingsSection
         }
         .navigationTitle(String(localized: "settings.deviceCapabilities.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     // MARK: - Hardware Decoding Section

@@ -12,10 +12,6 @@ struct ManageChannelsView: View {
     @Namespace private var sheetTransition
     @State private var channels: [Channel] = []
     @State private var showViewOptions = false
-    #if os(macOS)
-    @State private var showSubscriptionsData = false
-    @State private var pendingSubscriptionsData = false
-    #endif
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var notificationStates: [String: Bool] = [:]
@@ -23,11 +19,7 @@ struct ManageChannelsView: View {
     // View options (persisted)
     @AppStorage("manageChannelsLayout") private var layout: VideoListLayout = .grid
     @AppStorage("manageChannelsRowStyle") private var rowStyle: VideoRowStyle = .regular
-    #if os(macOS) || os(tvOS)
-    @AppStorage("manageChannelsGridColumns") private var gridColumns = 5
-    #else
     @AppStorage("manageChannelsGridColumns") private var gridColumns = 3
-    #endif
     @AppStorage("manageChannelsSortOrder") private var sortOrder: SidebarChannelSort = .alphabetical
 
     @State private var subscriptionMetadata: [String: Subscription] = [:]
@@ -65,20 +57,11 @@ struct ManageChannelsView: View {
 
                 // Grid-specific options
                 if layout == .grid {
-                    #if os(tvOS)
-                    Picker("viewOptions.columns.header", selection: $gridColumns) {
-                        ForEach(GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, gridConfig.maxColumns), id: \.self) { count in
-                            Text("\(count)").tag(count)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    #else
                     Stepper(
                         "viewOptions.columns \(min(max(GridConstants.minAllowedColumns, gridColumns), gridConfig.maxColumns))",
                         value: $gridColumns,
                         in: GridConstants.minAllowedColumns...max(GridConstants.minAllowedColumns, gridConfig.maxColumns)
                     )
-                    #endif
                 }
 
                 PlatformMenuPicker(String(localized: "manageChannels.sortBy"), selection: $sortOrder) {
@@ -88,17 +71,6 @@ struct ManageChannelsView: View {
                 }
             }
 
-            #if os(macOS)
-            // Subscriptions Data (opens as a sheet; popovers can't push)
-            Section {
-                Button {
-                    pendingSubscriptionsData = true
-                    showViewOptions = false
-                } label: {
-                    Label(String(localized: "manageChannels.subscriptionsData"), systemImage: "person.2.badge.gearshape")
-                }
-            }
-            #elseif os(iOS)
             // Subscriptions Data navigation link
             Section {
                 NavigationLink {
@@ -107,21 +79,9 @@ struct ManageChannelsView: View {
                     Label(String(localized: "manageChannels.subscriptionsData"), systemImage: "person.2.badge.gearshape")
                 }
             }
-            #endif
         }
     }
 
-    #if os(macOS)
-    private var subscriptionsDataSheet: some View {
-        NavigationStack {
-            SubscriptionsSettingsView()
-                .toolbar {
-                    sheetCloseToolbarItem { showSubscriptionsData = false }
-                }
-        }
-        .frame(minWidth: 500, minHeight: 450)
-    }
-    #endif
 
     // Grid layout configuration
     @State private var viewWidth: CGFloat = 0
@@ -174,42 +134,20 @@ struct ManageChannelsView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
-            #if os(tvOS)
-            VStack(spacing: 0) {
-                tvOSHeader
-                stateContent
-            }
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            #else
             stateContent
                 .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                     viewWidth = newWidth
                 }
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "subscriptions.channels.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $searchText, prompt: Text(String(localized: "channels.search.placeholder")))
         .toolbar {
-            #if os(macOS)
-            // Pin the trailing group (search field + toolbar buttons) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
                     showViewOptions = true
@@ -217,48 +155,18 @@ struct ManageChannelsView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "manageChannelsViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsForm
-                        .padding()
-                        .frame(width: 300)
-                        .onDisappear {
-                            // Present the sheet only after the popover is gone,
-                            // otherwise the presentation is swallowed.
-                            if pendingSubscriptionsData {
-                                pendingSubscriptionsData = false
-                                showSubscriptionsData = true
-                            }
-                        }
-                }
-                #endif
             }
         }
-        #endif
-        #if os(macOS)
-        .sheet(isPresented: $showSubscriptionsData) {
-            subscriptionsDataSheet
-        }
-        #else
         .sheet(isPresented: $showViewOptions) {
             NavigationStack {
                 viewOptionsForm
-                #if os(tvOS)
-                .scrollClipDisabled()
-                .padding(.horizontal, 40)
-                .padding(.vertical, 24)
-                #else
                 .navigationTitle(String(localized: "manageChannels.viewOptions.title"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
-                #endif
             }
             .presentationDetents([.height(360), .large])
             .presentationDragIndicator(.visible)
             .liquidGlassSheetContent(sourceID: "manageChannelsViewOptions", in: sheetTransition)
         }
-        #endif
         .onAppear {
             if let syncChannels = subscriptionService?.fetchSubscriptionsSync() {
                 channels = syncChannels
@@ -312,30 +220,9 @@ struct ManageChannelsView: View {
         }
     }
 
-    #if os(tvOS)
-    /// Header rendered above every state on tvOS so focus always has a target.
-    @ViewBuilder
-    private var tvOSHeader: some View {
-        HStack(spacing: 24) {
-            TextField("search.channels.placeholder", text: $searchText)
-                .textFieldStyle(.plain)
-
-            Button {
-                showViewOptions = true
-            } label: {
-                Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-            }
-        }
-        .focusSection()
-        .padding(.horizontal, 48)
-        .padding(.top, 20)
-        .padding(.bottom, 20)
-    }
-    #endif
 
     @ViewBuilder
     private var channelsView: some View {
-        #if os(tvOS)
         Group {
             if filteredChannels.isEmpty {
                 ContentUnavailableView.search(text: searchText)
@@ -349,22 +236,6 @@ struct ManageChannelsView: View {
                 }
             }
         }
-        .focusSection()
-        #else
-        Group {
-            if filteredChannels.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                switch layout {
-                case .list:
-                    listContent
-                case .grid:
-                    gridContent
-                }
-            }
-        }
-        #endif
     }
 
     private var listContent: some View {

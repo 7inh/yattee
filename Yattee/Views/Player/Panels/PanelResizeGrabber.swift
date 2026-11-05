@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 /// A draggable handle for resizing the panel width.
 struct PanelResizeGrabber: View {
@@ -39,9 +38,6 @@ struct PanelResizeGrabber: View {
     @State private var isDragging = false
     @State private var dragStartWidth: CGFloat? = nil
     @State private var dragStartLocation: CGFloat? = nil
-    #if os(macOS)
-    @State private var isHovering = false
-    #endif
 
     /// Width of the grabber hit area
     static let grabberHitWidth: CGFloat = 20
@@ -69,7 +65,6 @@ struct PanelResizeGrabber: View {
                     .frame(width: 4, height: 36)
             }
             .gesture(dragGesture)
-            #if os(iOS)
             // Publish the strip frame (with slop) so the window-level dismiss
             // pan never begins from a resize drag — a diagonal start would
             // otherwise cancel the resize and dismiss the player instead
@@ -85,18 +80,6 @@ struct PanelResizeGrabber: View {
                         }
                 }
             }
-            #endif
-            #if os(macOS)
-            .onHover { hovering in
-                isHovering = hovering
-                isDragActive = hovering || isDragging
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            #endif
             .animation(.easeInOut(duration: 0.15), value: isDragging)
     }
 
@@ -144,13 +127,7 @@ struct PanelResizeGrabber: View {
                 dragStartWidth = nil
                 dragStartLocation = nil
                 isDragging = false
-                #if os(macOS)
-                isDragActive = isHovering
-                #else
                 isDragActive = false
-                #endif
             }
     }
 }
-
-#endif

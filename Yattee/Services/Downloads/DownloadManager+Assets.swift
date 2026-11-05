@@ -7,7 +7,6 @@
 
 import Foundation
 
-#if !os(tvOS)
 
 extension DownloadManager {
     // MARK: - Storyboard Download
@@ -464,5 +463,3 @@ extension DownloadManager {
             .replacingOccurrences(of: "\\", with: "_")
     }
 }
-
-#endif

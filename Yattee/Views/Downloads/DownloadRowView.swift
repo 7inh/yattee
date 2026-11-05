@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 /// Row view for displaying a download item.
 /// Automatically handles DeArrow integration.
 /// For completed downloads, uses VideoRowView with tap zone support (thumbnail plays, text opens info).
@@ -192,7 +191,6 @@ struct DownloadRowView: View {
         .contentShape(Rectangle())
     }
 
-    #if os(iOS)
     private var isWaitingForWiFi: Bool {
         guard let settings = appEnvironment?.downloadSettings,
               let connectivity = appEnvironment?.connectivityMonitor else {
@@ -200,13 +198,11 @@ struct DownloadRowView: View {
         }
         return !settings.allowCellularDownloads && connectivity.isCellular
     }
-    #endif
 
     @ViewBuilder
     private var activeDownloadStatusView: some View {
         switch download.status {
         case .queued:
-            #if os(iOS)
             if isWaitingForWiFi {
                 Label(String(localized: "downloads.status.waitingForWiFi"), systemImage: "wifi")
                     .font(.caption)
@@ -216,22 +212,13 @@ struct DownloadRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            #else
-            Label(String(localized: "downloads.status.queued"), systemImage: "clock")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            #endif
 
         case .downloading:
-            #if os(iOS)
             if isWaitingForWiFi {
                 waitingForWiFiProgressView
             } else {
                 streamProgressView
             }
-            #else
-            streamProgressView
-            #endif
 
         case .paused:
             Label(String(localized: "downloads.status.paused"), systemImage: "pause.circle")
@@ -248,7 +235,6 @@ struct DownloadRowView: View {
         }
     }
 
-    #if os(iOS)
     @ViewBuilder
     private var waitingForWiFiProgressView: some View {
         let hasAudio = download.audioStreamURL != nil
@@ -315,7 +301,6 @@ struct DownloadRowView: View {
             }
         }
     }
-    #endif
 
     @ViewBuilder
     private var streamProgressView: some View {
@@ -431,4 +416,3 @@ struct DownloadRowView: View {
 // MARK: - Preview
 // Note: Preview requires a Video object for Download initialization.
 // See DownloadsView.swift for usage examples.
-#endif

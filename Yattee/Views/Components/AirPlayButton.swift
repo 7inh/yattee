@@ -8,7 +8,6 @@
 import AVKit
 import SwiftUI
 
-#if os(iOS)
 import UIKit
 
 struct AirPlayButton: UIViewRepresentable {
@@ -25,17 +24,3 @@ struct AirPlayButton: UIViewRepresentable {
         uiView.tintColor = tintColor
     }
 }
-
-#elseif os(macOS)
-import AppKit
-
-struct AirPlayButton: NSViewRepresentable {
-    func makeNSView(context: Context) -> AVRoutePickerView {
-        let routePicker = AVRoutePickerView()
-        routePicker.isRoutePickerButtonBordered = false
-        return routePicker
-    }
-
-    func updateNSView(_ nsView: AVRoutePickerView, context: Context) {}
-}
-#endif

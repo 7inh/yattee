@@ -966,7 +966,6 @@ extension SettingsManager {
 
     // MARK: - Navigation Style
 
-    #if os(iOS)
     /// Whether screens that fit the sidebar (iPad, iPhone Duo inner screen)
     /// use it, or keep the tab bar. Default is automatic.
     var navigationStyle: NavigationStyle {
@@ -979,7 +978,6 @@ extension SettingsManager {
             set(newValue.rawValue, for: .navigationStyle)
         }
     }
-    #endif
 
     // MARK: - Startup Tab Settings
 

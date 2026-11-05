@@ -2,7 +2,7 @@
 //  DirectMediaProbe.swift
 //  Yattee
 //
-//  Decides whether an arbitrary http(s) URL serves a media file mpv can play
+//  Decides whether an arbitrary http(s) URL serves a media file player can play
 //  as-is, so the app can skip Yattee Server extraction for debrid/CDN download
 //  links whose path is an opaque ID (TorBox, Real-Debrid, presigned S3, …).
 //
@@ -28,7 +28,7 @@ enum DirectMediaProbe {
     // MARK: - Network
 
     /// Asks the server what it serves at `url` and returns a result when it is
-    /// something mpv can play directly. `nil` means "not obviously media",
+    /// something player can play directly. `nil` means "not obviously media",
     /// e.g. an HTML page, and the caller should try Yattee Server instead.
     static func probe(_ url: URL, session: URLSession = .shared) async -> DirectMediaProbeResult? {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
@@ -197,7 +197,7 @@ enum DirectMediaProbe {
         return .notMedia
     }
 
-    /// Types mpv plays straight from the network.
+    /// Types player plays straight from the network.
     static func isPlayableMediaType(_ type: String) -> Bool {
         if type.hasPrefix("video/") || type.hasPrefix("audio/") { return true }
         return [

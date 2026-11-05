@@ -11,7 +11,6 @@ import SwiftUI
 
 // MARK: - iOS Tab Bar Helpers
 
-#if os(iOS)
 private extension View {
     @ViewBuilder
     func sidebarBottomBarPill() -> some View {
@@ -55,11 +54,9 @@ extension MiniPlayerMinimizeBehavior {
     }
 }
 
-#endif
 
 // MARK: - iOS and macOS Implementation
 
-#if os(iOS) || os(macOS)
 /// Sidebar layout for iPad, the iPhone Duo inner screen and macOS: a
 /// split view with a list sidebar. SwiftUI's sidebarAdaptable TabView never
 /// shows a sidebar on iPhone idiom, so the split view is used on iOS too.
@@ -76,25 +73,20 @@ struct UnifiedTabView: View {
         return appEnvironment?.basicAuthCredentialsManager.basicAuthHeader(for: server)
     }
 
-    #if os(iOS)
     private var zoomTransitionsEnabled: Bool {
         appEnvironment?.settingsManager.zoomTransitionsEnabled ?? true
     }
-    #endif
 
-    #if os(iOS)
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     /// Global trailing edge of the sidebar column and leading edge of the split
     /// view, so the mini player can sit over the detail column.
     @State private var sidebarTrailingEdge: CGFloat = 0
     @State private var splitViewLeadingEdge: CGFloat = 0
     @State private var miniPlayerClearance: CGFloat = 0
-    #endif
 
     var body: some View {
         splitView
             .zoomTransitionNamespace(zoomTransition)
-            #if os(iOS)
             .zoomTransitionsEnabled(zoomTransitionsEnabled)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: {
                 splitViewLeadingEdge = $0
@@ -105,7 +97,6 @@ struct UnifiedTabView: View {
             // room for it through the environment.
             .overlay(alignment: .bottom) { miniPlayerOverlay }
             .environment(\.miniPlayerBottomClearance, miniPlayerClearance)
-            #endif
             .onAppear {
                 configureSidebarManager()
                 router.applyStartupTabIfNeeded(settingsManager?.effectiveStartupTabForSidebar() ?? .home)
@@ -121,7 +112,6 @@ struct UnifiedTabView: View {
 
     @ViewBuilder
     private var splitView: some View {
-        #if os(iOS)
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: {
@@ -130,13 +120,6 @@ struct UnifiedTabView: View {
         } detail: {
             detailForSelection
         }
-        #else
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detailForSelection
-        }
-        #endif
     }
 
     // MARK: - Visible Main Items
@@ -148,20 +131,6 @@ struct UnifiedTabView: View {
     // MARK: - Sidebar
 
     private var sidebar: some View {
-        #if os(macOS)
-        VStack(spacing: 0) {
-            sidebarList
-
-            if DataContextSwitcherVisibility.showsPickers(in: appEnvironment) {
-                Divider()
-                // The window has no toolbar of its own to hang this off, and the
-                // sidebar is the one chrome every tab shares.
-                DataContextSwitcherSettingsRow()
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-            }
-        }
-        #else
         sidebarList
             .safeAreaInset(edge: .bottom) {
                 if DataContextSwitcherVisibility.showsPickers(in: appEnvironment) {
@@ -175,7 +144,6 @@ struct UnifiedTabView: View {
                         .padding(.bottom, 8)
                 }
             }
-        #endif
     }
 
     private var sidebarList: some View {
@@ -274,11 +242,7 @@ struct UnifiedTabView: View {
             }
         case .settings:
             NavigationStack(path: router.path(for: .settings)) {
-                #if os(iOS)
                 SettingsView(showCloseButton: false).withNavigationDestinations()
-                #else
-                SettingsView().withNavigationDestinations()
-                #endif
             }
         case .openURL:
             NavigationStack(path: router.path(for: .openURL)) {
@@ -308,7 +272,6 @@ struct UnifiedTabView: View {
 
     private var settingsManager: SettingsManager? { appEnvironment?.settingsManager }
 
-    #if os(iOS)
     /// The split view has no tab bar to host the mini player as a bottom
     /// accessory, so it floats at the bottom of the detail column and pages
     /// reserve its height as bottom safe area: floating content such as the
@@ -337,290 +300,15 @@ struct UnifiedTabView: View {
         .padding(.leading, sidebarWidth)
         .animation(.spring(response: 0.3), value: hasActiveVideo)
     }
-    #endif
 }
 
 #Preview("Unified Tab View") {
     UnifiedTabView(router: NavigationRouter())
         .appEnvironment(.preview)
 }
-#endif
 
 // MARK: - tvOS Implementation
 
-#if os(tvOS)
-struct UnifiedTabView: View {
-    @Environment(\.appEnvironment) private var appEnvironment
-
-    let router: NavigationRouter
-
-    // Zoom transition namespace (local to this tab view)
-    @Namespace private var zoomTransition
-
-    private var shouldShowNowPlaying: Bool {
-        guard let state = appEnvironment?.playerService.state else { return false }
-        let isExpanded = appEnvironment?.navigationCoordinator.isPlayerExpanded ?? false
-        return state.currentVideo != nil && !isExpanded
-    }
-
-    private var yatteeServerAuthHeader: String? {
-        guard let server = appEnvironment?.instancesManager.enabledYatteeServerInstances.first else { return nil }
-        return appEnvironment?.basicAuthCredentialsManager.basicAuthHeader(for: server)
-    }
-
-    var body: some View {
-        @Bindable var router = router
-
-        TabView(selection: $router.selection) {
-            mainTabs
-            sidebarSections
-        }
-        .tabViewStyle(.sidebarAdaptable)
-        .zoomTransitionNamespace(zoomTransition)
-        .onAppear {
-            configureSidebarManager()
-            router.applyStartupTabIfNeeded(settingsManager?.effectiveStartupTabForSidebar() ?? .home)
-            ensureSelectionIsAvailable(visibleMainItems: visibleMainItems)
-        }
-        .onChange(of: router.selection) { oldValue, _ in
-            // Pop the previously-selected tab's stack to its root so its
-            // pushed views don't linger after the user picks another item.
-            // Before the remap, which may write the stack of `oldValue`.
-            router.popToRoot(oldValue)
-            ensureSelectionIsAvailable(visibleMainItems: visibleMainItems)
-            // Force any pushed TVSidebarDetailContainer (used by Settings
-            // sub-pages and similar detail screens) to dismiss. Without this,
-            // tvOS's sidebarAdaptable TabView leaves the previously-pushed
-            // detail visible until the user manually presses Menu.
-            NotificationCenter.default.post(name: .yatteeTVForcePopDetail, object: nil)
-        }
-        .onChange(of: sidebarManager.sortedSourceItems) { _, items in
-            leaveRemovedSource(remaining: items)
-        }
-    }
-
-    // MARK: - Visible Main Items
-
-    private var visibleMainItems: [SidebarMainItem] {
-        settingsManager?.visibleSidebarMainItems() ?? SidebarMainItem.defaultOrder
-    }
-
-    // MARK: - Tab Content Builders
-
-    @TabContentBuilder<SidebarItem>
-    private var mainTabs: some TabContent<SidebarItem> {
-        // Now Playing (only shown when video is playing and player collapsed)
-        if shouldShowNowPlaying,
-           let currentVideo = appEnvironment?.playerService.state.currentVideo {
-            Tab(value: SidebarItem.nowPlaying) {
-                Color.clear
-                    .onAppear {
-                        appEnvironment?.navigationCoordinator.expandPlayer()
-                        // Reset selection to prevent immediate re-trigger when player is collapsed
-                        router.select(.home)
-                    }
-            } label: {
-                Label("\(currentVideo.title)\n\(currentVideo.author.name)", systemImage: SidebarItem.nowPlaying.systemImage)
-            }
-        }
-
-        ForEach(visibleMainItems) { item in
-            mainTab(for: item)
-        }
-    }
-
-    @TabContentBuilder<SidebarItem>
-    private func mainTab(for item: SidebarMainItem) -> some TabContent<SidebarItem> {
-        switch item {
-        case .search:
-            Tab(value: SidebarItem.search, role: .search) {
-                NavigationStack(path: router.path(for: .search)) {
-                    SearchView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.search.title, systemImage: SidebarItem.search.systemImage)
-            }
-
-        case .home:
-            Tab(value: SidebarItem.home) {
-                NavigationStack(path: router.path(for: .home)) {
-                    HomeView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.home.title, systemImage: SidebarItem.home.systemImage)
-            }
-
-        case .subscriptions:
-            Tab(value: SidebarItem.subscriptionsFeed) {
-                NavigationStack(path: router.path(for: .subscriptionsFeed)) {
-                    SubscriptionsView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.subscriptionsFeed.title, systemImage: SidebarItem.subscriptionsFeed.systemImage)
-            }
-
-        case .bookmarks:
-            Tab(value: SidebarItem.bookmarks) {
-                NavigationStack(path: router.path(for: .bookmarks)) {
-                    BookmarksListView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.bookmarks.title, systemImage: SidebarItem.bookmarks.systemImage)
-            }
-
-        case .history:
-            Tab(value: SidebarItem.history) {
-                NavigationStack(path: router.path(for: .history)) {
-                    HistoryListView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.history.title, systemImage: SidebarItem.history.systemImage)
-            }
-
-        case .downloads:
-            // Downloads not available on tvOS
-            // This case won't be reached due to isAvailableOnCurrentPlatform filtering
-            Tab(value: SidebarItem.home) {
-                EmptyView()
-            }
-
-        case .channels:
-            Tab(value: SidebarItem.manageChannels) {
-                NavigationStack(path: router.path(for: .manageChannels)) {
-                    ManageChannelsView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.manageChannels.title, systemImage: SidebarItem.manageChannels.systemImage)
-            }
-
-        case .playlists:
-            Tab(value: SidebarItem.playlistsList) {
-                NavigationStack(path: router.path(for: .playlistsList)) {
-                    PlaylistsListView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.playlistsList.title, systemImage: SidebarItem.playlistsList.systemImage)
-            }
-
-        case .sources:
-            Tab(value: SidebarItem.sources) {
-                NavigationStack(path: router.path(for: .sources)) {
-                    MediaSourcesView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.sources.title, systemImage: SidebarItem.sources.systemImage)
-            }
-
-        case .settings:
-            Tab(value: SidebarItem.settings) {
-                NavigationStack(path: router.path(for: .settings)) {
-                    SettingsView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.settings.title, systemImage: SidebarItem.settings.systemImage)
-            }
-
-        case .openURL:
-            Tab(value: SidebarItem.openURL) {
-                NavigationStack(path: router.path(for: .openURL)) {
-                    TVSidebarDetailContainer(
-                        systemImage: SidebarItem.openURL.systemImage,
-                        title: SidebarItem.openURL.title
-                    ) {
-                        OpenLinkView()
-                    }
-                    .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.openURL.title, systemImage: SidebarItem.openURL.systemImage)
-            }
-
-        case .remoteControl:
-            Tab(value: SidebarItem.remoteControl) {
-                NavigationStack(path: router.path(for: .remoteControl)) {
-                    TVSidebarDetailContainer(
-                        systemImage: SidebarItem.remoteControl.systemImage,
-                        title: SidebarItem.remoteControl.title
-                    ) {
-                        RemoteControlContentView(navigationStyle: .link)
-                    }
-                    .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.remoteControl.title, systemImage: SidebarItem.remoteControl.systemImage)
-            }
-
-        case .continueWatching:
-            Tab(value: SidebarItem.continueWatching) {
-                NavigationStack(path: router.path(for: .continueWatching)) {
-                    ContinueWatchingView()
-                        .withNavigationDestinations()
-                }
-            } label: {
-                Label(SidebarItem.continueWatching.title, systemImage: SidebarItem.continueWatching.systemImage)
-            }
-        }
-    }
-
-    @TabContentBuilder<SidebarItem>
-    private var sidebarSections: some TabContent<SidebarItem> {
-        // Sources Section (shows configured instances and media sources)
-        if !sidebarManager.sortedSourceItems.isEmpty && (settingsManager?.sidebarSourcesEnabled ?? true) {
-            TabSection(String(localized: "sidebar.section.sources")) {
-                ForEach(sidebarManager.sortedSourceItems) { item in
-                    Tab(value: item) {
-                        sourceContent(for: item)
-                    } label: {
-                        Label(item.title, systemImage: item.systemImage)
-                    }
-                }
-            }
-        }
-
-        // Channels Section (shows subscribed channels)
-        if !sidebarManager.channelItems.isEmpty && (settingsManager?.sidebarChannelsEnabled ?? true) {
-            TabSection(String(localized: "sidebar.section.channels")) {
-                ForEach(sidebarManager.channelItems) { item in
-                    Tab(value: item) {
-                        channelContent(for: item)
-                    } label: {
-                        channelLabel(for: item)
-                    }
-                }
-            }
-        }
-
-        // Playlists Section
-        if !sidebarManager.playlistItems.isEmpty && (settingsManager?.sidebarPlaylistsEnabled ?? true) {
-            TabSection(String(localized: "sidebar.section.playlists")) {
-                ForEach(sidebarManager.playlistItems) { item in
-                    Tab(value: item) {
-                        playlistContent(for: item)
-                    } label: {
-                        playlistLabel(for: item)
-                    }
-                }
-            }
-        }
-    }
-
-    private var settingsManager: SettingsManager? { appEnvironment?.settingsManager }
-}
-
-#Preview("Unified Tab View - tvOS") {
-    UnifiedTabView(router: NavigationRouter())
-        .appEnvironment(.preview)
-}
-#endif
 
 // MARK: - Shared Helpers
 

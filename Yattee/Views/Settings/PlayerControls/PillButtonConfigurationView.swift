@@ -30,9 +30,7 @@ struct PillButtonConfigurationView: View {
                 }
             }
             .navigationTitle(config.buttonType.displayName)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .opaqueSettingsFormBackground()
             .onAppear {
                 syncFromConfiguration(config)
@@ -88,7 +86,6 @@ struct PillButtonConfigurationView: View {
                 updateSettings(.seek(SeekSettings(seconds: Int(seekSeconds), direction: newValue)))
             }
 
-            #if !os(tvOS)
             HStack {
                 Text(String(localized: "settings.playerControls.seek.seconds"))
                 Spacer()
@@ -104,7 +101,6 @@ struct PillButtonConfigurationView: View {
             .onChange(of: seekSeconds) { _, newValue in
                 updateSettings(.seek(SeekSettings(seconds: Int(newValue), direction: seekDirection)))
             }
-            #endif
 
             // Quick presets
             HStack {

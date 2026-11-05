@@ -8,7 +8,6 @@
 //  screen of the window hosting the controls.
 //
 
-#if os(iOS)
 
 import UIKit
 
@@ -32,5 +31,3 @@ enum PlayerBrightness {
         screen(for: hostScreen).brightness = value
     }
 }
-
-#endif

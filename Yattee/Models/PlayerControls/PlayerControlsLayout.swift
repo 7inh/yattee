@@ -132,7 +132,6 @@ struct PlayerControlsLayout: Codable, Hashable, Sendable {
                 settings: .slider(SliderSettings(sliderBehavior: .alwaysVisible))
             ),
             .defaultConfiguration(for: .airplay),
-            .defaultConfiguration(for: .mpvDebug),
             .defaultConfiguration(for: .close)
         ]
 

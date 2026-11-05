@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 
 /// Observable state for batch download operations.
 @Observable
@@ -253,5 +252,3 @@ extension View {
         modifier(BatchDownloadModifier(coordinator: coordinator))
     }
 }
-
-#endif

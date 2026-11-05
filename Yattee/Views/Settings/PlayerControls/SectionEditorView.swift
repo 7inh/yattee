@@ -32,7 +32,6 @@ struct SectionEditorView: View {
             .listRowBackground(Color.clear)
 
             // Orientation toggle; macOS has no portrait/landscape distinction
-            #if os(iOS)
             Picker(
                 String(localized: "settings.playerControls.previewOrientation"),
                 selection: $viewModel.isPreviewingLandscape
@@ -44,30 +43,8 @@ struct SectionEditorView: View {
             }
             .pickerStyle(.segmented)
             .listRowBackground(Color.clear)
-            #endif
 
             // The macOS bar draws a glass capsule whose appearance can be forced.
-            #if os(macOS)
-            if sectionType == .bottom {
-                Section {
-                    Picker(
-                        String(localized: "settings.playerControls.glassBackground", defaultValue: "Glass Background"),
-                        selection: $controlBarTheme
-                    ) {
-                        ForEach(ControlsTheme.allCases, id: \.self) { theme in
-                            Text(glassBackgroundLabel(for: theme)).tag(theme)
-                        }
-                    }
-                    .disabled(!viewModel.canEditActivePreset)
-                    .onChange(of: controlBarTheme) { _, newTheme in
-                        guard newTheme != viewModel.currentLayout.globalSettings.controlBarTheme else { return }
-                        viewModel.updateGlobalSettingsSync { $0.controlBarTheme = newTheme }
-                    }
-                } header: {
-                    Text(String(localized: "settings.playerControls.appearance"))
-                }
-            }
-            #endif
 
             // Added buttons
             Section {
@@ -143,14 +120,10 @@ struct SectionEditorView: View {
             }
         }
         .navigationTitle(sectionTitle)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .opaqueSettingsFormBackground()
         .toolbar {
-            #if os(iOS)
             EditButton()
-            #endif
         }
         .onAppear {
             syncFromViewModel()
@@ -201,27 +174,13 @@ struct SectionEditorView: View {
         viewModel.addButtonSync(buttonType, to: sectionType)
     }
 
-    #if os(macOS)
-    private func glassBackgroundLabel(for theme: ControlsTheme) -> String {
-        switch theme {
-        case .system:
-            return String(localized: "controls.theme.auto", defaultValue: "Auto")
-        case .light, .dark:
-            return theme.displayName
-        }
-    }
-    #endif
 
     private var sectionTitle: String {
         switch sectionType {
         case .top:
             return String(localized: "settings.playerControls.topButtons")
         case .bottom:
-            #if os(macOS)
-            return String(localized: "settings.playerControls.controlBar", defaultValue: "Control Bar")
-            #else
             return String(localized: "settings.playerControls.bottomButtons")
-            #endif
         }
     }
 }
@@ -240,13 +199,11 @@ private struct ButtonRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(configuration.buttonType.displayName)
 
-                #if os(iOS)
                 if configuration.visibilityMode != .both {
                     Text(configuration.visibilityMode.displayName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                #endif
             }
 
             Spacer()

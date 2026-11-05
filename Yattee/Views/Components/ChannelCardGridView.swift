@@ -23,11 +23,7 @@ struct ChannelCardGridView: View {
 
     /// Minimum height for channel name to reserve space for 2 lines
     private var titleMinHeight: CGFloat {
-        #if os(tvOS)
-        isCompact ? 56 : 80
-        #else
         isCompact ? 32 : 40
-        #endif
     }
 
     var body: some View {
@@ -80,10 +76,8 @@ struct ChannelCardGridView: View {
             .frame(maxWidth: .infinity)
         }
         .padding()
-        #if !os(tvOS)
             .background(.quaternary.opacity(0.3))
             .clipShape(RoundedRectangle(cornerRadius: 12))
-        #endif
         .contentShape(Rectangle())
     }
     

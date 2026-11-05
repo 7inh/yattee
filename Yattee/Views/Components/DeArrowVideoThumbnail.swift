@@ -45,7 +45,6 @@ struct DeArrowVideoThumbnail: View {
         return (videoURLs.first, Array(videoURLs.dropFirst()))
     }
 
-    #if !os(tvOS)
     private var downloadManager: DownloadManager? {
         appEnvironment?.downloadManager
     }
@@ -68,11 +67,6 @@ struct DeArrowVideoThumbnail: View {
     private var downloadProgressIndeterminate: Bool {
         downloadProgressInfo?.isIndeterminate ?? false
     }
-    #else
-    private var isDownloaded: Bool { false }
-    private var downloadProgress: Double? { nil }
-    private var downloadProgressIndeterminate: Bool { false }
-    #endif
 
     /// Title to show on placeholder while the thumbnail is loading or absent.
     private var placeholderTitle: String? {

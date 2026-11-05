@@ -7,7 +7,6 @@
 //  panel collapse animation.
 //
 
-#if os(iOS)
 import UIKit
 
 /// Coordinates overscroll detection on a UIScrollView, calling back during pull-down gestures
@@ -114,4 +113,3 @@ final class OverscrollGestureHandler: NSObject, UIGestureRecognizerDelegate {
         false
     }
 }
-#endif

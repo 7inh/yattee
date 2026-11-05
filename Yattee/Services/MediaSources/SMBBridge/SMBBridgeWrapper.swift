@@ -28,7 +28,7 @@ enum SMBBridgeError: Error, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .contextInitFailed:
-            return "Failed to initialize SMB context"
+            return "SMB sources are unavailable in the audio-only build"
         case .connectionFailed(let msg):
             return "SMB connection failed: \(msg)"
         case .listingFailed(let msg):
@@ -96,7 +96,7 @@ actor SMBBridgeContext {
         context = smb_init_context(wg, user, pass, protocolVersion.cValue)
 
         if context == nil {
-            LoggingService.shared.logMediaSourcesError("Failed to initialize SMB context")
+            LoggingService.shared.logMediaSourcesError("SMB sources are unavailable in the audio-only build")
             throw SMBBridgeError.contextInitFailed
         }
 

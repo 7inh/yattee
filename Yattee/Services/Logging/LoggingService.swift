@@ -29,7 +29,6 @@ enum LogLevel: String, Codable, CaseIterable, Sendable {
 enum LogCategory: String, Codable, CaseIterable, Sendable {
     case api = "API"
     case player = "Player"
-    case mpv = "MPV"
     case cloudKit = "CloudKit"
     case downloads = "Downloads"
     case navigation = "Navigation"
@@ -47,7 +46,6 @@ enum LogCategory: String, Codable, CaseIterable, Sendable {
         switch self {
         case .api: return "network"
         case .player: return "play.circle"
-        case .mpv: return "film"
         case .cloudKit: return "icloud"
         case .downloads: return "arrow.down.circle"
         case .navigation: return "arrow.triangle.turn.up.right.diamond"
@@ -356,26 +354,6 @@ extension LoggingService {
     /// Log a remote control debug message.
     nonisolated func logRemoteControlDebug(_ message: String, details: String? = nil) {
         debug(message, category: .remoteControl, details: details)
-    }
-
-    /// Log an MPV event.
-    nonisolated func logMPV(_ message: String, details: String? = nil) {
-        info(message, category: .mpv, details: details)
-    }
-
-    /// Log an MPV debug message.
-    nonisolated func logMPVDebug(_ message: String, details: String? = nil) {
-        debug(message, category: .mpv, details: details)
-    }
-
-    /// Log an MPV warning.
-    nonisolated func logMPVWarning(_ message: String, details: String? = nil) {
-        warning(message, category: .mpv, details: details)
-    }
-
-    /// Log an MPV error.
-    nonisolated func logMPVError(_ message: String, error: Error? = nil) {
-        self.error(message, category: .mpv, details: error?.localizedDescription)
     }
 
     // MARK: - Media Sources Logging

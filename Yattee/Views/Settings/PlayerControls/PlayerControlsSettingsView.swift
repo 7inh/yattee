@@ -22,9 +22,7 @@ struct PlayerControlsSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.playerControls.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .task {
             if viewModel == nil, let appEnv = appEnvironment {
                 let vm = PlayerControlsSettingsViewModel(
@@ -75,9 +73,7 @@ private struct PlayerControlsSettingsContent: View {
     var body: some View {
         Form {
             // The phone-shaped preview and comments pill don't apply to the macOS player.
-            #if os(iOS)
             PreviewSection(viewModel: viewModel, layout: previewLayout)
-            #endif
             PresetSection(
                 viewModel: viewModel,
                 trackedPresetName: $trackedActivePresetName,
@@ -90,15 +86,10 @@ private struct PlayerControlsSettingsContent: View {
                 fontStyle: $fontStyle
             )
             LayoutSectionsSection(viewModel: viewModel)
-            #if os(iOS)
             GesturesSectionsSection(viewModel: viewModel)
-            #endif
             SystemControlsSection(viewModel: viewModel)
             VolumeSection(viewModel: viewModel)
         }
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .id(refreshID)
         .alert(
@@ -244,7 +235,6 @@ private struct AppearanceSection: View {
     var body: some View {
         Section {
             // The macOS bar draws its own glass capsule; the per-button style has no effect there.
-            #if os(iOS)
             Picker(
                 String(localized: "settings.playerControls.style"),
                 selection: $style
@@ -258,7 +248,6 @@ private struct AppearanceSection: View {
                 guard newStyle != viewModel.currentLayout.globalSettings.style else { return }
                 viewModel.updateGlobalSettingsSync { $0.style = newStyle }
             }
-            #endif
 
             Picker(
                 String(localized: "settings.playerControls.buttonSize"),
@@ -321,17 +310,10 @@ private struct LayoutSectionsSection: View {
             NavigationLink {
                 CenterControlsSettingsView(viewModel: viewModel)
             } label: {
-                #if os(macOS)
-                Label(
-                    String(localized: "settings.playerControls.seekDurations", defaultValue: "Seek Durations"),
-                    systemImage: "arrow.trianglehead.clockwise"
-                )
-                #else
                 Label(
                     String(localized: "settings.playerControls.centerControls"),
                     systemImage: "play.circle"
                 )
-                #endif
             }
             .disabled(!viewModel.canEditActivePreset)
 
@@ -352,17 +334,10 @@ private struct LayoutSectionsSection: View {
                 )
             } label: {
                 HStack {
-                    #if os(macOS)
-                    Label(
-                        String(localized: "settings.playerControls.controlBar", defaultValue: "Control Bar"),
-                        systemImage: "rectangle.bottomthird.inset.filled"
-                    )
-                    #else
                     Label(
                         String(localized: "settings.playerControls.bottomButtons"),
                         systemImage: "rectangle.bottomthird.inset.filled"
                     )
-                    #endif
                     Spacer()
                     Text("\(viewModel.currentLayout.bottomSection.buttons.count)")
                         .foregroundStyle(.secondary)
@@ -371,7 +346,6 @@ private struct LayoutSectionsSection: View {
             .disabled(!viewModel.canEditActivePreset)
 
             // The player pill only exists in the iOS player.
-            #if os(iOS)
             NavigationLink {
                 PlayerPillEditorView(viewModel: viewModel)
             } label: {
@@ -386,7 +360,6 @@ private struct LayoutSectionsSection: View {
                 }
             }
             .disabled(!viewModel.canEditActivePreset)
-            #endif
 
             NavigationLink {
                 MiniPlayerEditorView(viewModel: viewModel)
@@ -399,7 +372,6 @@ private struct LayoutSectionsSection: View {
             .disabled(!viewModel.canEditActivePreset)
 
             // The details panel exists in the iOS and macOS players.
-            #if os(iOS) || os(macOS)
             NavigationLink {
                 PanelSettingsView(viewModel: viewModel)
             } label: {
@@ -414,7 +386,6 @@ private struct LayoutSectionsSection: View {
                 }
             }
             .disabled(!viewModel.canEditActivePreset)
-            #endif
         } header: {
             Text(String(localized: "settings.playerControls.layoutSections"))
         } footer: {
@@ -427,7 +398,6 @@ private struct LayoutSectionsSection: View {
 
 // MARK: - Gestures Sections Section (iOS only)
 
-#if os(iOS)
 private struct GesturesSectionsSection: View {
     @Bindable var viewModel: PlayerControlsSettingsViewModel
 
@@ -504,7 +474,6 @@ private struct GesturesSectionsSection: View {
         }
     }
 }
-#endif
 
 // MARK: - System Controls Section
 
@@ -585,7 +554,7 @@ private struct VolumeSection: View {
     @Bindable var viewModel: PlayerControlsSettingsViewModel
 
     // Local state for immediate UI updates
-    @State private var volumeMode: VolumeMode = .mpv
+    @State private var volumeMode: VolumeMode = .inApp
 
     var body: some View {
         Section {
@@ -602,7 +571,7 @@ private struct VolumeSection: View {
                 guard newMode != viewModel.volumeMode else { return }
                 viewModel.updateVolumeModeSync(newMode)
                 if newMode == .system {
-                    // Set MPV to 100% when switching to system mode
+                    // Set player to 100% when switching to system mode
                     appEnvironment?.playerService.currentBackend?.volume = 1.0
                     appEnvironment?.playerService.state.volume = 1.0
                 }
@@ -612,8 +581,8 @@ private struct VolumeSection: View {
         } header: {
             Text(String(localized: "settings.playback.volume.header"))
         } footer: {
-            if volumeMode == .mpv {
-                Text(String(localized: "settings.playback.volume.mpv.footer"))
+            if volumeMode == .inApp {
+                Text(String(localized: "settings.playback.volume.inApp.footer"))
             } else {
                 Text(String(localized: "settings.playback.volume.system.footer"))
             }

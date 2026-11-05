@@ -125,13 +125,7 @@ struct SidebarSettingsView: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        NavigationStack {
-            sidebarList
-        }
-        #else
         sidebarList
-        #endif
     }
 
     private var sidebarList: some View {
@@ -142,19 +136,10 @@ struct SidebarSettingsView: View {
             channelsSection
             playlistsSection
         }
-        #if os(iOS)
         .environment(\.editMode, .constant(.active))
-        #endif
-        #if os(macOS)
-        .listStyle(.inset)
-        #endif
         .opaqueSettingsFormBackground()
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.sidebar.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .onAppear {
             loadMainNavigationSettings()
         }
@@ -180,21 +165,6 @@ struct SidebarSettingsView: View {
 
     private var mainNavigationSection: some View {
         Section {
-            #if os(tvOS)
-            let availableItems = mainItemOrder.filter { $0.isAvailableOnCurrentPlatform }
-            ForEach(Array(availableItems.enumerated()), id: \.element.id) { index, item in
-                TVSidebarMainItemRow(
-                    icon: item.icon,
-                    title: item.localizedTitle,
-                    isRequired: item.isRequired,
-                    isVisible: mainItemBinding(for: item),
-                    canMoveUp: index > 0,
-                    canMoveDown: index < availableItems.count - 1,
-                    onMoveUp: { moveMainItem(at: index, direction: -1) },
-                    onMoveDown: { moveMainItem(at: index, direction: 1) }
-                )
-            }
-            #else
             ForEach(mainItemOrder.filter { $0.isAvailableOnCurrentPlatform }) { item in
                 SidebarMainItemRow(
                     icon: item.icon,
@@ -232,7 +202,6 @@ struct SidebarSettingsView: View {
                 // Save immediately
                 saveMainNavigationSettings()
             }
-            #endif
         } header: {
             Text(String(localized: "settings.sidebar.mainNavigation.header"))
         } footer: {
@@ -240,23 +209,6 @@ struct SidebarSettingsView: View {
         }
     }
 
-    #if os(tvOS)
-    private func moveMainItem(at index: Int, direction: Int) {
-        let available = mainItemOrder.filter { $0.isAvailableOnCurrentPlatform }
-        let newIndex = index + direction
-        guard index >= 0, index < available.count,
-              newIndex >= 0, newIndex < available.count else { return }
-
-        let movedItem = available[index]
-        let neighborItem = available[newIndex]
-
-        guard let fromActual = mainItemOrder.firstIndex(of: movedItem),
-              let toActual = mainItemOrder.firstIndex(of: neighborItem) else { return }
-
-        mainItemOrder.swapAt(fromActual, toActual)
-        saveMainNavigationSettings()
-    }
-    #endif
 
     private func mainItemBinding(for item: SidebarMainItem) -> Binding<Bool> {
         Binding(
@@ -318,18 +270,6 @@ struct SidebarSettingsView: View {
 
             // Max sources (only shown when limit is enabled)
             if sourcesLimitEnabledBinding.wrappedValue {
-                #if os(tvOS)
-                // tvOS uses Picker instead of Slider (Slider/Stepper unavailable)
-                PlatformMenuPicker(String(localized: "settings.sidebar.maxSources"), selection: maxSourcesBinding) {
-                    ForEach([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100], id: \.self) { value in
-                        Text("\(value)").tag(value)
-                    }
-                }
-                .disabled(!sourcesEnabledBinding.wrappedValue)
-                .onChange(of: maxSourcesBinding.wrappedValue) {
-                    notifySidebarSettingsChanged()
-                }
-                #else
                 // Max sources slider
                 HStack {
                     Text(String(localized: "settings.sidebar.maxSources"))
@@ -353,7 +293,6 @@ struct SidebarSettingsView: View {
                     }
                 }
                 .disabled(!sourcesEnabledBinding.wrappedValue)
-                #endif
             }
         } header: {
             Text(String(localized: "settings.sidebar.sources.header"))
@@ -390,18 +329,6 @@ struct SidebarSettingsView: View {
 
             // Max channels (only shown when limit is enabled)
             if channelsLimitEnabledBinding.wrappedValue {
-                #if os(tvOS)
-                // tvOS uses Picker instead of Slider (Slider/Stepper unavailable)
-                PlatformMenuPicker(String(localized: "settings.sidebar.maxChannels"), selection: maxChannelsBinding) {
-                    ForEach([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100], id: \.self) { value in
-                        Text("\(value)").tag(value)
-                    }
-                }
-                .disabled(!channelsEnabledBinding.wrappedValue)
-                .onChange(of: maxChannelsBinding.wrappedValue) {
-                    notifySidebarSettingsChanged()
-                }
-                #else
                 // Max channels slider
                 HStack {
                     Text(String(localized: "settings.sidebar.maxChannels"))
@@ -425,7 +352,6 @@ struct SidebarSettingsView: View {
                     }
                 }
                 .disabled(!channelsEnabledBinding.wrappedValue)
-                #endif
             }
         } header: {
             Text(String(localized: "settings.sidebar.channels.header"))
@@ -462,18 +388,6 @@ struct SidebarSettingsView: View {
 
             // Max playlists (only shown when limit is enabled)
             if playlistsLimitEnabledBinding.wrappedValue {
-                #if os(tvOS)
-                // tvOS uses Picker instead of Slider (Slider/Stepper unavailable)
-                PlatformMenuPicker(String(localized: "settings.sidebar.maxPlaylists"), selection: maxPlaylistsBinding) {
-                    ForEach([5, 10, 15, 20, 25, 30], id: \.self) { value in
-                        Text("\(value)").tag(value)
-                    }
-                }
-                .disabled(!playlistsEnabledBinding.wrappedValue)
-                .onChange(of: maxPlaylistsBinding.wrappedValue) {
-                    notifySidebarSettingsChanged()
-                }
-                #else
                 // Max playlists slider
                 HStack {
                     Text(String(localized: "settings.sidebar.maxPlaylists"))
@@ -497,7 +411,6 @@ struct SidebarSettingsView: View {
                     }
                 }
                 .disabled(!playlistsEnabledBinding.wrappedValue)
-                #endif
             }
         } header: {
             Text(String(localized: "settings.sidebar.playlists.header"))
@@ -537,78 +450,6 @@ private struct SidebarMainItemRow: View {
 
 // MARK: - tvOS Sidebar Main Item Row
 
-#if os(tvOS)
-private struct TVSidebarMainItemRow: View {
-    let icon: String
-    let title: String
-    let isRequired: Bool
-    @Binding var isVisible: Bool
-    let canMoveUp: Bool
-    let canMoveDown: Bool
-    let onMoveUp: () -> Void
-    let onMoveDown: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(spacing: 4) {
-                Button(action: onMoveUp) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption)
-                        .foregroundStyle(canMoveUp ? .primary : .tertiary)
-                        .frame(width: 30, height: 24)
-                }
-                .buttonStyle(TVSidebarCompactButtonStyle())
-                .disabled(!canMoveUp)
-
-                Button(action: onMoveDown) {
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(canMoveDown ? .primary : .tertiary)
-                        .frame(width: 30, height: 24)
-                }
-                .buttonStyle(TVSidebarCompactButtonStyle())
-                .disabled(!canMoveDown)
-            }
-
-            Button {
-                guard !isRequired else { return }
-                isVisible.toggle()
-            } label: {
-                HStack {
-                    Image(systemName: icon)
-                        .frame(width: 24)
-                        .foregroundStyle(.secondary)
-                    Text(title)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: isVisible ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isRequired ? .secondary : (isVisible ? .green : .secondary))
-                        .font(.title3)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(TVFormRowButtonStyle())
-            .disabled(isRequired)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct TVSidebarCompactButtonStyle: ButtonStyle {
-    @Environment(\.isFocused) private var isFocused
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isFocused ? Color.white.opacity(0.2) : Color.clear)
-            )
-            .scaleEffect(configuration.isPressed ? 0.9 : (isFocused ? 1.1 : 1.0))
-            .animation(.easeInOut(duration: 0.1), value: isFocused)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-#endif
 
 // MARK: - Preview
 

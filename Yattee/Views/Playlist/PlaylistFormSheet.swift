@@ -110,14 +110,9 @@ struct PlaylistFormSheet: View {
 
     var body: some View {
         NavigationStack {
-            #if os(tvOS)
-            tvOSContent
-            #else
             formContent
                 .navigationTitle(navigationTitle)
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: "common.cancel")) {
@@ -131,7 +126,6 @@ struct PlaylistFormSheet: View {
                         .disabled(!canSave)
                     }
                 }
-            #endif
         }
         .onAppear {
             switch mode {
@@ -149,17 +143,11 @@ struct PlaylistFormSheet: View {
                 prefilledPrivacy = privacy
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 400)
-        #endif
     }
 
     // MARK: - Form Content
 
-    #if !os(tvOS)
     private var formContent: some View {
         Form {
             Section {
@@ -168,12 +156,7 @@ struct PlaylistFormSheet: View {
                     text: $title,
                     prompt: Text(String(localized: "playlist.name"))
                 )
-                #if os(iOS)
                 .textInputAutocapitalization(.sentences)
-                #endif
-                #if os(macOS)
-                .labelsHidden()
-                #endif
             } header: {
                 Text(String(localized: "playlist.name"))
             }
@@ -208,80 +191,11 @@ struct PlaylistFormSheet: View {
                 }
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
     }
-    #endif
 
     // MARK: - tvOS Content
 
-    #if os(tvOS)
-    private var tvOSContent: some View {
-        VStack(spacing: 0) {
-            Text(navigationTitle)
-                .font(.title3)
-                .fontWeight(.semibold)
-                .lineLimit(1)
-                .padding(.top, 16)
-
-            Form {
-                Section {
-                    TVSettingsTextField(
-                        title: String(localized: "playlist.name"),
-                        text: $title
-                    )
-                } header: {
-                    Text(String(localized: "playlist.name"))
-                }
-
-                Section {
-                    TVSettingsTextField(
-                        title: String(localized: "playlist.description.placeholder"),
-                        text: $descriptionText
-                    )
-                } header: {
-                    Text(String(localized: "playlist.description"))
-                } footer: {
-                    HStack {
-                        Text(String(localized: "playlist.description.optional"))
-                        Spacer()
-                        Text(verbatim: "\(descriptionText.count)/\(maxDescriptionLength)")
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(.secondary)
-                }
-
-                if showsPrivacy {
-                    Section {
-                        privacyPicker
-                    } header: {
-                        Text(String(localized: "playlist.privacy"))
-                    } footer: {
-                        Text(privacyFooter)
-                    }
-                }
-
-                Section {
-                    Button(saveButtonTitle) {
-                        save()
-                    }
-                    .buttonStyle(TVToolbarButtonStyle())
-                    .lineLimit(1)
-                    .disabled(!canSave)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-                }
-            }
-            .scrollClipDisabled()
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-        }
-    }
-    #endif
 
     // MARK: - Privacy
 
@@ -303,9 +217,6 @@ struct PlaylistFormSheet: View {
                 Text(Self.label(for: option)).tag(option)
             }
         }
-        #if os(macOS)
-        .labelsHidden()
-        #endif
     }
 
     private static func label(for privacy: PlaylistPrivacy) -> String {

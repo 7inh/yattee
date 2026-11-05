@@ -36,11 +36,7 @@ enum PillVisibility: String, Codable, Hashable, Sendable, CaseIterable {
     /// and Split View windows make "portrait" mean "narrow" — so an
     /// orientation split never matches what the user sees.
     static var isOrientationAgnostic: Bool {
-        #if os(iOS)
         return UIDevice.current.userInterfaceIdiom == .pad
-        #else
-        return false
-        #endif
     }
 
     /// Whether the pill is enabled at all (any mode except `.never`).

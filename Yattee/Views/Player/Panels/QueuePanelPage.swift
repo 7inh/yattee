@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct QueuePanelPage: View {
     var settings: QueuePageSettings = QueuePageSettings()
@@ -22,5 +21,3 @@ struct QueuePanelPage: View {
         .panelListLeadingMargin()
     }
 }
-
-#endif

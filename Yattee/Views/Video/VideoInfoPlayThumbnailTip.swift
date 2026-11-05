@@ -7,7 +7,6 @@
 //  When the thumbnail is a carousel over the video's context, it also mentions swiping.
 //
 
-#if !os(tvOS)
 import SwiftUI
 import TipKit
 
@@ -56,4 +55,3 @@ struct VideoInfoPlayThumbnailTipModifier: ViewModifier {
         }
     }
 }
-#endif

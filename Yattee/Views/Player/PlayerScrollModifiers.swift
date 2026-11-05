@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 // MARK: - Scroll Offset Tracking Modifier
 
@@ -66,5 +65,3 @@ struct ScrollGeometryData: Equatable {
     let contentHeight: CGFloat
     let containerHeight: CGFloat
 }
-
-#endif

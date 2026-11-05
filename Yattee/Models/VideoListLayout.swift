@@ -33,20 +33,12 @@ enum VideoListLayout: String, CaseIterable {
 enum GridConstants {
     /// Minimum width for a video card thumbnail to remain usable.
     static let minCardWidth: CGFloat = {
-        #if os(tvOS)
-        200
-        #else
         100
-        #endif
     }()
 
     /// Spacing between grid items.
     static let spacing: CGFloat = {
-        #if os(tvOS)
-        48
-        #else
         12
-        #endif
     }()
 
     /// Horizontal padding for the grid container.
@@ -57,11 +49,7 @@ enum GridConstants {
 
     /// Minimum allowed columns. tvOS doesn't make sense with a single column.
     static let minAllowedColumns: Int = {
-        #if os(tvOS)
-        2
-        #else
         1
-        #endif
     }()
 
     /// Threshold for compact card styling (columns >= this use compact mode).

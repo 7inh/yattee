@@ -29,12 +29,8 @@ enum CloudKitAvailability {
     /// Extracts the entitlements dictionary from the embedded provisioning
     /// profile — a CMS blob wrapping an XML property list.
     private static func embeddedProvisioningEntitlements() -> [String: Any]? {
-        #if os(macOS)
-        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/embedded.provisionprofile")
-        #else
         guard let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") else { return nil }
         let url = URL(fileURLWithPath: path)
-        #endif
 
         guard let data = try? Data(contentsOf: url),
               let start = data.range(of: Data("<?xml".utf8)),

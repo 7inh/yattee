@@ -26,75 +26,12 @@ struct AddSourceView: View {
     @State private var hasLegacyAccountsToImport = false
 
     var body: some View {
-        #if os(iOS)
         NavigationStack {
             AddRemoteServerView(dismissSheet: dismiss)
                 .toolbar {
                     sheetCloseToolbarItem { dismiss() }
                 }
         }
-        #elseif os(tvOS)
-        listContent
-            .navigationDestination(isPresented: $navigateToWebDAV) {
-                TVSidebarDetailContainer(
-                    systemImage: "externaldrive.connected.to.line.below",
-                    title: String(localized: "sources.addWebDAV")
-                ) {
-                    AddWebDAVView(
-                        prefillURL: discoveredWebDAVURL,
-                        prefillName: discoveredName,
-                        prefillAllowInvalidCertificates: discoveredAllowInvalidCerts
-                    )
-                }
-            }
-            .navigationDestination(isPresented: $navigateToSMB) {
-                TVSidebarDetailContainer(
-                    systemImage: "server.rack",
-                    title: String(localized: "sources.addSMB")
-                ) {
-                    AddSMBView(
-                        prefillServer: discoveredSMBServer,
-                        prefillName: discoveredName
-                    )
-                }
-            }
-            .sheet(isPresented: $showingNetworkDiscovery) {
-                NetworkShareDiscoverySheet(filterType: selectedShareType) { share in
-                    handleSelectedShare(share)
-                }
-            }
-        #else
-        NavigationStack {
-            listContent
-                .navigationTitle(String(localized: "sources.newSource"))
-                .toolbar {
-                    sheetCloseToolbarItem { dismiss() }
-                }
-                .navigationDestination(isPresented: $navigateToWebDAV) {
-                    AddWebDAVView(
-                        prefillURL: discoveredWebDAVURL,
-                        prefillName: discoveredName,
-                        prefillAllowInvalidCertificates: discoveredAllowInvalidCerts,
-                        dismissSheet: dismiss
-                    )
-                }
-                .navigationDestination(isPresented: $navigateToSMB) {
-                    AddSMBView(
-                        prefillServer: discoveredSMBServer,
-                        prefillName: discoveredName,
-                        dismissSheet: dismiss
-                    )
-                }
-        }
-        #if os(macOS)
-        .frame(minWidth: 560, minHeight: 560)
-        #endif
-        .sheet(isPresented: $showingNetworkDiscovery) {
-            NetworkShareDiscoverySheet(filterType: selectedShareType) { share in
-                handleSelectedShare(share)
-            }
-        }
-        #endif
     }
 
     private var listContent: some View {
@@ -102,21 +39,9 @@ struct AddSourceView: View {
             if hasLegacyAccountsToImport {
                 Section {
                     NavigationLink {
-                        #if os(tvOS)
-                        TVSidebarDetailContainer(
-                            systemImage: "person.badge.key",
-                            title: String(localized: "migration.accounts.title")
-                        ) {
-                            LegacyAccountsImportView(showsDoneButton: false)
-                        }
-                        #else
                         LegacyAccountsImportView(showsDoneButton: false)
-                        #endif
                     } label: {
                         Label(String(localized: "migration.accounts.addSourcesLink"), systemImage: "person.badge.key")
-                        #if os(tvOS)
-                            .labelStyle(TVSourceRowLabelStyle())
-                        #endif
                     }
                 } footer: {
                     Text(String(localized: "migration.accounts.addSourcesFooter"))
@@ -124,85 +49,35 @@ struct AddSourceView: View {
             }
 
             Section {
-                #if !os(tvOS)
                 NavigationLink {
                     AddLocalFolderView(dismissSheet: dismiss)
                 } label: {
                     Label(String(localized: "sources.addLocalFolder"), systemImage: "folder")
                 }
-                #endif
 
                 NavigationLink {
-                    #if os(tvOS)
-                    TVSidebarDetailContainer(
-                        systemImage: "externaldrive.connected.to.line.below",
-                        title: String(localized: "sources.addWebDAV")
-                    ) {
-                        AddWebDAVView()
-                    }
-                    #else
                     AddWebDAVView(dismissSheet: dismiss)
-                    #endif
                 } label: {
                     Label(String(localized: "sources.addWebDAV"), systemImage: "externaldrive.connected.to.line.below")
-                    #if os(tvOS)
-                        .labelStyle(TVSourceRowLabelStyle())
-                    #endif
                 }
 
                 NavigationLink {
-                    #if os(tvOS)
-                    TVSidebarDetailContainer(
-                        systemImage: "server.rack",
-                        title: String(localized: "sources.addSMB")
-                    ) {
-                        AddSMBView()
-                    }
-                    #else
                     AddSMBView(dismissSheet: dismiss)
-                    #endif
                 } label: {
                     Label(String(localized: "sources.addSMB"), systemImage: "server.rack")
-                    #if os(tvOS)
-                        .labelStyle(TVSourceRowLabelStyle())
-                    #endif
                 }
 
                 NavigationLink {
-                    #if os(tvOS)
-                    TVSidebarDetailContainer(
-                        systemImage: "globe",
-                        title: String(localized: "sources.addRemoteServer")
-                    ) {
-                        AddRemoteServerView()
-                    }
-                    #else
                     AddRemoteServerView(dismissSheet: dismiss)
-                    #endif
                 } label: {
                     Label(String(localized: "sources.addRemoteServer"), systemImage: "globe")
-                    #if os(tvOS)
-                        .labelStyle(TVSourceRowLabelStyle())
-                    #endif
                 }
 
                 NavigationLink {
-                    #if os(tvOS)
-                    TVSidebarDetailContainer(
-                        systemImage: "globe",
-                        title: String(localized: "sources.browsePeerTube")
-                    ) {
-                        if let appEnvironment {
-                            PeerTubeInstancesExploreView()
-                                .appEnvironment(appEnvironment)
-                        }
-                    }
-                    #else
                     if let appEnvironment {
                         PeerTubeInstancesExploreView()
                             .appEnvironment(appEnvironment)
                     }
-                    #endif
                 } label: {
                     Label {
                         Text(String(localized: "sources.browsePeerTube"))
@@ -212,9 +87,6 @@ struct AddSourceView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 24, height: 24)
                     }
-                    #if os(tvOS)
-                    .labelStyle(TVSourceRowLabelStyle())
-                    #endif
                 }
             }
 
@@ -224,13 +96,7 @@ struct AddSourceView: View {
                     showingNetworkDiscovery = true
                 } label: {
                     Label(String(localized: "discovery.scanNetwork"), systemImage: "wifi")
-                    #if os(tvOS)
-                        .labelStyle(TVSourceRowLabelStyle())
-                    #endif
                 }
-                #if os(tvOS)
-                .buttonStyle(TVFormRowButtonStyle())
-                #endif
             } footer: {
                 Text(String(localized: "sources.footer.discovery"))
             }

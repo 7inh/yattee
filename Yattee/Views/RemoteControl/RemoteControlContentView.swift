@@ -222,9 +222,7 @@ struct RemoteControlContentView: View {
             } label: {
                 DeviceRowContent(device: device, status: status, showChevron: true)
             }
-            #if !os(tvOS)
             .buttonStyle(.plain)
-            #endif
         }
     }
 }
@@ -287,7 +285,6 @@ private struct DeviceRowContent: View {
 
             Spacer()
 
-            #if !os(tvOS)
             // Play/Pause button when video is loaded
             if device.currentVideoTitle != nil {
                 Button {
@@ -302,7 +299,6 @@ private struct DeviceRowContent: View {
                 }
                 .buttonStyle(.borderless)
             }
-            #endif
 
             if showChevron {
                 Image(systemName: "chevron.right")

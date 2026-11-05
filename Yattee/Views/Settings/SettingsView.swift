@@ -13,238 +13,19 @@ struct SettingsView: View {
 
     var showCloseButton: Bool = true
 
-    #if os(macOS)
-    @State private var selectedSection: SettingsSection? = .sources
-    #endif
 
     var body: some View {
-        #if os(macOS)
-        macOSSettings
-            .frame(minWidth: 600, minHeight: 520)
-        #elseif os(tvOS)
-        tvOSSettings
-        #else
         iOSSettings
-        #endif
     }
 
     // MARK: - macOS Settings
 
-    #if os(macOS)
-    /// Accounts stays out of the list until a source that can hold one exists
-    /// (or an account survives its source and needs cleaning up).
-    private var visibleSections: [SettingsSection] {
-        SettingsSection.allCases.filter {
-            $0 != .accounts || AccountsListView.showsSettingsEntry(in: appEnvironment)
-        }
-    }
-
-    private var macOSSettings: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                List(visibleSections, selection: $selectedSection) { section in
-                    HStack {
-                        Label(section.title, systemImage: section.icon)
-
-                        if section == .accounts, AccountsListView.needsAttention(in: appEnvironment) {
-                            Spacer()
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .tag(section)
-                }
-                .listStyle(.sidebar)
-
-                Divider()
-                macOSSidebarFooter
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-        } detail: {
-            if appEnvironment != nil {
-                NavigationStack {
-                    Group {
-                        switch selectedSection {
-                        case .sources:
-                            SourcesListView()
-                        case .accounts:
-                            AccountsListView()
-                        case .icloud:
-                            iCloudSettingsView()
-                        case .appearance:
-                            AppearanceSettingsView()
-                        case .layoutNavigation:
-                            LayoutNavigationSettingsView()
-                        case .playback:
-                            PlaybackSettingsView()
-                        case .playerControls:
-                            PlayerControlsSettingsView()
-                        case .notifications:
-                            NotificationSettingsView()
-                        case .downloads:
-                            DownloadSettingsView()
-                        case .privacy:
-                            PrivacySettingsView()
-                        case .youtubeEnhancements:
-                            YouTubeEnhancementsSettingsView()
-                        case .advanced:
-                            AdvancedSettingsView()
-                        case .about:
-                            AboutView()
-                        case .none:
-                            Text(String(localized: "settings.placeholder.selectSection"))
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    }
-                }
-                // Covers all section pages and their pushed sub-pages, which
-                // otherwise sit on the translucent wallpaper-tinted material.
-                .opaqueWindowBackground()
-            }
-        }
-    }
-
-    private var macOSSidebarFooter: some View {
-        VStack(spacing: 6) {
-            Image("AppIconPreview")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            Text(verbatim: "Yattee")
-                .font(.callout)
-                .fontWeight(.semibold)
-
-            Text("\(appVersion) (\(buildNumber))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .allowsHitTesting(false)
-    }
-    #endif
 
     // MARK: - tvOS Settings
 
-    #if os(tvOS)
-    private var tvOSSettings: some View {
-        List {
-            if let appEnvironment {
-                    NavigationLink {
-                        SourcesListView()
-                    } label: {
-                        HStack {
-                            Label(String(localized: "sources.title"), systemImage: "server.rack")
-                            Spacer()
-                            if appEnvironment.mediaSourcesManager.hasSourcesNeedingPassword {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                    }
-                    .accessibilityIdentifier("settings.row.sources")
-
-                    if AccountsListView.showsSettingsEntry(in: appEnvironment) {
-                        NavigationLink {
-                            AccountsListView()
-                        } label: {
-                            HStack {
-                                Label(String(localized: "accounts.title"), systemImage: "person.crop.circle")
-                                Spacer()
-                                if AccountsListView.needsAttention(in: appEnvironment) {
-                                    Image(systemName: "exclamationmark.circle.fill")
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("settings.row.accounts")
-                    }
-
-                    NavigationLink {
-                        TVSidebarDetailContainer(systemImage: "icloud", title: String(localized: "settings.icloud.title")) { iCloudSettingsView() }
-                    } label: {
-                        HStack {
-                            Label(String(localized: "settings.icloud.title"), systemImage: "icloud")
-                            if AppIdentifiers.isCloudKitDevelopmentEnvironment {
-                                Spacer()
-                                Text(String(localized: "settings.icloud.dev.badge"))
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.orange, in: Capsule())
-                            }
-                        }
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "paintbrush", title: String(localized: "settings.appearance.sectionTitle")) { AppearanceSettingsView() } } label: {
-                        Label(String(localized: "settings.appearance.sectionTitle"), systemImage: "paintbrush")
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "hand.tap", title: String(localized: "settings.layoutNavigation.title")) { LayoutNavigationSettingsView() } } label: {
-                        Label(String(localized: "settings.layoutNavigation.title"), systemImage: "hand.tap")
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "rectangle.on.rectangle.angled", title: String(localized: "settings.topShelf.title", defaultValue: "Top Shelf")) { TopShelfSettingsView() } } label: {
-                        Label(String(localized: "settings.topShelf.title", defaultValue: "Top Shelf"), systemImage: "rectangle.on.rectangle.angled")
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "play.circle", title: String(localized: "settings.playback.sectionTitle")) { PlaybackSettingsView() } } label: {
-                        Label(String(localized: "settings.playback.sectionTitle"), systemImage: "play.circle")
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "hand.raised", title: String(localized: "settings.privacy.title")) { PrivacySettingsView() } } label: {
-                        Label(String(localized: "settings.privacy.title"), systemImage: "hand.raised")
-                    }
-
-                    if appEnvironment.instancesManager.enabledInstances.contains(where: \.isYouTubeInstance) {
-                        NavigationLink { TVSidebarDetailContainer(systemImage: "puzzlepiece.extension", title: String(localized: "settings.youtubeEnhancements.title")) { YouTubeEnhancementsSettingsView() } } label: {
-                            Label(String(localized: "settings.youtubeEnhancements.title"), systemImage: "puzzlepiece.extension")
-                        }
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "gearshape.2", title: String(localized: "settings.advanced.title")) { AdvancedSettingsView() } } label: {
-                        Label(String(localized: "settings.advanced.title"), systemImage: "gearshape.2")
-                    }
-
-                    NavigationLink { TVSidebarDetailContainer(systemImage: "info.circle", title: String(localized: "settings.about.title")) { AboutView() } } label: {
-                        Label(String(localized: "settings.about.title"), systemImage: "info.circle")
-                    }
-                }
-            }
-            .listStyle(.grouped)
-            .safeAreaInset(edge: .leading) {
-                VStack(spacing: 20) {
-                    Spacer()
-
-                    Image("AppIconPreview")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 200, height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 46))
-
-                    Text(verbatim: "Yattee")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-
-                    Text("\(appVersion) (\(buildNumber))")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-                }
-                .frame(width: 400)
-                .allowsHitTesting(false)
-            }
-            .accessibilityIdentifier("settings.view")
-    }
-    #endif
 
     // MARK: - iOS Settings
 
-    #if os(iOS)
     private var iOSSettings: some View {
         NavigationStack {
             List {
@@ -317,7 +98,6 @@ struct SettingsView: View {
                             Label(String(localized: "settings.playback.sectionTitle"), systemImage: "play.circle")
                         }
 
-                        #if os(iOS)
                         NavigationLink {
                             PlayerControlsSettingsView()
                         } label: {
@@ -335,7 +115,6 @@ struct SettingsView: View {
                         } label: {
                             Label(String(localized: "settings.downloads.title"), systemImage: "arrow.down.circle")
                         }
-                        #endif
 
                         NavigationLink {
                             PrivacySettingsView()
@@ -389,7 +168,6 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings.view")
         }
     }
-    #endif
 
     // MARK: - App Info
 

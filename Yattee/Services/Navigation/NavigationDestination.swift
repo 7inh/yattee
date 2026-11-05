@@ -93,17 +93,9 @@ extension NavigationDestination {
         case .continueWatching:
             ContinueWatchingView()
         case .downloads:
-            #if os(tvOS)
-            TVDownloadsUnavailableView(title: String(localized: "home.downloads.title"))
-            #else
             DownloadsView()
-            #endif
         case .downloadsStorage:
-            #if os(tvOS)
-            TVDownloadsUnavailableView(title: String(localized: "settings.downloads.storage.title"))
-            #else
             DownloadsStorageView()
-            #endif
         case .subscriptionsFeed:
             SubscriptionsView()
         case .settings:
@@ -149,31 +141,6 @@ extension NavigationDestination {
     }
 }
 
-#if os(tvOS)
-// MARK: - tvOS Downloads Placeholder
-
-/// What a downloads destination shows on tvOS, which has no downloads.
-///
-/// Reachable on tvOS through `yattee://downloads`. Without a focusable element
-/// the focus engine has nowhere to land and the remote is stuck, so it carries
-/// a Done that pops it.
-private struct TVDownloadsUnavailableView: View {
-    let title: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(title, systemImage: "arrow.down.circle")
-        } description: {
-            Text(String(localized: "home.downloads.notAvailable"))
-        } actions: {
-            Button(String(localized: "common.done")) {
-                dismiss()
-            }
-        }
-    }
-}
-#endif
 
 // MARK: - Media Source by ID View
 
@@ -191,13 +158,6 @@ private struct MediaSourceByIDView: View {
             } description: {
                 Text(String(localized: "navigation.sourceNotFound.description"))
             } actions: {
-                #if os(tvOS)
-                // Nothing else here is focusable, and as a sidebar source this
-                // is a tab root that Menu cannot pop.
-                Button(String(localized: "navigation.sourceNotFound.openSources")) {
-                    appEnvironment?.navigationCoordinator.router.select(.sources)
-                }
-                #endif
             }
         }
     }
@@ -242,14 +202,10 @@ private struct MiniPlayerBottomClearanceModifier: ViewModifier {
     @Environment(\.miniPlayerBottomClearance) private var clearance
 
     func body(content: Content) -> some View {
-        #if os(iOS)
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Color.clear.frame(height: clearance)
             }
-        #else
-        content
-        #endif
     }
 }
 

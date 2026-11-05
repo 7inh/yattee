@@ -167,13 +167,7 @@ struct BlurredImageBackground: View {
 extension BlurredImageBackground {
     /// Platform-specific blur radius defaults
     static var platformBlurRadius: CGFloat {
-        #if os(tvOS)
-        return 40
-        #elseif os(macOS)
-        return 50
-        #else
         return 60
-        #endif
     }
 }
 

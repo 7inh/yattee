@@ -28,13 +28,9 @@ struct SponsorBlockSettingsView: View {
                 AboutSection()
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
         .navigationTitle(String(localized: "settings.sponsorBlock.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
@@ -92,10 +88,8 @@ private struct AdvancedSection: View {
                 text: $apiURLText,
                 prompt: Text(SettingsManager.defaultSponsorBlockAPIURL)
             )
-            #if os(iOS)
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
-            #endif
             .autocorrectionDisabled()
             .onChange(of: apiURLText) { _, newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)

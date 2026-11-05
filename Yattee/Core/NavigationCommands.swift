@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 /// Navigation-related menu bar commands.
 /// Works on both macOS and iPadOS 26+.
 struct NavigationCommands: Commands {
@@ -139,4 +138,3 @@ struct NavigationCommands: Commands {
         .keyboardShortcut("9", modifiers: [.command])
     }
 }
-#endif

@@ -9,11 +9,7 @@
 //
 
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 // MARK: - Extraction Item Model
 
@@ -49,10 +45,6 @@ struct OpenLinkSheet: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        OpenLinkFormView(prefilledURL: prefilledURL, onRequestDismiss: { dismiss() })
-            .frame(minWidth: 520, minHeight: 440)
-        #else
         NavigationStack {
             OpenLinkFormView(prefilledURL: prefilledURL, onRequestDismiss: { dismiss() })
                 .toolbar {
@@ -63,7 +55,6 @@ struct OpenLinkSheet: View {
                     }
                 }
         }
-        #endif
     }
 }
 
@@ -118,7 +109,6 @@ struct OpenLinkFormView: View {
                     isTextEditorFocused = true
                 }
             }
-            #if !os(tvOS)
             .sheet(isPresented: $showingDownloadSheet, onDismiss: {
                 // Close sheet when download sheet is dismissed (if no errors and we're in sheet mode)
                 if !hasErrors {
@@ -131,264 +121,35 @@ struct OpenLinkFormView: View {
                     }
                 }
             }
-            #endif
     }
 
     @ViewBuilder
     private var platformBody: some View {
-        #if os(macOS)
-        macOSBody
-        #else
         Form {
             urlInputSection
             extractionResultsSection
             actionButtonsSection
             yatteeServerWarningSection
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "openLink.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.immediately)
-        #endif
-        #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var macOSBody: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(String(localized: "openLink.title"))
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            VStack(alignment: .leading, spacing: 6) {
-                TextEditor(text: $urlText)
-                    .font(.system(.body, design: .monospaced))
-                    .focused($isTextEditorFocused)
-                    .disabled(isExtracting)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .frame(minHeight: 90, maxHeight: 140)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(nsColor: .textBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
-                    )
-
-                HStack {
-                    Text(supportedSitesHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if isTooManyURLs {
-                        Label(
-                            String(localized: "openLink.tooManyUrls \(Self.maxURLs)"),
-                            systemImage: "exclamationmark.triangle"
-                        )
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                    } else if urlCount > 0 {
-                        Text(String(localized: "openLink.urlCount \(urlCount)"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            if !clipboardURLs.isEmpty, !isExtracting {
-                let clipboardText = clipboardURLs.map(\.absoluteString).joined(separator: "\n")
-                if clipboardText != urlText {
-                    Button {
-                        urlText = clipboardText
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "doc.on.clipboard")
-                            if clipboardURLs.count > 1 {
-                                Text(String(localized: "openLink.pasteMultiple \(clipboardURLs.count)"))
-                            } else {
-                                Text(String(localized: "openLink.pasteClipboard"))
-                            }
-                            Text("·")
-                                .foregroundStyle(.secondary)
-                            Text(clipboardURLs.first?.host ?? "")
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer(minLength: 0)
-                        }
-                        .font(.subheadline)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                }
-            }
-
-            if !extractedItems.isEmpty {
-                Divider()
-                macOSResultsList
-            }
-
-            if !hasYatteeServer, hasExternalURLs, !isExtracting {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "openLink.yatteeServerNotConfigured"))
-                            .font(.subheadline)
-                        Text(String(localized: "openLink.yatteeServerMessage"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: 8) {
-                if onRequestDismiss != nil {
-                    Button(String(localized: "common.cancel")) {
-                        onRequestDismiss?()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                }
-                Spacer()
-                if isExtracting {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(String(localized: "openLink.extracting"))
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
-                } else {
-                    if allLinksAreVideos {
-                        Button {
-                            isTextEditorFocused = false
-                            Task { await downloadAllURLs() }
-                        } label: {
-                            Label(
-                                isMultipleURLs
-                                    ? String(localized: "openLink.downloadAll")
-                                    : String(localized: "openLink.download"),
-                                systemImage: "arrow.down.circle"
-                            )
-                        }
-                        .disabled(!isValidInput)
-
-                        Button {
-                            isTextEditorFocused = false
-                            Task { await openAllURLs() }
-                        } label: {
-                            Label(
-                                isMultipleURLs
-                                    ? String(localized: "openLink.openAll")
-                                    : String(localized: "openLink.open"),
-                                systemImage: "play.fill"
-                            )
-                        }
-                        .disabled(!isValidInput)
-                    }
-
-                    Button {
-                        isTextEditorFocused = false
-                        Task { await loadURLs() }
-                    } label: {
-                        Label(loadButtonTitle, systemImage: "arrow.right.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!isValidInput)
-                }
-            }
-        }
-        .padding(20)
-    }
-
-    @ViewBuilder
-    private var macOSResultsList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if isExtracting {
-                let processed = extractedItems.filter { item in
-                    if case .pending = item.status { return false }
-                    return true
-                }.count
-                Text(String(localized: "openLink.extractingProgress \(processed) \(extractedItems.count)"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(String(localized: "openLink.results"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(extractedItems) { item in
-                        HStack(spacing: 10) {
-                            Group {
-                                switch item.status {
-                                case .pending:
-                                    Image(systemName: "circle").foregroundStyle(.secondary)
-                                case .extracting:
-                                    ProgressView().controlSize(.small)
-                                case .success:
-                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                                case .failed:
-                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
-                                }
-                            }
-                            .frame(width: 18)
-
-                            VStack(alignment: .leading, spacing: 1) {
-                                if let video = item.video {
-                                    Text(video.title).lineLimit(1)
-                                    Text(item.displayHost)
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                } else {
-                                    Text(item.url.absoluteString)
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                }
-                                if case .failed(let error) = item.status {
-                                    Text(error).font(.caption2).foregroundStyle(.red)
-                                }
-                            }
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .frame(maxHeight: 120)
-        }
-    }
-    #endif
 
     // MARK: - URL Input Section
 
     @ViewBuilder
     private var urlInputSection: some View {
         Section {
-            #if os(tvOS)
-            // tvOS doesn't have TextEditor, use TextField for single URL
-            TextField(String(localized: "openLink.urlPlaceholder"), text: $urlText)
-                .textContentType(.URL)
-                .focused($isTextEditorFocused)
-                .disabled(isExtracting)
-            #else
             TextEditor(text: $urlText)
                 .frame(minHeight: 100, maxHeight: 200)
                 .font(.system(.body, design: .monospaced))
-                #if os(iOS)
                 .autocapitalization(.none)
                 .keyboardType(.URL)
-                #endif
                 .focused($isTextEditorFocused)
                 .disabled(isExtracting)
-            #endif
 
-            #if !os(tvOS)
             // URL count indicator (not shown on tvOS since it only supports single URL)
             HStack {
                 if isTooManyURLs {
@@ -433,7 +194,6 @@ struct OpenLinkFormView: View {
                     }
                 }
             }
-            #endif
         } footer: {
             Text(supportedSitesHint)
         }
@@ -566,7 +326,6 @@ struct OpenLinkFormView: View {
                     }
                     .disabled(!isValidInput)
 
-                    #if !os(tvOS)
                     // Download shortcut
                     Button {
                         isTextEditorFocused = false
@@ -580,7 +339,6 @@ struct OpenLinkFormView: View {
                         )
                     }
                     .disabled(!isValidInput)
-                    #endif
                 }
             }
         }
@@ -668,15 +426,9 @@ struct OpenLinkFormView: View {
     private func checkClipboard() {
         clipboardURLs = []
 
-        #if os(iOS)
         if let string = UIPasteboard.general.string {
             clipboardURLs = parseURLsFromString(string)
         }
-        #elseif os(macOS)
-        if let string = NSPasteboard.general.string(forType: .string) {
-            clipboardURLs = parseURLsFromString(string)
-        }
-        #endif
     }
 
     private func parseURLsFromString(_ string: String) -> [URL] {
@@ -820,7 +572,6 @@ struct OpenLinkFormView: View {
 
     // MARK: - Download Action
 
-    #if !os(tvOS)
     private func downloadAllURLs() async {
         let urls = parsedURLs
         guard !urls.isEmpty, let appEnvironment else { return }
@@ -953,7 +704,6 @@ struct OpenLinkFormView: View {
         }
     }
 
-    #endif
 }
 
 // MARK: - Previews

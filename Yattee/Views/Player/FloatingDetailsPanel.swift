@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 // MARK: - Panel Height Preference Key
 
@@ -246,11 +245,7 @@ struct FloatingDetailsPanel: View {
     @ViewBuilder
     private var panelBackground: some View {
         if isPinned {
-            #if os(iOS)
             Color(uiColor: .systemBackground)
-            #else
-            Color(nsColor: .windowBackgroundColor)
-            #endif
         } else {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.regularMaterial)
@@ -260,11 +255,7 @@ struct FloatingDetailsPanel: View {
     /// Background color for fades - adapts to pinned/floating state
     private var fadeBackgroundColor: Color {
         if isPinned {
-            #if os(iOS)
             return Color(.systemBackground)
-            #else
-            return Color(nsColor: .windowBackgroundColor)
-            #endif
         } else {
             // Use subtle dark color that blends with material background
             return Color.black.opacity(0.4)
@@ -361,11 +352,7 @@ struct FloatingDetailsPanel: View {
                 queueModeIcon: playerState?.queueMode.icon ?? "list.bullet",
                 isPlayPauseDisabled: playerState?.playbackState == .loading,
                 isOrientationLocked: {
-                    #if os(iOS)
                     return appEnvironment?.settingsManager.inAppOrientationLock ?? false
-                    #else
-                    return false
-                    #endif
                 }(),
                 video: video,
                 playbackRate: playerState?.rate ?? .x1,
@@ -387,16 +374,9 @@ struct FloatingDetailsPanel: View {
                 },
                 onAirPlay: { /* AirPlay - handled by system */ },
                 onPiP: {
-                    #if os(iOS)
-                    if let mpvBackend = playerService?.currentBackend as? MPVBackend {
-                        mpvBackend.togglePiP()
-                    }
-                    #endif
                 },
                 onOrientationLock: {
-                    #if os(iOS)
                     appEnvironment?.settingsManager.inAppOrientationLock.toggle()
-                    #endif
                 },
                 onFullscreen: { onFullscreen?() },
                 onRateChanged: { rate in
@@ -506,5 +486,3 @@ struct FloatingDetailsPanel: View {
         // Below threshold - scroll view will rubber-band back naturally
     }
 }
-
-#endif

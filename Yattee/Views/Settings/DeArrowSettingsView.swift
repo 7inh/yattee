@@ -28,13 +28,9 @@ struct DeArrowSettingsView: View {
                 AboutSection()
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
         .navigationTitle(String(localized: "settings.deArrow.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
@@ -88,10 +84,8 @@ private struct AdvancedSection: View {
                 text: $apiURLText,
                 prompt: Text(SettingsManager.defaultDeArrowAPIURL)
             )
-            #if os(iOS)
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
-            #endif
             .autocorrectionDisabled()
             .onChange(of: apiURLText) { _, newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -116,10 +110,8 @@ private struct AdvancedSection: View {
                 text: $thumbnailAPIURLText,
                 prompt: Text(SettingsManager.defaultDeArrowThumbnailAPIURL)
             )
-            #if os(iOS)
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
-            #endif
             .autocorrectionDisabled()
             .onChange(of: thumbnailAPIURLText) { _, newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)

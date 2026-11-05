@@ -59,15 +59,9 @@ struct ChapterRow: View {
     private var thumbnailContent: some View {
         Group {
             if let thumbnail {
-                #if os(macOS)
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                #else
                 Image(uiImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                #endif
             } else {
                 Rectangle()
                     .fill(.quaternary)

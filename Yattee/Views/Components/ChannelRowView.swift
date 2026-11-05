@@ -27,19 +27,11 @@ struct ChannelRowView: View {
     }
 
     private var nameFont: Font {
-        #if os(tvOS)
-        style == .compact ? .caption : .subheadline
-        #else
         .subheadline
-        #endif
     }
 
     private var subscriberFont: Font {
-        #if os(tvOS)
         style == .compact ? .caption2 : .caption
-        #else
-        style == .compact ? .caption2 : .caption
-        #endif
     }
 
     private var showChevron: Bool {

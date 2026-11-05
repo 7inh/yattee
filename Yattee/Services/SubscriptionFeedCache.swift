@@ -7,11 +7,7 @@
 //
 
 import Foundation
-#if os(iOS) || os(tvOS)
 import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
 
 /// State of feed loading.
 enum FeedLoadState: Equatable {
@@ -129,7 +125,6 @@ final class SubscriptionFeedCache {
 
     /// Sets up observers to detect when app goes to background.
     private func setupLifecycleObservers() {
-        #if os(iOS) || os(tvOS)
         NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
@@ -140,18 +135,6 @@ final class SubscriptionFeedCache {
                 self.handleAppBackgrounded()
             }
         }
-        #elseif os(macOS)
-        NotificationCenter.default.addObserver(
-            forName: NSApplication.willResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor [self] in
-                self.handleAppBackgrounded()
-            }
-        }
-        #endif
     }
 
     /// Handles app going to background - cancels any active polling.
@@ -233,7 +216,6 @@ final class SubscriptionFeedCache {
         // the previous login's feed would stay on the system home screen until
         // some later refresh happened to rewrite it. Written from the cleared
         // cache, so this erases it.
-        TopShelfSnapshotWriter.writeFeed()
         diskClearTask = Task {
             await FeedCache.shared.clear()
         }
@@ -283,7 +265,6 @@ final class SubscriptionFeedCache {
             category: .general
         )
         saveToDisk()
-        TopShelfSnapshotWriter.writeFeed()
     }
 
     /// Appends videos to the existing cache (for pagination).

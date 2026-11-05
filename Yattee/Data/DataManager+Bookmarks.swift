@@ -148,7 +148,6 @@ extension DataManager {
         if self.bookmark(for: videoID) == nil {
             cachedBookmarkedVideoIDs.remove(videoID)
         }
-        TopShelfSnapshotWriter.writeBookmarks(dataManager: self)
     }
 
     /// Inserts a bookmark into the database.
@@ -175,7 +174,6 @@ extension DataManager {
             save()
             cachedBookmarkedVideoIDs.insert(videoID)
         }
-        TopShelfSnapshotWriter.writeBookmarks(dataManager: self)
     }
     
     /// Updates bookmark tags and note for a video.

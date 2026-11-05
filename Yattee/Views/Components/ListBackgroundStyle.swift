@@ -28,31 +28,13 @@ enum ListBackgroundStyle {
     var color: Color {
         switch self {
         case .grouped:
-            #if os(iOS)
             Color(uiColor: .systemGroupedBackground)
-            #elseif os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-            #else
-            Color.black.opacity(0.9)
-            #endif
 
         case .plain:
-            #if os(iOS)
             Color(uiColor: .systemBackground)
-            #elseif os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-            #else
-            Color.clear
-            #endif
 
         case .card:
-            #if os(iOS)
             Color(uiColor: .secondarySystemGroupedBackground)
-            #elseif os(macOS)
-            Color(nsColor: .controlBackgroundColor)
-            #else
-            Color.gray.opacity(0.2)
-            #endif
         }
     }
 }

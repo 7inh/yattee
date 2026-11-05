@@ -34,12 +34,8 @@ private func sheetCloseButton(
     action: @escaping () -> Void
 ) -> some View {
     let button = Button(role: .cancel, action: action) {
-        #if os(macOS)
-        Text(String(localized: titleKey))
-        #else
         Label(String(localized: titleKey), systemImage: "xmark")
             .labelStyle(.iconOnly)
-        #endif
     }
 
     if let identifier {

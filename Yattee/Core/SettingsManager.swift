@@ -7,10 +7,8 @@
 
 import Foundation
 import SwiftUI
-#if os(iOS)
 import CoreHaptics
 import UIKit
-#endif
 
 /// Manages application settings with platform-specific keys and iCloud sync.
 @MainActor
@@ -45,7 +43,6 @@ final class SettingsManager {
     var _preferredSubtitlesLanguage: String?
     var _playerVolume: Float?
     var _resumeAction: ResumeAction?
-    var _tvOSMenuButtonClosesVideo: Bool?
     var _allowSoftwareDecodedFormats: Bool?
     var _audioOnlyModeEnabled: Bool?
 
@@ -74,32 +71,19 @@ final class SettingsManager {
 
     // Player
     var _keepPlayerPinnedEnabled: Bool?
-    #if os(iOS)
     var _inAppOrientationLock: Bool?
     var _rotateToMatchAspectRatio: Bool?
     var _preferPortraitBrowsing: Bool?
     var _tabletopReflection: Bool?
-    #endif
-    #if os(macOS)
-    var _macPlayerSeparateWindow: Bool?
-    var _macPlayerFloating: Bool?
-    var _macControlsBarOffsetX: Double?
-    var _macControlsBarOffsetY: Double?
-    var _playerSheetAutoResize: Bool?
-    #endif
 
     // Mini Player Minimize Behavior is kept as it's not part of the preset
 
     // Mini Player Minimize Behavior (iOS 26+)
-    #if os(iOS)
     var _miniPlayerMinimizeBehavior: (any RawRepresentable)?
-    #endif
 
     // Haptics (iOS)
-    #if os(iOS)
     var _hapticFeedbackEnabled: Bool?
     var _hapticFeedbackIntensity: HapticFeedbackIntensity?
-    #endif
 
     // iCloud sync
     var _iCloudSyncEnabled: Bool?
@@ -129,12 +113,6 @@ final class SettingsManager {
     var _homeSectionItemsLimit: Int?
     var _homeSectionLayout: HomeSectionLayout?
 
-    // Top Shelf (tvOS)
-    var _topShelfSections: [TopShelfSection]?
-
-    // Custom MPV options (local-only)
-    var _customMPVOptions: [String: String]?
-
     // Tab bar settings (compact size class only - iOS)
     var _tabBarItemOrder: [TabBarItem]?
     var _tabBarItemVisibility: [TabBarItem: Bool]?
@@ -146,9 +124,7 @@ final class SettingsManager {
 
     // Tab bar startup
     var _tabBarStartupTab: SidebarMainItem?
-    #if os(iOS)
     var _navigationStyle: NavigationStyle?
-    #endif
     var _sidebarSourcesEnabled: Bool?
     var _sidebarSourceSort: SidebarSourceSort?
     var _sidebarSourcesLimitEnabled: Bool?
@@ -170,16 +146,8 @@ final class SettingsManager {
     // Advanced settings
     var _showAdvancedStreamDetails: Bool?
     var _showPlayerAreaDebug: Bool?
-    var _showTVDebugButton: Bool?
-    var _verboseMPVLogging: Bool?
     var _verboseRemoteControlLogging: Bool?
-    var _mpvBufferSeconds: Double?
-    var _mpvUseEDLStreams: Bool?
     var _zoomTransitionsEnabled: Bool?
-    var _tvMatchDisplayFrameRate: Bool?
-    var _tvMatchDisplayDynamicRange: Bool?
-    var _tvAudioDelayMs: Double?
-    var _tvVideoSyncMode: TVVideoSyncMode?
 
     // Details panel settings
     var _floatingDetailsPanelWidth: CGFloat?
@@ -221,17 +189,10 @@ final class SettingsManager {
     var _linkActionsRunWithoutConfirmation: Bool?
 
     // Video tap actions (iOS/macOS only)
-    #if !os(tvOS)
     var _thumbnailTapAction: VideoTapAction?
     var _textAreaTapAction: VideoTapAction?
     var _videoInfoActionsLayout: VideoInfoActionsLayout?
     var _videoInfoPrimaryAction: VideoInfoPrimaryAction?
-    #endif
-
-    // Video tap action (tvOS only)
-    #if os(tvOS)
-    var _tvOSVideoTapAction: VideoTapAction?
-    #endif
 
     // Player Controls settings (controlsButtonSize moved to preset)
 
@@ -240,10 +201,8 @@ final class SettingsManager {
     var _appIcon: AppIcon?
 
     // Video Swipe Actions
-    #if !os(tvOS)
     var _videoSwipeActionOrder: [VideoSwipeAction]?
     var _videoSwipeActionVisibility: [VideoSwipeAction: Bool]?
-    #endif
 
     // MARK: - Initialization
 
@@ -324,13 +283,7 @@ final class SettingsManager {
 
     func platformKey(_ key: SettingsKey) -> String {
         let baseKey = key.rawValue
-        #if os(iOS)
         return key.isPlatformSpecific ? "iOS.\(baseKey)" : baseKey
-        #elseif os(macOS)
-        return key.isPlatformSpecific ? "macOS.\(baseKey)" : baseKey
-        #elseif os(tvOS)
-        return key.isPlatformSpecific ? "tvOS.\(baseKey)" : baseKey
-        #endif
     }
 
     /// Returns the companion key used to store the last-modified timestamp for a protected setting.
@@ -447,7 +400,6 @@ final class SettingsManager {
         _preferredSubtitlesLanguage = nil
         _playerVolume = nil
         _resumeAction = nil
-        _tvOSMenuButtonClosesVideo = nil
         _allowSoftwareDecodedFormats = nil
         _audioOnlyModeEnabled = nil
         _sponsorBlockEnabled = nil
@@ -464,14 +416,12 @@ final class SettingsManager {
         _randomizeUserAgentPerRequest = nil
         _feedCacheValidityMinutes = nil
         _keepPlayerPinnedEnabled = nil
-        #if os(iOS)
         _hapticFeedbackEnabled = nil
         _hapticFeedbackIntensity = nil
         _inAppOrientationLock = nil
         _rotateToMatchAspectRatio = nil
         _preferPortraitBrowsing = nil
         _tabletopReflection = nil
-        #endif
         _iCloudSyncEnabled = nil
         _lastSyncTime = nil
         _syncInstances = nil
@@ -483,17 +433,8 @@ final class SettingsManager {
         _syncMediaSources = nil
         _syncSearchHistory = nil
         _searchHistoryLimit = nil
-        #if os(macOS)
-        _macPlayerSeparateWindow = nil
-        _macPlayerFloating = nil
-        _macControlsBarOffsetX = nil
-        _macControlsBarOffsetY = nil
-        _playerSheetAutoResize = nil
-        #endif
         // miniPlayerShowVideo and miniPlayerVideoTapAction moved to preset
-        #if os(iOS)
         _miniPlayerMinimizeBehavior = nil
-        #endif
         _homeShortcutOrder = nil
         _homeShortcutVisibility = nil
         _homeShortcutLayout = nil
@@ -505,16 +446,13 @@ final class SettingsManager {
         _homeSectionVisibility = nil
         _homeSectionItemsLimit = nil
         _homeSectionLayout = nil
-        _topShelfSections = nil
         _tabBarItemOrder = nil
         _tabBarItemVisibility = nil
         _sidebarMainItemOrder = nil
         _sidebarMainItemVisibility = nil
         _sidebarStartupTab = nil
         _tabBarStartupTab = nil
-        #if os(iOS)
         _navigationStyle = nil
-        #endif
         _sidebarSourcesEnabled = nil
         _sidebarSourceSort = nil
         _sidebarSourcesLimitEnabled = nil
@@ -529,16 +467,8 @@ final class SettingsManager {
         _sidebarPlaylistsLimitEnabled = nil
         _showAdvancedStreamDetails = nil
         _showPlayerAreaDebug = nil
-        _showTVDebugButton = nil
-        _verboseMPVLogging = nil
         _verboseRemoteControlLogging = nil
-        _mpvBufferSeconds = nil
-        _mpvUseEDLStreams = nil
         _zoomTransitionsEnabled = nil
-        _tvMatchDisplayFrameRate = nil
-        _tvMatchDisplayDynamicRange = nil
-        _tvAudioDelayMs = nil
-        _tvVideoSyncMode = nil
         _floatingDetailsPanelWidth = nil
         _landscapeDetailsPanelVisible = nil
         _landscapeDetailsPanelPinned = nil
@@ -564,22 +494,13 @@ final class SettingsManager {
         _linkActionsRunWithoutConfirmation = nil
         _remoteControlCustomDeviceName = nil
         _remoteControlHideWhenBackgrounded = nil
-        #if !os(tvOS)
         _thumbnailTapAction = nil
         _textAreaTapAction = nil
         _videoInfoActionsLayout = nil
         _videoInfoPrimaryAction = nil
-        #endif
-        #if os(tvOS)
-        _tvOSVideoTapAction = nil
-        #endif
         _listStyle = nil
-        #if os(iOS)
         _appIcon = nil
-        #endif
-        #if !os(tvOS)
         _videoSwipeActionOrder = nil
         _videoSwipeActionVisibility = nil
-        #endif
     }
 }

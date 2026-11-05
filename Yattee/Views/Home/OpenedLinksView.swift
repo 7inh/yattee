@@ -11,16 +11,11 @@ import SwiftUI
 
 struct OpenedLinksView: View {
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(tvOS)
-    @Environment(\.dismiss) private var dismiss
-    #endif
     @AppStorage("searchRowStyle") private var rowStyle: VideoRowStyle = .regular
 
     @State private var viewModel: OpenedLinksViewModel
 
-    #if !os(tvOS)
     @State private var showingDownloadSheet = false
-    #endif
 
     init(urls: [URL]) {
         _viewModel = State(initialValue: OpenedLinksViewModel(urls: urls))
@@ -37,10 +32,7 @@ struct OpenedLinksView: View {
     var body: some View {
         content
             .navigationTitle(title)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if !os(tvOS)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     // Buttons disable themselves: a macOS toolbar item doesn't
@@ -57,7 +49,6 @@ struct OpenedLinksView: View {
                     Task { await download(quality: quality, includeSubtitles: includeSubtitles) }
                 }
             }
-            #endif
             .onAppear {
                 guard let appEnvironment else { return }
                 viewModel.start(appEnvironment: appEnvironment)
@@ -66,29 +57,6 @@ struct OpenedLinksView: View {
 
     @ViewBuilder
     private var content: some View {
-        #if os(tvOS)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(spacing: 24) {
-                    batchActions
-
-                    // The batch buttons stay disabled until a video resolves,
-                    // and loading or failed rows are not focusable: with every
-                    // link still loading or failed, this is the only thing the
-                    // remote can land on.
-                    if viewModel.videos.isEmpty {
-                        Button(String(localized: "common.done")) {
-                            dismiss()
-                        }
-                    }
-                }
-                .padding(.horizontal, 48)
-
-                resultsList
-            }
-        }
-        .scrollClipDisabled()
-        #else
         (listStyle == .inset ? ListBackgroundStyle.grouped : ListBackgroundStyle.plain).color
             .ignoresSafeArea()
             .overlay(
@@ -96,7 +64,6 @@ struct OpenedLinksView: View {
                     resultsList
                 }
             )
-        #endif
     }
 
     private var resultsList: some View {
@@ -138,9 +105,7 @@ struct OpenedLinksView: View {
                     videoIndex: context?.videoIndex ?? videos.firstIndex(where: { $0.id == video.id }),
                     linkStartTime: context?.linkStartTime
                 )
-                #if !os(tvOS)
                 .videoSwipeActions(video: video)
-                #endif
 
         case .playlist(let playlist, _):
             NavigationLink(value: NavigationDestination.playlist(.remote(playlist.id, instance: nil, title: playlist.title))) {
@@ -199,14 +164,12 @@ struct OpenedLinksView: View {
         }
         .disabled(noVideos)
 
-        #if !os(tvOS)
         Button {
             startDownload()
         } label: {
             Label(String(localized: "openedLinks.downloadAll"), systemImage: "arrow.down.circle")
         }
         .disabled(noVideos)
-        #endif
     }
 
     private func playAll() {
@@ -245,7 +208,6 @@ struct OpenedLinksView: View {
         )
     }
 
-    #if !os(tvOS)
     private func startDownload() {
         guard let appEnvironment, !viewModel.videoLinks.isEmpty else { return }
         let settings = appEnvironment.downloadSettings
@@ -279,7 +241,6 @@ struct OpenedLinksView: View {
             )
         }
     }
-    #endif
 }
 
 // MARK: - Link Status Row

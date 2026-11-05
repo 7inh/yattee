@@ -94,52 +94,11 @@ struct BookmarksListView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
-            #if os(tvOS)
-            VStack(spacing: 0) {
-                // tvOS: Inline search field and action button for better focus navigation
-                HStack(spacing: 24) {
-                    TextField("search.bookmarks.placeholder", text: $searchText)
-                        .textFieldStyle(.plain)
-
-                    Button {
-                        showViewOptions = true
-                    } label: {
-                        Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                    }
-                }
-                .focusSection()
-                .padding(.horizontal, 48)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
-
-                // Content
-                Group {
-                    if filteredBookmarks.isEmpty {
-                        emptyView
-                    } else {
-                        switch layout {
-                        case .list:
-                            listContent
-                        case .grid:
-                            gridContent
-                        }
-                    }
-                }
-                .focusSection()
-            }
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            #else
             Group {
                 if filteredBookmarks.isEmpty {
                     emptyView
@@ -155,20 +114,11 @@ struct BookmarksListView: View {
             .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                 viewWidth = newWidth
             }
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "home.bookmarks.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $searchText, prompt: Text(String(localized: "bookmarks.search.placeholder")))
         .toolbar {
-            #if os(macOS)
-            // Pin the trailing group (search field + toolbar buttons) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
                     showViewOptions = true
@@ -176,20 +126,12 @@ struct BookmarksListView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "bookmarksViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
         }
-        #endif
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "bookmarksViewOptions", in: sheetTransition)
         }
-        #endif
         .onAppear {
             loadBookmarks()
             loadWatchEntries()
@@ -234,7 +176,6 @@ struct BookmarksListView: View {
                 ) {
                     bookmarkRow(bookmark: bookmark, index: index)
                 }
-                #if !os(tvOS)
                 .videoSwipeActions(
                     video: bookmark.toVideo(),
                     fixedActions: [
@@ -248,7 +189,6 @@ struct BookmarksListView: View {
                         }
                     ]
                 )
-                #endif
             }
         }
     }
@@ -287,9 +227,6 @@ struct BookmarksListView: View {
                 }
             }
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 
     // MARK: - Helper Views

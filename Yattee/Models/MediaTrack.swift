@@ -1,21 +1,21 @@
 //
-//  MPVTrack.swift
+//  MediaTrack.swift
 //  Yattee
 //
-//  Model representing one entry of mpv's `track-list` property.
+//  Local track metadata retained for the existing controls during the audio UI migration.
 //
 
 import Foundation
 
-/// A single track reported by mpv's `track-list` property (embedded or external).
-struct MPVTrack: Equatable, Sendable, Identifiable, Decodable {
-    enum TrackType: String, Decodable, Sendable {
+/// Track metadata used by the existing quality controls.
+struct MediaTrack: Hashable, Sendable, Identifiable {
+    enum TrackType: String, Codable, Sendable {
         case video
         case audio
         case sub
     }
 
-    /// mpv track id — unique only within a track type.
+    /// player track id — unique only within a track type.
     let trackID: Int
     let type: TrackType
     let title: String?
@@ -24,7 +24,7 @@ struct MPVTrack: Equatable, Sendable, Identifiable, Decodable {
     let isForced: Bool
     /// True for tracks loaded via `sub-add`/`audio-add` (external files).
     let isExternal: Bool
-    /// Whether mpv currently plays this track.
+    /// Whether player currently plays this track.
     let isSelected: Bool
     /// Cover-art pseudo video tracks.
     let isAlbumArt: Bool
@@ -35,45 +35,8 @@ struct MPVTrack: Equatable, Sendable, Identifiable, Decodable {
     let height: Int?
     let fps: Double?
 
-    /// Identifiable across types — mpv ids collide between audio/sub/video.
+    /// Identifiable across types — player ids collide between audio/sub/video.
     var id: String { "\(type.rawValue):\(trackID)" }
-
-    private enum CodingKeys: String, CodingKey {
-        case trackID = "id"
-        case type
-        case title
-        case lang
-        case isDefault = "default"
-        case isForced = "forced"
-        case isExternal = "external"
-        case isSelected = "selected"
-        case isAlbumArt = "albumart"
-        case codec
-        case channelCount = "demux-channel-count"
-        case sampleRate = "demux-samplerate"
-        case width = "demux-w"
-        case height = "demux-h"
-        case fps = "demux-fps"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        trackID = try container.decode(Int.self, forKey: .trackID)
-        type = try container.decode(TrackType.self, forKey: .type)
-        title = try container.decodeIfPresent(String.self, forKey: .title)
-        lang = try container.decodeIfPresent(String.self, forKey: .lang)
-        isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
-        isForced = try container.decodeIfPresent(Bool.self, forKey: .isForced) ?? false
-        isExternal = try container.decodeIfPresent(Bool.self, forKey: .isExternal) ?? false
-        isSelected = try container.decodeIfPresent(Bool.self, forKey: .isSelected) ?? false
-        isAlbumArt = try container.decodeIfPresent(Bool.self, forKey: .isAlbumArt) ?? false
-        codec = try container.decodeIfPresent(String.self, forKey: .codec)
-        channelCount = try container.decodeIfPresent(Int.self, forKey: .channelCount)
-        sampleRate = try container.decodeIfPresent(Int.self, forKey: .sampleRate)
-        width = try container.decodeIfPresent(Int.self, forKey: .width)
-        height = try container.decodeIfPresent(Int.self, forKey: .height)
-        fps = try container.decodeIfPresent(Double.self, forKey: .fps)
-    }
 
     init(
         trackID: Int,

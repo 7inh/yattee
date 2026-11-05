@@ -8,9 +8,7 @@
 import Foundation
 import SwiftUI
 
-#if os(iOS)
 import UIKit
-#endif
 
 /// Coordinates remote control functionality between the local network service and player.
 @MainActor
@@ -268,7 +266,6 @@ final class RemoteControlCoordinator {
                 networkService.refreshDiscoveryOnly()
             }
         case .background:
-            #if os(iOS) || os(tvOS)
             let hideWhenBackgrounded = settingsManager?.remoteControlHideWhenBackgrounded ?? true
             let isIncognito = settingsManager?.incognitoModeEnabled ?? false
             // Only stop hosting if we were actually hosting (not incognito)
@@ -278,9 +275,6 @@ final class RemoteControlCoordinator {
             } else {
                 rcLog("LIFECYCLE", "App entering background", details: "hideWhenBackgrounded=\(hideWhenBackgrounded), incognito=\(isIncognito)")
             }
-            #else
-            rcLog("LIFECYCLE", "App entering background")
-            #endif
         case .inactive:
             rcDebug("LIFECYCLE", "App became inactive")
         @unknown default:
@@ -440,16 +434,11 @@ final class RemoteControlCoordinator {
         let state = playerService.state
 
         // Compute fullscreen state (same logic as shouldShowFullscreenButton in PlayerControlsActions)
-        #if os(iOS)
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let isWideScreenLayout = navigationCoordinator?.isWideScreenLayoutActive ?? false
         // iPad in widescreen = can't force rotation, so fullscreen toggle not available
         let canToggleFullscreen = !(isIPad && isWideScreenLayout) && state.currentVideo != nil
         let isFullscreen = isWideScreenLayout
-        #else
-        let canToggleFullscreen = false
-        let isFullscreen = false
-        #endif
 
         return RemotePlayerState(
             videoID: state.currentVideo?.id.videoID,
@@ -547,8 +536,8 @@ final class RemoteControlCoordinator {
             await playerService?.seek(to: time)
 
         case .setVolume(let volume):
-            // Only handle volume commands when in-app (MPV) volume mode
-            guard GlobalLayoutSettings.cached.volumeMode == .mpv else {
+            // Only handle volume commands when in-app (player) volume mode
+            guard GlobalLayoutSettings.cached.volumeMode == .inApp else {
                 rcDebug("HANDLE", "[\(senderName)] Ignoring setVolume - system volume mode active")
                 return
             }
@@ -561,8 +550,8 @@ final class RemoteControlCoordinator {
             }
 
         case .setMuted(let muted):
-            // Only handle mute commands when in-app (MPV) volume mode
-            guard GlobalLayoutSettings.cached.volumeMode == .mpv else {
+            // Only handle mute commands when in-app (player) volume mode
+            guard GlobalLayoutSettings.cached.volumeMode == .inApp else {
                 rcDebug("HANDLE", "[\(senderName)] Ignoring setMuted - system volume mode active")
                 return
             }

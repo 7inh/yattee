@@ -6,7 +6,6 @@
 //  the render server: no body evaluations or app CPU per frame.
 //
 
-#if os(iOS) || os(tvOS)
 import SwiftUI
 import UIKit
 
@@ -127,4 +126,3 @@ final class MarqueeLayerScrollerView<Content: View>: UIView {
         layer.add(animation, forKey: Self.animationKey)
     }
 }
-#endif

@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 /// Consolidated actions and state for player control buttons.
 /// Used by `ControlsSectionRenderer` (iOS) and `MacOSControlsSectionRenderer`
@@ -28,27 +27,22 @@ struct PlayerControlsActions {
     /// Whether the video is widescreen aspect ratio
     let isWidescreenVideo: Bool
 
-    #if os(iOS)
     /// Whether orientation is locked
     let isOrientationLocked: Bool
-    #endif
 
     /// Whether the side panel is visible
     let isPanelVisible: Bool
 
-    #if os(iOS)
     /// Whether the side panel is pinned (iPad landscape)
     let isPanelPinned: Bool
 
     /// Whether the corner layout is active: the fullscreen button then
     /// toggles the panels (hide = fullscreen video, unhide on next press)
     var isCornerLayout: Bool = false
-    #endif
 
     /// Which side the panel is on
     let panelSide: FloatingPanelSide
 
-    #if os(iOS)
     /// Whether running on iPad
     let isIPad: Bool
 
@@ -69,9 +63,8 @@ struct PlayerControlsActions {
     var togglesPanelOnFullscreen: Bool {
         usesRotationFreeFullscreen && onToggleDetailsVisibility == nil && onTogglePanel != nil
     }
-    #endif
 
-    /// Whether volume controls should show (mpv mode)
+    /// Whether volume controls should show (player mode)
     let showVolumeControls: Bool
 
     /// Whether debug button should show
@@ -98,17 +91,15 @@ struct PlayerControlsActions {
     /// Current audio stream
     let currentAudioStream: Stream?
 
-    /// Embedded (in-container) tracks reported by mpv for the loaded file
-    var embeddedSubtitleTracks: [MPVTrack] = []
+    /// Embedded (in-container) tracks reported by player for the loaded file
+    var embeddedSubtitleTracks: [MediaTrack] = []
     var currentEmbeddedSubtitleTrackID: Int? = nil
 
-    #if os(iOS)
     /// Current panscan value (0.0 = fit, 1.0 = fill)
     let panscanValue: Double
 
     /// Whether panscan change is currently allowed
     let isPanscanAllowed: Bool
-    #endif
 
     /// Whether auto-play next is enabled
     let isAutoPlayNextEnabled: Bool
@@ -143,18 +134,14 @@ struct PlayerControlsActions {
     /// panel toggle so the controls-resize never plays visibly)
     var onHideControls: (() -> Void)?
 
-    #if os(iOS)
     /// Toggle orientation lock
     var onToggleOrientationLock: (() -> Void)?
-    #endif
 
     /// Toggle side panel
     var onTogglePanel: (() -> Void)?
 
-    #if os(iOS)
     /// Toggle panscan between 0 and 1
     var onTogglePanscan: (() -> Void)?
-    #endif
 
     /// Toggle auto-play next in queue
     var onToggleAutoPlayNext: (() -> Void)?
@@ -250,11 +237,7 @@ struct PlayerControlsActions {
     /// Whether an external subtitle file can be loaded: media-source playback
     /// (local folder/SMB/WebDAV) on platforms with a file picker.
     var canLoadExternalSubtitles: Bool {
-        #if os(tvOS)
-        return false
-        #else
         return currentVideo?.isFromMediaSource == true
-        #endif
     }
 
     /// Whether chapters are available
@@ -267,17 +250,6 @@ struct PlayerControlsActions {
         playerState.pipState == .active ? "pip.exit" : "pip.enter"
     }
 
-    #if os(macOS)
-    /// Fullscreen icon based on current state (no rotation semantics on macOS).
-    var fullscreenIcon: String {
-        isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
-    }
-
-    /// Whether the fullscreen button should be shown
-    var shouldShowFullscreenButton: Bool {
-        onToggleFullscreen != nil
-    }
-    #else
     /// Fullscreen icon based on current state.
     /// Uses rotation icons when tapping will cause device rotation,
     /// otherwise uses standard fullscreen arrows.
@@ -391,7 +363,6 @@ struct PlayerControlsActions {
 
         return showFullscreenButton && hasFullscreenAction && !isPinnedPanelActive
     }
-    #endif
 
     /// Whether PiP button should be enabled.
     /// No video track in audio-only playback - `isPiPPossible` may lag behind
@@ -410,5 +381,3 @@ struct PlayerControlsActions {
         playerState.hasPrevious
     }
 }
-
-#endif

@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct DownloadSettingsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
@@ -18,18 +17,14 @@ struct DownloadSettingsView: View {
                 StorageSection(downloadManager: downloadManager)
                 QualitySection(downloadSettings: downloadSettings)
                 ConcurrencySection(downloadSettings: downloadSettings)
-                #if os(iOS)
                 CellularSection(
                     downloadSettings: downloadSettings,
                     downloadManager: downloadManager
                 )
-                #endif
             }
         }
         .navigationTitle(String(localized: "settings.downloads.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
@@ -50,7 +45,6 @@ private struct StorageSection: View {
 
     var body: some View {
         SettingsFormSection {
-            #if os(iOS)
             NavigationLink {
                 DownloadsStorageView()
             } label: {
@@ -61,15 +55,6 @@ private struct StorageSection: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            #else
-            SettingsNavigationRow(
-                "settings.downloads.usedStorage",
-                systemImage: "internaldrive",
-                trailing: { Text(formatBytes(storageUsed)) }
-            ) {
-                DownloadsStorageView()
-            }
-            #endif
         }
     }
 }
@@ -113,7 +98,6 @@ private struct ConcurrencySection: View {
 
     var body: some View {
         SettingsFormSection {
-            #if os(iOS)
             Stepper(value: $downloadSettings.maxConcurrentDownloads, in: 1...5) {
                 HStack {
                     Text(String(localized: "settings.downloads.maxConcurrent"))
@@ -122,20 +106,12 @@ private struct ConcurrencySection: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            #else
-            Stepper(
-                "\(String(localized: "settings.downloads.maxConcurrent")): \(downloadSettings.maxConcurrentDownloads)",
-                value: $downloadSettings.maxConcurrentDownloads,
-                in: 1...5
-            )
-            #endif
         }
     }
 }
 
 // MARK: - Cellular Section
 
-#if os(iOS)
 private struct CellularSection: View {
     @Bindable var downloadSettings: DownloadSettings
     let downloadManager: DownloadManager?
@@ -152,7 +128,6 @@ private struct CellularSection: View {
         }
     }
 }
-#endif
 
 #Preview {
     NavigationStack {
@@ -160,4 +135,3 @@ private struct CellularSection: View {
     }
     .appEnvironment(.preview)
 }
-#endif

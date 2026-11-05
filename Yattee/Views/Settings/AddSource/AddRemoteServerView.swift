@@ -110,15 +110,7 @@ struct AddRemoteServerView: View {
     /// render the "Add Source" action button inline in the form instead, so it
     /// is always visible.
     private var usesToolbarActionButton: Bool {
-        #if os(macOS)
-        if #available(macOS 26, *) {
-            return true
-        } else {
-            return false
-        }
-        #else
         return false
-        #endif
     }
 
     private var canAdd: Bool {
@@ -140,31 +132,9 @@ struct AddRemoteServerView: View {
     // MARK: - Body
 
     var body: some View {
-        #if os(tvOS)
-        VStack(spacing: 0) {
-            formContent
-        }
-        .confirmationDialog(
-            String(localized: "sources.yatteeServer.warning.title"),
-            isPresented: $showingYatteeServerWarning,
-            titleVisibility: .visible
-        ) {
-            yatteeServerWarningButtons
-        } message: {
-            Text(String(localized: "sources.yatteeServer.warning.message"))
-        }
-        .presentationCompactAdaptation(.sheet)
-        .fullScreenCover(item: $signInInstance, onDismiss: finishAdding) { instance in
-            signInStep(for: instance)
-        }
-        #else
         formContent
-            #if os(iOS)
             .navigationTitle(String(localized: "sources.addInvidiousServer"))
             .navigationBarTitleDisplayMode(.inline)
-            #else
-            .navigationTitle(String(localized: "sources.addRemoteServer"))
-            #endif
             .confirmationDialog(
                 String(localized: "sources.yatteeServer.warning.title"),
                 isPresented: $showingYatteeServerWarning,
@@ -178,7 +148,6 @@ struct AddRemoteServerView: View {
             .sheet(item: $signInInstance, onDismiss: finishAdding) { instance in
                 signInStep(for: instance)
             }
-        #endif
     }
 
     /// The optional login offered right after a source that supports accounts
@@ -234,98 +203,17 @@ struct AddRemoteServerView: View {
                 }
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .toolbar {
-            if isFieldsRevealed, usesToolbarActionButton {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        addSource()
-                    } label: {
-                        if isValidatingCredentials {
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text(String(localized: "sources.validatingCredentials"))
-                            }
-                        } else {
-                            Text(String(localized: "sources.addSource"))
-                        }
-                    }
-                    .disabled(!canAdd || isValidatingCredentials)
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("addRemoteServer.actionButton")
-                }
-            }
-        }
-        #endif
     }
 
     // MARK: - URL Entry Section
 
     private var urlEntrySection: some View {
         Section {
-            #if os(tvOS)
-            TVSettingsTextField(title: String(localized: "sources.placeholder.urlOrAddress"), text: $urlString)
-                .onChange(of: urlString) { _, _ in
-                    handleURLChange()
-                }
-
-            if !isFieldsRevealed && !isAwaitingBasicAuth {
-                Button {
-                    startDetection()
-                } label: {
-                    if case .detecting = uiState {
-                        HStack {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(String(localized: "sources.detecting"))
-                        }
-                    } else {
-                        Text(String(localized: "sources.detect"))
-                    }
-                }
-                .buttonStyle(TVSettingsButtonStyle())
-                .disabled(urlString.isEmpty || uiState == .detecting)
-            }
-            #elseif os(macOS)
-            LabeledContent(String(localized: "sources.field.url")) {
-                TextField("", text: $urlString, prompt: Text(String(localized: "sources.placeholder.urlOrAddress")))
-                    .textContentType(.URL)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("addRemoteServer.urlField")
-                    .onChange(of: urlString) { _, _ in
-                        handleURLChange()
-                    }
-            }
-
-            if !isFieldsRevealed && !isAwaitingBasicAuth {
-                HStack {
-                    Spacer()
-                    Button {
-                        startDetection()
-                    } label: {
-                        HStack(spacing: 6) {
-                            if case .detecting = uiState {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Text(String(localized: "sources.detect"))
-                        }
-                    }
-                    .disabled(urlString.isEmpty || uiState == .detecting)
-                    .accessibilityIdentifier("addRemoteServer.detectButton")
-                }
-            }
-            #else
             TextField(String(localized: "sources.placeholder.urlOrAddress"), text: $urlString)
                 .textContentType(.URL)
-                #if os(iOS)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
-                #endif
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("addRemoteServer.urlField")
                 .onChange(of: urlString) { _, _ in
@@ -347,13 +235,8 @@ struct AddRemoteServerView: View {
                 .disabled(urlString.isEmpty || uiState == .detecting)
                 .accessibilityIdentifier("addRemoteServer.detectButton")
             }
-            #endif
         } footer: {
-            #if os(iOS)
             Text(String(localized: "sources.footer.invidiousServer"))
-            #else
-            Text(String(localized: "sources.footer.remoteServer"))
-            #endif
         }
     }
 
@@ -390,30 +273,13 @@ struct AddRemoteServerView: View {
     @ViewBuilder
     private func basicAuthRequiredSection(invalidCredentials: Bool) -> some View {
         Section {
-            #if os(tvOS)
-            TVSettingsTextField(title: String(localized: "sources.field.username"), text: $basicAuthUsername)
-            TVSettingsTextField(title: String(localized: "sources.field.password"), text: $basicAuthPassword, isSecure: true)
-            #elseif os(macOS)
-            LabeledContent(String(localized: "sources.field.username")) {
-                TextField("", text: $basicAuthUsername)
-                    .textContentType(.username)
-                    .autocorrectionDisabled()
-            }
-            LabeledContent(String(localized: "sources.field.password")) {
-                SecureField("", text: $basicAuthPassword)
-                    .textContentType(.password)
-            }
-            #else
             TextField(String(localized: "sources.field.username"), text: $basicAuthUsername)
                 .textContentType(.username)
-                #if os(iOS)
                 .textInputAutocapitalization(.never)
-                #endif
                 .autocorrectionDisabled()
 
             SecureField(String(localized: "sources.field.password"), text: $basicAuthPassword)
                 .textContentType(.password)
-            #endif
         } header: {
             Text(String(localized: "sources.header.basicAuth"))
         } footer: {
@@ -440,9 +306,6 @@ struct AddRemoteServerView: View {
                 }
             }
             .disabled(basicAuthUsername.isEmpty || basicAuthPassword.isEmpty || uiState == .detecting)
-            #if os(tvOS)
-            .buttonStyle(TVSettingsButtonStyle())
-            #endif
             .accessibilityIdentifier("addRemoteServer.retryDetectionButton")
         }
     }
@@ -457,15 +320,7 @@ struct AddRemoteServerView: View {
         // and comes back as soon as detection succeeds.
         if !hasDetectionFailed {
             Section {
-                #if os(tvOS)
-                TVSettingsTextField(title: String(localized: "sources.field.nameOptional"), text: $name)
-                #elseif os(macOS)
-                LabeledContent(String(localized: "sources.field.name")) {
-                    TextField("", text: $name, prompt: Text(String(localized: "sources.field.nameOptional")))
-                }
-                #else
                 TextField(String(localized: "sources.field.nameOptional"), text: $name)
-                #endif
             } header: {
                 Text(String(localized: "sources.header.displayName"))
             }
@@ -490,14 +345,7 @@ struct AddRemoteServerView: View {
         // SSL Certificate toggle (show if SSL error occurred)
         if showSSLToggle {
             Section {
-                #if os(tvOS)
-                TVSettingsToggle(
-                    title: String(localized: "sources.field.allowInvalidCertificates"),
-                    isOn: $allowInvalidCertificates
-                )
-                #else
                 Toggle(String(localized: "sources.field.allowInvalidCertificates"), isOn: $allowInvalidCertificates)
-                #endif
             } header: {
                 Text(String(localized: "sources.header.security"))
             } footer: {
@@ -516,30 +364,13 @@ struct AddRemoteServerView: View {
 
         if showBasicAuthSection {
             Section {
-                #if os(tvOS)
-                TVSettingsTextField(title: String(localized: "sources.field.username"), text: $basicAuthUsername)
-                TVSettingsTextField(title: String(localized: "sources.field.password"), text: $basicAuthPassword, isSecure: true)
-                #elseif os(macOS)
-                LabeledContent(String(localized: "sources.field.username")) {
-                    TextField("", text: $basicAuthUsername)
-                        .textContentType(.username)
-                        .autocorrectionDisabled()
-                }
-                LabeledContent(String(localized: "sources.field.password")) {
-                    SecureField("", text: $basicAuthPassword)
-                        .textContentType(.password)
-                }
-                #else
                 TextField(String(localized: "sources.field.username"), text: $basicAuthUsername)
                     .textContentType(.username)
-                    #if os(iOS)
                     .textInputAutocapitalization(.never)
-                    #endif
                     .autocorrectionDisabled()
 
                 SecureField(String(localized: "sources.field.password"), text: $basicAuthPassword)
                     .textContentType(.password)
-                #endif
             } header: {
                 Text(String(localized: detectedType == .yatteeServer ? "sources.header.auth" : "sources.header.basicAuth"))
             } footer: {
@@ -574,9 +405,6 @@ struct AddRemoteServerView: View {
             }
             .accessibilityIdentifier("addRemoteServer.actionButton")
             .disabled(!canAdd || isValidatingCredentials)
-            #if os(tvOS)
-            .buttonStyle(TVSettingsButtonStyle())
-            #endif
         }
     }
 
@@ -602,9 +430,6 @@ struct AddRemoteServerView: View {
             }
             .accessibilityIdentifier("addRemoteServer.retryDetectionButton")
             .disabled(urlString.isEmpty || isRedetecting)
-            #if os(tvOS)
-            .buttonStyle(TVSettingsButtonStyle())
-            #endif
         }
     }
 

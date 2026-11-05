@@ -5,7 +5,6 @@
 //  Picker for selecting and configuring a tap zone action.
 //
 
-#if os(iOS)
 import SwiftUI
 
 /// View for selecting and configuring a tap zone's action.
@@ -63,9 +62,7 @@ struct TapZoneActionPicker: View {
             }
         }
         .navigationTitle(position.displayName)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     @ViewBuilder
@@ -119,4 +116,3 @@ struct TapZoneActionPicker: View {
         )
     }
 }
-#endif

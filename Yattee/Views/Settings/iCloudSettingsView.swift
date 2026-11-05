@@ -85,12 +85,8 @@ struct iCloudSettingsView: View {
                 }
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.icloud.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .task {
             await cloudKitSync?.refreshAccountStatus()
         }
@@ -275,9 +271,6 @@ struct iCloudSettingsView: View {
                 Label(String(localized: "settings.icloud.category.mediaSources"), systemImage: "externaldrive.connected.to.line.below")
             }
         }
-        #if os(macOS)
-        .labelStyle(FixedIconWidthLabelStyle())
-        #endif
     }
 
     // MARK: - Sync Status Section

@@ -19,12 +19,8 @@ struct PrivacySettingsView: View {
             historySection
             searchSection
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.privacy.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     // MARK: - Sections
@@ -37,14 +33,7 @@ struct PrivacySettingsView: View {
                     Label {
                         Text(String(localized: "settings.behavior.incognitoMode"))
                     } icon: {
-                        #if os(macOS)
                         Image("incognito")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
-                        #else
-                        Image("incognito")
-                        #endif
                     }
                 }
             }

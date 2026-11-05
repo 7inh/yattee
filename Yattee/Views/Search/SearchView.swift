@@ -98,29 +98,19 @@ struct SearchView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         tvOSOrDefaultContent
-        #if !os(macOS)
         .sheet(isPresented: $showFilterSheet) {
             searchFiltersSheetContent
-            #if !os(tvOS)
             .presentationDetents([.medium, .large])
-            #endif
         }
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
-            #if !os(tvOS)
             .liquidGlassSheetContent(sourceID: "searchViewOptions", in: sheetTransition)
-            #endif
         }
-        #endif
         .onChange(of: searchTextBinding.wrappedValue) { _, newValue in
             if suppressNextTextChangeSearch {
                 suppressNextTextChangeSearch = false
@@ -212,66 +202,9 @@ struct SearchView: View {
         )
     }
 
-    #if os(macOS)
-    private var searchFiltersToolbarButton: some View {
-        Button {
-            showFilterSheet = true
-        } label: {
-            Label(String(localized: "search.filters"), systemImage: filtersIconName)
-        }
-        .popover(isPresented: $showFilterSheet, arrowEdge: .bottom) {
-            searchFiltersSheetContent
-        }
-    }
-    #endif
 
     @ViewBuilder
     private var tvOSOrDefaultContent: some View {
-        #if os(tvOS)
-        VStack(spacing: 0) {
-            // tvOS: Search field, type filter, search filters, view options
-            HStack(spacing: 24) {
-                TextField("search.placeholder", text: searchTextBinding)
-                    .textFieldStyle(.plain)
-                    .onSubmit {
-                        searchViewModel?.cancelSuggestions()
-                        searchViewModel?.filters.type = .video
-                        if let filters = searchViewModel?.filters {
-                            saveFilters(filters)
-                        }
-                        Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-                    }
-
-                if !searchTextBinding.wrappedValue.isEmpty {
-                    // Type filter
-                    filterMenu(
-                        title: (searchViewModel?.filters.type ?? .video).title,
-                        selection: Binding(
-                            get: { searchViewModel?.filters.type ?? .video },
-                            set: { searchViewModel?.filters.type = $0 }
-                        ),
-                        options: SearchContentType.allCases,
-                        labelForOption: { $0.title }
-                    )
-
-                    // Combined search filters menu
-                    tvOSFiltersMenu
-                }
-
-                Button {
-                    showViewOptions = true
-                } label: {
-                    Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                }
-            }
-            .focusSection()
-            .padding(.horizontal, 48)
-            .padding(.top, 20)
-            searchContent
-                .padding(.top, 20)
-                .focusSection()
-        }
-        #else
         searchContent
         .navigationTitle(String(localized: "tabs.search"))
         .toolbarTitleDisplayMode(.inlineLarge)
@@ -284,48 +217,14 @@ struct SearchView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "searchViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
-            #if os(macOS)
-            if searchInstance?.supportsSearchFilters == true {
-                // Filters button + content type picker are always visible on macOS.
-                // The picker is rendered bare (no opacity/disabled/fixedSize wrappers):
-                // wrapping a `.segmented` Picker in those modifiers inserts a hosting
-                // layer that makes the toolbar fall back to a Liquid-Glass pill instead
-                // of the native segmented control.
-                ToolbarItem(placement: .navigation) {
-                    searchFiltersToolbarButton
-                }
-                ToolbarItem(placement: .principal) {
-                    if #available(macOS 26, *) {
-                        contentTypePicker
-                    } else {
-                        contentTypePicker
-                            .fixedSize()
-                    }
-                }
-            }
-            #endif
-            #if os(macOS)
-            // Pin the trailing group (search field) to the right edge
-            // so it doesn't shift when the filter items appear/disappear.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
         }
         .searchable(text: searchTextBinding, prompt: Text(String(localized: "search.placeholder")))
         .onSubmit(of: .search) {
             searchViewModel?.cancelSuggestions()
-            #if !os(macOS)
             // On macOS the content type picker is always visible, so preserve the
             // user's chosen type instead of resetting it to .video on each submit.
             searchViewModel?.filters.type = .video
-            #endif
             if let filters = searchViewModel?.filters {
                 saveFilters(filters)
             }
@@ -337,7 +236,6 @@ struct SearchView: View {
             }
             Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
         }
-        #endif
     }
 
     @ViewBuilder
@@ -458,19 +356,11 @@ struct SearchView: View {
     // MARK: - Views
 
     private var recentItemsSpacing: CGFloat {
-        #if os(tvOS)
-        16
-        #else
         0
-        #endif
     }
 
     private var horizontalCardSpacing: CGFloat {
-        #if os(tvOS)
-        48
-        #else
         16
-        #endif
     }
 
     /// Instance picker for selecting search source when multiple instances are available
@@ -504,14 +394,11 @@ struct SearchView: View {
             }
             .padding(listStyle == .inset ? 4 : 0)
             .background(listStyle == .inset ? ListBackgroundStyle.card.color : .clear)
-            #if !os(tvOS)
             .clipShape(.rect(cornerRadius: 10))
-            #endif
             .padding(.horizontal)
         }
     }
 
-    #if !os(tvOS)
     private var filtersIconName: String {
         (searchViewModel?.filters.isDefault ?? true)
             ? "line.3.horizontal.decrease.circle"
@@ -530,9 +417,7 @@ struct SearchView: View {
         }
         .pickerStyle(.segmented)
     }
-    #endif
 
-    #if os(iOS)
     private var searchFiltersStrip: some View {
         HStack(spacing: 12) {
             // Filter button
@@ -548,107 +433,7 @@ struct SearchView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
     }
-    #endif
 
-    #if os(tvOS)
-    private func filterMenu<T: Hashable & Identifiable & CaseIterable>(
-        title: String,
-        selection: Binding<T>,
-        options: [T],
-        labelForOption: @escaping (T) -> String
-    ) -> some View {
-        Menu {
-            ForEach(options) { option in
-                Button {
-                    selection.wrappedValue = option
-                    if let filters = searchViewModel?.filters {
-                        saveFilters(filters)
-                    }
-                    Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-                } label: {
-                    if option == selection.wrappedValue {
-                        Label(labelForOption(option), systemImage: "checkmark")
-                    } else {
-                        Text(labelForOption(option))
-                    }
-                }
-            }
-        } label: {
-            Text(title)
-        }
-    }
-
-    private var tvOSFiltersMenu: some View {
-        Menu {
-            // Sort By
-            Menu(String(localized: "search.sort")) {
-                ForEach(SearchSortOption.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.sort = option
-                        if let filters = searchViewModel?.filters { saveFilters(filters) }
-                        Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-                    } label: {
-                        if searchViewModel?.filters.sort == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            // Upload Date
-            Menu(String(localized: "search.uploadDate")) {
-                ForEach(SearchDateFilter.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.date = option
-                        if let filters = searchViewModel?.filters { saveFilters(filters) }
-                        Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-                    } label: {
-                        if searchViewModel?.filters.date == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            // Duration
-            Menu(String(localized: "search.duration")) {
-                ForEach(SearchDurationFilter.allCases) { option in
-                    Button {
-                        searchViewModel?.filters.duration = option
-                        if let filters = searchViewModel?.filters { saveFilters(filters) }
-                        Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-                    } label: {
-                        if searchViewModel?.filters.duration == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            // Reset
-            Button(role: .destructive) {
-                let currentType = searchViewModel?.filters.type ?? .video
-                searchViewModel?.filters = .defaults
-                searchViewModel?.filters.type = currentType
-                if let filters = searchViewModel?.filters { saveFilters(filters) }
-                Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
-            } label: {
-                Label(String(localized: "search.filters.reset"), systemImage: "arrow.counterclockwise")
-            }
-            .disabled(searchViewModel?.filters.isDefault ?? true)
-        } label: {
-            Label(String(localized: "search.filters"), systemImage: "line.3.horizontal.decrease")
-        }
-    }
-    #endif
 
     // MARK: - Search History Helpers
 
@@ -695,16 +480,6 @@ struct SearchView: View {
                         if !searchHistory.isEmpty {
                             VStack(alignment: .leading, spacing: 0) {
                                 // Header - tappable to expand/collapse when more than 5 items
-                                #if os(tvOS)
-                                HStack {
-                                    Text(String(localized: "search.recentSearches.title"))
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                }
-                                .padding(.horizontal)
-                                .padding(.bottom, 8)
-                                #else
                                 Button {
                                     if hasMoreSearchHistory {
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -729,7 +504,6 @@ struct SearchView: View {
                                 .disabled(!hasMoreSearchHistory)
                                 .padding(.horizontal)
                                 .padding(.bottom, 8)
-                                #endif
 
                                 // Items
                                 VStack(spacing: recentItemsSpacing) {
@@ -769,20 +543,14 @@ struct SearchView: View {
                                             }
                                         }
 
-                                        #if !os(tvOS)
                                         if history.id != displayedSearchHistory.last?.id {
                                             Divider()
                                                 .padding(.leading, 52)
                                         }
-                                        #endif
                                     }
                                 }
-                                #if os(tvOS)
-                                .background(.clear)
-                                #else
                                 .background(listStyle == .inset ? ListBackgroundStyle.card.color : Color.clear)
                                 .clipShape(.rect(cornerRadius: listStyle == .inset ? 10 : 0))
-                                #endif
                                 .padding(.horizontal)
                             }
                         }
@@ -815,11 +583,7 @@ struct SearchView: View {
                                                     channel: channelFromRecent(recentChannel),
                                                     isCompact: false
                                                 )
-                                                #if os(tvOS)
-                                                .frame(width: 240)
-                                                #else
                                                 .frame(width: 160)
-                                                #endif
                                             }
                                             .zoomTransitionSource(id: recentChannel.channelID)
                                             .buttonStyle(.plain)
@@ -834,9 +598,6 @@ struct SearchView: View {
                                     }
                                     .padding(.horizontal)
                                 }
-                                #if os(tvOS)
-                                .scrollClipDisabled()
-                                #endif
                             }
                         }
 
@@ -860,11 +621,7 @@ struct SearchView: View {
                                                     playlist: playlistFromRecent(recentPlaylist),
                                                     isCompact: false
                                                 )
-                                                #if os(tvOS)
-                                                .frame(width: 320)
-                                                #else
                                                 .frame(width: 200)
-                                                #endif
                                             }
                                             .zoomTransitionSource(id: playlistIDFromRecent(recentPlaylist))
                                             .buttonStyle(.plain)
@@ -879,9 +636,6 @@ struct SearchView: View {
                                     }
                                     .padding(.horizontal)
                                 }
-                                #if os(tvOS)
-                                .scrollClipDisabled()
-                                #endif
                             }
                         }
 
@@ -902,9 +656,6 @@ struct SearchView: View {
                     }
                     .padding(.vertical)
                 }
-                #if os(tvOS)
-                .scrollClipDisabled()
-                #endif
                 .background(listStyle == .inset ? ListBackgroundStyle.grouped.color : ListBackgroundStyle.plain.color)
                 .accessibilityLabel("search.recents")
                 .confirmationDialog(
@@ -1052,22 +803,14 @@ struct SearchView: View {
     @ViewBuilder
     private var resultsViewWithLoading: some View {
         if searchViewModel != nil {
-            #if os(tvOS)
-            ProgressView()
-                .accessibilityIdentifier("search.loading")
-                .frame(maxWidth: .infinity)
-                .padding(.top, 40)
-            #else
             resultsBackgroundStyle.color
                 .ignoresSafeArea()
                 .overlay(
                     ScrollView {
                         VStack(spacing: 16) {
-                            #if os(iOS)
                             if searchInstance?.supportsSearchFilters == true {
                                 searchFiltersStrip
                             }
-                            #endif
 
                             ProgressView()
                                 .accessibilityIdentifier("search.loading")
@@ -1076,35 +819,12 @@ struct SearchView: View {
                         }
                     }
                 )
-            #endif
         }
     }
 
     @ViewBuilder
     private var resultsView: some View {
         if searchViewModel != nil {
-            #if os(tvOS)
-            ScrollView {
-                if layout == .list {
-                    listResultsContent
-                } else {
-                    gridResultsContent
-                }
-            }
-            .scrollClipDisabled()
-            .accessibilityLabel("search.results")
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            viewWidth = geometry.size.width
-                        }
-                        .onChange(of: geometry.size.width) { _, newWidth in
-                            viewWidth = newWidth
-                        }
-                }
-            )
-            #else
             resultsBackgroundStyle.color
                 .ignoresSafeArea()
                 .overlay(
@@ -1128,7 +848,6 @@ struct SearchView: View {
                         }
                     )
                 )
-            #endif
         }
     }
 
@@ -1148,11 +867,9 @@ struct SearchView: View {
         if let vm = searchViewModel {
             VStack(spacing: 0) {
                 // Filter strip at top (only for instances that support search filters)
-                #if os(iOS)
                 if searchInstance?.supportsSearchFilters == true {
                     searchFiltersStrip
                 }
-                #endif
 
                 // Card container
                 VideoListContent(listStyle: .inset) {
@@ -1176,11 +893,9 @@ struct SearchView: View {
         if let vm = searchViewModel {
             VStack(spacing: 0) {
                 // Filter strip at top (only for instances that support search filters)
-                #if os(iOS)
                 if searchInstance?.supportsSearchFilters == true {
                     searchFiltersStrip
                 }
-                #endif
 
                 VideoListContent(listStyle: .plain) {
                     ForEach(Array(unifiedResults.enumerated()), id: \.element.id) { resultIndex, item in
@@ -1218,9 +933,7 @@ struct SearchView: View {
                         videoIndex: videoIndex,
                         loadMoreVideos: loadMoreSearchResultsCallback
                     )
-                    #if !os(tvOS)
                     .videoSwipeActions(video: video)
-                    #endif
                     .onAppear {
                         if resultIndex == unifiedResults.count - 3 {
                             Task { await vm.loadMore() }
@@ -1266,12 +979,10 @@ struct SearchView: View {
         if let vm = searchViewModel {
             LazyVStack(spacing: 16) {
                 // Filter strip at top (only for instances that support search filters)
-                #if os(iOS)
                 if searchInstance?.supportsSearchFilters == true {
                     searchFiltersStrip
                         .padding(.bottom, 8)
                 }
-                #endif
 
                 // Single grid with mixed content preserving order
                 VideoGridContent(columns: gridConfig.effectiveColumns) {
@@ -1345,9 +1056,7 @@ struct SearchView: View {
     }
 
     private func dismissKeyboard() {
-        #if os(iOS)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #endif
     }
 
     // MARK: - Search History Helpers
@@ -1517,19 +1226,10 @@ struct SearchFiltersSheet: View {
     @Binding var filters: SearchFilters
 
     var body: some View {
-        #if os(macOS)
-        // Popover content: filters apply live, click-outside dismisses.
-        filtersForm
-            .onChange(of: filters) { _, _ in onApply() }
-            .padding()
-            .frame(width: 300)
-        #else
         NavigationStack {
             filtersForm
             .navigationTitle(String(localized: "search.filters"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel")) {
@@ -1544,7 +1244,6 @@ struct SearchFiltersSheet: View {
                 }
             }
         }
-        #endif
     }
 
     private var filtersForm: some View {

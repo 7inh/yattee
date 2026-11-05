@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 struct PlaybackSpeedMenuContent: View {
     let currentRate: PlaybackRate
@@ -28,5 +27,3 @@ struct PlaybackSpeedMenuContent: View {
         }
     }
 }
-
-#endif

@@ -29,15 +29,8 @@ struct NetworkShareDiscoverySheet: View {
     var body: some View {
         NavigationStack {
             content
-                #if os(tvOS)
-                .scrollClipDisabled()
-                .padding(.horizontal, 40)
-                .padding(.vertical, 40)
-                #else
                 .navigationTitle(String(localized: "discovery.title"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: "common.cancel")) {
@@ -46,7 +39,6 @@ struct NetworkShareDiscoverySheet: View {
                         }
                     }
                 }
-                #endif
                 .onAppear {
                     discoveryService?.startDiscovery()
                 }
@@ -54,9 +46,6 @@ struct NetworkShareDiscoverySheet: View {
                     discoveryService?.stopDiscovery()
                 }
         }
-        #if os(macOS)
-        .frame(minWidth: 450, minHeight: 400)
-        #endif
     }
 
     @ViewBuilder
@@ -73,14 +62,6 @@ struct NetworkShareDiscoverySheet: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        #if os(tvOS)
-                        // The toolbar Cancel is iOS/macOS only. Until a share
-                        // turns up, this is the only thing the remote can focus.
-                        Button(String(localized: "common.cancel")) {
-                            service.stopDiscovery()
-                            dismiss()
-                        }
-                        #endif
                     }
                 }
 
@@ -133,9 +114,6 @@ struct NetworkShareDiscoverySheet: View {
                     }
                 }
             }
-            #if os(tvOS)
-            .listStyle(.grouped)
-            #endif
         } else {
             // No environment available
             ContentUnavailableView {
@@ -143,11 +121,6 @@ struct NetworkShareDiscoverySheet: View {
             } description: {
                 Text(String(localized: "discovery.unavailable.description"))
             } actions: {
-                #if os(tvOS)
-                Button(String(localized: "common.cancel")) {
-                    dismiss()
-                }
-                #endif
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

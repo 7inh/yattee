@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 
-#if !os(tvOS)
 
 extension DownloadManager {
     // MARK: - Download Execution
@@ -943,5 +942,3 @@ extension DownloadManager {
         }
     }
 }
-
-#endif

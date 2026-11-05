@@ -49,17 +49,6 @@ struct VideoListContainer<Header: View, Content: View, Footer: View>: View {
     private let cardBottomPadding: CGFloat = 16
 
     var body: some View {
-        #if os(tvOS)
-        // tvOS: Simple ScrollView without background overlay
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                header()
-                content()
-                footer()
-            }
-        }
-        .scrollClipDisabled()
-        #else
         // iOS/macOS: Background overlay pattern
         backgroundStyle.color
             .ignoresSafeArea()
@@ -78,7 +67,6 @@ struct VideoListContainer<Header: View, Content: View, Footer: View>: View {
                     }
                 }
             )
-        #endif
     }
 
     // MARK: - Private

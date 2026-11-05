@@ -48,17 +48,10 @@ struct TabBarSettingsView: View {
                 startupSection
                 configurableTabsSection
             }
-            #if os(iOS) || os(tvOS)
             .environment(\.editMode, .constant(.active))
-            #endif
             .navigationTitle(String(localized: "settings.tabBar.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
         }
-        #if os(macOS)
-        .frame(minWidth: 400, minHeight: 300)
-        #endif
     }
 
     // MARK: - Sections
@@ -80,21 +73,11 @@ struct TabBarSettingsView: View {
     private var configurableTabsSection: some View {
         Section {
             ForEach(itemOrder) { item in
-                #if os(tvOS)
-                if item != .downloads {
-                    TabBarItemRow(
-                        icon: item.icon,
-                        title: item.localizedTitle,
-                        isVisible: itemBinding(for: item)
-                    )
-                }
-                #else
                 TabBarItemRow(
                     icon: item.icon,
                     title: item.localizedTitle,
                     isVisible: itemBinding(for: item)
                 )
-                #endif
             }
             .onMove { from, to in
                 var order = itemOrder

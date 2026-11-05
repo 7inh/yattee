@@ -5,7 +5,6 @@
 //  Calculator for determining tap zone hit-testing and frames.
 //
 
-#if os(iOS)
 import CoreGraphics
 import Foundation
 
@@ -64,4 +63,3 @@ enum TapZoneCalculator {
         }
     }
 }
-#endif

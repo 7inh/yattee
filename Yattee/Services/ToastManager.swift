@@ -38,11 +38,7 @@ final class ToastManager {
 
     /// Determines whether the player is currently visible (expanded sheet on iOS, window on macOS).
     private var isPlayerVisible: Bool {
-        #if os(macOS)
-        return ExpandedPlayerWindowManager.shared.isPresented
-        #else
         return navigationCoordinator?.isPlayerExpanded ?? false
-        #endif
     }
 
     /// Resolves the active scope for a toast based on current UI state.
@@ -96,14 +92,8 @@ final class ToastManager {
             var lastPlayerVisible = self.isPlayerVisible
             
             while !Task.isCancelled {
-                #if os(macOS)
-                // ExpandedPlayerWindowManager.isPresented follows the window
-                // and is not observable, so poll it.
-                try? await Task.sleep(for: .milliseconds(100))
-                #else
                 guard let coordinator = self.navigationCoordinator else { break }
                 await observationChange { _ = coordinator.isPlayerExpanded }
-                #endif
                 guard !Task.isCancelled else { break }
                 
                 let currentPlayerVisible = self.isPlayerVisible

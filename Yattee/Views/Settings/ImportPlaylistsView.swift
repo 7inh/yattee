@@ -11,9 +11,6 @@ struct ImportPlaylistsView: View {
     let instance: Instance
 
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(tvOS)
-    @Environment(\.dismiss) private var dismiss
-    #endif
 
     @State private var playlists: [Playlist] = []
     @State private var importedPlaylistIDs: Set<String> = []
@@ -75,13 +72,9 @@ struct ImportPlaylistsView: View {
 
     var body: some View {
         content
-            #if !os(tvOS)
             .navigationTitle(String(localized: "import.playlists.title"))
-            #endif
             .accessibilityIdentifier(AccessibilityID.view)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 if !unimportedPlaylists.isEmpty && importingPlaylistID == nil {
                     ToolbarItem(placement: .primaryAction) {
@@ -185,13 +178,6 @@ struct ImportPlaylistsView: View {
         } description: {
             Text(String(localized: "import.playlists.emptyDescription"))
         } actions: {
-            #if os(tvOS)
-            // Nothing in the content is focusable here; the container's
-            // toolbar Done is not something to rely on to keep the remote free.
-            Button(String(localized: "common.done")) {
-                dismiss()
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier(AccessibilityID.emptyState)

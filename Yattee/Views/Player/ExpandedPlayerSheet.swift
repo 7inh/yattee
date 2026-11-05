@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 // MARK: - Expanded Player Sheet
 
@@ -63,11 +62,9 @@ struct ExpandedPlayerSheet: View {
     @State var panelExpandOffset: CGFloat = 0
     /// Whether to use compact panel (no description) - animated state
     @State var useCompactPanel: Bool = false
-    #if os(iOS)
     /// Session-only presentation state for the iPhone portrait controls panel.
     @State var isOnTheGoPresented: Bool = false
     @State var onTheGoSelectedDetent: PresentationDetent = .large
-    #endif
     /// Track if we're in widescreen layout for status bar hiding
     @State private var isInWideScreenLayout = false
     /// Active player controls layout from preset (loaded once, updated on notification)
@@ -99,7 +96,6 @@ struct ExpandedPlayerSheet: View {
 
     // MARK: - Layout State (iOS)
 
-    #if os(iOS)
     /// Track previous orientation to detect changes
     @State private var previousIsLandscape: Bool?
     /// Foldable hinge partially open (iPhone Duo laptop position): the
@@ -108,14 +104,9 @@ struct ExpandedPlayerSheet: View {
     /// Seeded from the last hinge report so a re-presented player starts in
     /// the right layout instead of animating into it.
     @State var isTabletopHinge = HingeLayoutObserver.lastKnownTabletop
-    #endif
 
-    #if os(iOS) || os(macOS)
     /// Debug stats for overlay
-    @State var debugStats: MPVDebugStats = MPVDebugStats()
     /// Timer for updating debug stats
-    @State var debugUpdateTimer: Timer?
-    #endif
 
     // MARK: - Computed Properties
 
@@ -123,9 +114,7 @@ struct ExpandedPlayerSheet: View {
     var playerState: PlayerState? { playerService?.state }
     var navigationCoordinator: NavigationCoordinator? { appEnvironment?.navigationCoordinator }
 
-    #if os(iOS)
     var inAppOrientationLock: Bool { appEnvironment?.settingsManager.inAppOrientationLock ?? false }
-    #endif
 
     // MARK: - Comments Helpers
 
@@ -185,7 +174,6 @@ struct ExpandedPlayerSheet: View {
         presentSheet(.addToPlaylist(video))
     }
 
-    #if os(iOS)
     /// A separate host lets queue/download sheets open above On-the-go.
     @ViewBuilder
     func onTheGoSheet(smallDetent: PresentationDetent) -> some View {
@@ -202,7 +190,6 @@ struct ExpandedPlayerSheet: View {
             .presentationBackgroundInteraction(.enabled(upThrough: smallDetent))
         }
     }
-    #endif
 
     // MARK: - Body
 
@@ -244,22 +231,12 @@ struct ExpandedPlayerSheet: View {
                 isAutoPlayEnabled: isAutoPlayEnabled,
                 nextQueuedVideo: nextQueuedVideo
             ))
-            #if os(iOS)
             .modifier(PlayerIOSEventHandlersModifier(
                 inAppOrientationLock: inAppOrientationLock,
                 toggleFullscreen: toggleFullscreen,
-                startDebugUpdates: startDebugUpdates,
-                stopDebugUpdates: stopDebugUpdates,
                 setupRotationMonitoring: setupRotationMonitoring,
                 setupOrientationLockCallback: setupOrientationLockCallback
             ))
-            #endif
-            #if os(macOS)
-            .modifier(PlayerMacOSEventHandlersModifier(
-                startDebugUpdates: startDebugUpdates,
-                stopDebugUpdates: stopDebugUpdates
-            ))
-            #endif
     }
 
     /// Player content with comments overlay - extracted to help compiler type-checking
@@ -332,7 +309,6 @@ struct ExpandedPlayerSheet: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    #if os(iOS)
     /// Whether the status bar and home indicator are hidden for the current
     /// layout state (see the modifier site for the rationale).
     private var hidesSystemOverlays: Bool {
@@ -342,7 +318,6 @@ struct ExpandedPlayerSheet: View {
         }
         return isInWideScreenLayout || !isPortraitPanelVisible
     }
-    #endif
 
     // MARK: - Player Content
 
@@ -350,7 +325,6 @@ struct ExpandedPlayerSheet: View {
     private var playerContent: some View {
         GeometryReader { geometry in
             let wideScreen = isWideScreenLayout(size: geometry.size)
-            #if os(iOS) || os(macOS)
             // Gate on the full size including safe areas: the corner layout
             // shows the status bar, which would otherwise shrink the measured
             // height and flip the decision back (layout oscillation).
@@ -360,16 +334,12 @@ struct ExpandedPlayerSheet: View {
             )
             let cornerActive = isCornerLayout(size: fullSize)
             let cornerFits = cornerLayoutFits(size: fullSize)
-            #else
-            let cornerFits = false
-            #endif
 
             ZStack(alignment: .top) {
                 // Full-screen background - prevents content leaking during aspect ratio animation
                 // Use black for all modes since panel-based layout uses black backgrounds
                 Color.black.ignoresSafeArea(edges: .bottom)
 
-                #if os(iOS) || os(macOS)
                 if geometry.size.width <= 0 || geometry.size.height <= 0 {
                     // Transient zero-size layout pass (e.g. the deferred macOS
                     // player window before its first real layout). Don't mount
@@ -404,38 +374,27 @@ struct ExpandedPlayerSheet: View {
                     // Portrait/standard scrolling layout
                     standardPlayerContent(geometry: geometry)
                 }
-                #else
-                // tvOS uses standard layout only
-                standardPlayerContent(geometry: geometry)
-                #endif
             }
-            #if os(iOS)
             // Applied inside the animation-stripping transaction below so the
             // hinge-driven tabletop switch still animates the video between
             // the screen center and the upper half.
             .animation(.easeInOut(duration: 0.3), value: isTabletopHinge)
-            #endif
             .transaction { transaction in
                 // Disable animations during layout switch to prevent position interpolation
                 transaction.animation = nil
             }
-            #if os(iOS)
             .observeHingeLayout(isTabletop: $isTabletopHinge)
-            #endif
-            #if os(iOS) || os(macOS)
             .onChange(of: cornerActive) { _, newValue in
                 navigationCoordinator?.isCornerLayoutActive = newValue
             }
             .onChange(of: cornerFits, initial: true) { _, newValue in
                 navigationCoordinator?.cornerLayoutFits = newValue
             }
-            #endif
             .onChange(of: wideScreen, initial: true) { _, newValue in
                 navigationCoordinator?.isWideScreenLayoutActive = newValue
             }
             .onChange(of: wideScreen) { _, newValue in
                 isInWideScreenLayout = newValue
-                #if os(iOS)
                 if newValue {
                     isOnTheGoPresented = false
                 }
@@ -467,19 +426,14 @@ struct ExpandedPlayerSheet: View {
                     // (if hidden before landscape, stays hidden after returning to portrait)
                 }
                 previousIsLandscape = newValue
-                #endif
             }
             .onAppear {
                 isInWideScreenLayout = wideScreen
-                #if os(iOS) || os(macOS)
                 navigationCoordinator?.isCornerLayoutActive = cornerActive
-                #endif
-                #if os(iOS)
                 previousIsLandscape = wideScreen
                 if wideScreen {
                     navigationCoordinator?.isPortraitPanelVisible = false
                 }
-                #endif
                 // Provisional pass on fresh player open (prevents stale panel
                 // state from a previous session). Uses the cached settings;
                 // loadPlayerControlsLayout re-applies the authoritative value.
@@ -489,7 +443,6 @@ struct ExpandedPlayerSheet: View {
                         cornerLayoutFits: cornerFits,
                         settingsManager: appEnvironment?.settingsManager
                     )
-                    #if os(iOS) || os(macOS)
                     LoggingService.shared.logPlayer("[ExpandedPlayerSheet] onAppear provisional apply: visible=\(visible), state=\(isPortraitPanelVisible), wideScreen=\(wideScreen)")
                     // No animation: this is the opening state, not a user
                     // toggle — animating it here slides the video mid-expand.
@@ -501,7 +454,6 @@ struct ExpandedPlayerSheet: View {
                     if !wideScreen {
                         navigationCoordinator?.isPortraitPanelVisible = visible
                     }
-                    #endif
                 }
             }
         }
@@ -516,7 +468,6 @@ struct ExpandedPlayerSheet: View {
         // Shared sheets opened from the player, and global requests while it
         // is up, so they appear above the player window.
         .appSheetHost(isTopLevel: hostsGlobalSheetRequests, toastScope: .player)
-        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         // Corner layout with panels visible keeps the system status bar and
         // home indicator on iPad (a thin strip); hiding the panels (fullscreen
@@ -526,15 +477,10 @@ struct ExpandedPlayerSheet: View {
         // corner layout always hides it there.
         .playerStatusBarHidden(hidesSystemOverlays)
         .persistentSystemOverlays(hidesSystemOverlays ? .hidden : .automatic)
-        #endif
     }
 
     private var hostsGlobalSheetRequests: Bool {
-        #if os(iOS)
         navigationCoordinator?.isPlayerExpanded == true && !isOnTheGoPresented
-        #else
-        navigationCoordinator?.isPlayerExpanded == true
-        #endif
     }
 }
 
@@ -572,7 +518,6 @@ private struct PlayerSheetsModifier: ViewModifier {
             .sheet(isPresented: $showingQualitySheet) {
                 qualitySelectorSheet
             }
-            #if !os(tvOS)
             .alert(
                 String(localized: "player.deleteDownload.title"),
                 isPresented: $showingDeleteDownloadAlert
@@ -590,7 +535,6 @@ private struct PlayerSheetsModifier: ViewModifier {
             } message: {
                 Text(String(localized: "player.deleteDownload.message"))
             }
-            #endif
     }
 
     @ViewBuilder
@@ -813,7 +757,6 @@ private struct PlayerEventHandlersModifier: ViewModifier {
                     cornerLayoutFits: navigationCoordinator?.cornerLayoutFits ?? PanelSettings.canHostCornerLayout,
                     settingsManager: appEnvironment?.settingsManager
                 )
-                #if os(iOS) || os(macOS)
                 LoggingService.shared.logPlayer("[ExpandedPlayerSheet] authoritative apply: visible=\(visible), state=\(isPortraitPanelVisible), wideScreen=\(isInWideScreenLayout)")
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
@@ -823,7 +766,6 @@ private struct PlayerEventHandlersModifier: ViewModifier {
                 if !isInWideScreenLayout {
                     navigationCoordinator?.isPortraitPanelVisible = visible
                 }
-                #endif
                 navigationCoordinator?.hasAppliedPanelDefaultVisibility = true
             }
         }
@@ -853,15 +795,12 @@ private func applyPanelDefaultVisibility(
 
 // MARK: - iOS Event Handlers Modifier
 
-#if os(iOS)
 /// ViewModifier for iOS-specific player event handlers - extracted to help compiler type-checking
 private struct PlayerIOSEventHandlersModifier: ViewModifier {
     @Environment(\.appEnvironment) var appEnvironment
 
     let inAppOrientationLock: Bool
     let toggleFullscreen: () -> Void
-    let startDebugUpdates: () -> Void
-    let stopDebugUpdates: () -> Void
     let setupRotationMonitoring: () -> Void
     let setupOrientationLockCallback: () -> Void
 
@@ -881,7 +820,6 @@ private struct PlayerIOSEventHandlersModifier: ViewModifier {
                 DeviceRotationManager.shared.stopMonitoring()
                 DeviceRotationManager.shared.isOrientationLocked = nil
                 OrientationManager.shared.unlock()
-                stopDebugUpdates()
             }
             .onChange(of: inAppOrientationLock) { _, isLocked in
                 if isLocked {
@@ -893,141 +831,12 @@ private struct PlayerIOSEventHandlersModifier: ViewModifier {
             .onChange(of: navigationCoordinator?.pendingFullscreenToggle) { _, _ in
                 toggleFullscreen()
             }
-            .onChange(of: playerState?.showDebugOverlay) { _, isVisible in
-                if isVisible == true {
-                    startDebugUpdates()
-                } else {
-                    stopDebugUpdates()
-                }
-            }
+
     }
 }
-#endif
 
 // MARK: - macOS Event Handlers Modifier
 
-#if os(macOS)
-/// ViewModifier for macOS-specific player event handlers - extracted to help compiler type-checking
-private struct PlayerMacOSEventHandlersModifier: ViewModifier {
-    @Environment(\.appEnvironment) var appEnvironment
-
-    let startDebugUpdates: () -> Void
-    let stopDebugUpdates: () -> Void
-
-    var playerState: PlayerState? { appEnvironment?.playerService.state }
-
-    /// Corner layout with its panels visible resizes the window freely: no
-    /// aspect lock, no auto-fit. With the panels hidden only the video is
-    /// left, so the window follows the ratio lock like the stacked layout.
-    private var isCornerLayoutActive: Bool {
-        appEnvironment?.isCornerPanelLayoutActive == true
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: playerState?.showDebugOverlay) { _, isVisible in
-                if isVisible == true {
-                    startDebugUpdates()
-                } else {
-                    stopDebugUpdates()
-                }
-            }
-            .onChange(of: playerState?.videoAspectRatio) { oldValue, newValue in
-                handleAspectRatioChange(oldValue: oldValue, newValue: newValue)
-            }
-            .onChange(of: playerState?.currentVideo?.id) { oldValue, newValue in
-                handleVideoChangeForResize(oldValue: oldValue, newValue: newValue)
-            }
-            .onChange(of: appEnvironment?.isCornerPanelLayoutActive) { _, isCorner in
-                handleCornerLayoutChange(isCorner: isCorner == true)
-            }
-            .onAppear {
-                handleMacOSAppear()
-            }
-    }
-
-    /// Entering corner mode with panels shown drops the window's aspect-ratio
-    /// constraint so it resizes freely; leaving it (stacked layout, or corner
-    /// panels hidden) restores the lock (and auto-fit, when on) exactly as the
-    /// aspect-change handler would have applied it.
-    private func handleCornerLayoutChange(isCorner: Bool) {
-        if isCorner {
-            ExpandedPlayerWindowManager.shared.unlockAspectRatio()
-        } else if let aspectRatio = playerState?.videoAspectRatio, aspectRatio > 0 {
-            ExpandedPlayerWindowManager.shared.lockAspectRatio(aspectRatio)
-            // Auto-fit only when the layout change was not caused by the
-            // user dragging the window. The corner layout resolves from the
-            // window width, so a drag across its threshold flips this handler;
-            // fitting back to the video size mid-drag pushes the width over
-            // the threshold again and the window oscillates between layouts
-            // for the rest of the drag. The user's drag owns the size.
-            if appEnvironment?.settingsManager.playerSheetAutoResize == true,
-               !ExpandedPlayerWindowManager.shared.isLiveResizing {
-                ExpandedPlayerWindowManager.shared.resizeToFitAspectRatio(aspectRatio, animated: true)
-            }
-        }
-    }
-
-    private func handleAspectRatioChange(oldValue: Double?, newValue: Double?) {
-        guard !isCornerLayoutActive else { return }
-        // nil while a video is loaded means audio-only playback (no video
-        // track reports a size) — fall back to the standard 16:9 instead of
-        // keeping the previous video's ratio.
-        let ratio: Double
-        if let newValue, newValue > 0 {
-            ratio = newValue
-        } else if playerState?.currentVideo != nil {
-            ratio = 16.0 / 9.0
-        } else {
-            return
-        }
-
-        // Always keep the manual-resize aspect lock in sync, regardless of the
-        // auto-resize setting — the user always wants resize to be ratio-locked.
-        ExpandedPlayerWindowManager.shared.lockAspectRatio(ratio)
-
-        guard appEnvironment?.settingsManager.playerSheetAutoResize == true else { return }
-
-        let shouldAnimate = oldValue != nil
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(100))
-            ExpandedPlayerWindowManager.shared.resizeToFitAspectRatio(
-                ratio,
-                animated: shouldAnimate
-            )
-        }
-    }
-
-    private func handleVideoChangeForResize(oldValue: Video.ID?, newValue: Video.ID?) {
-        guard !isCornerLayoutActive else { return }
-        guard oldValue != nil, newValue != nil else { return }
-        guard appEnvironment?.settingsManager.playerSheetAutoResize == true else { return }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
-            if let aspectRatio = playerState?.videoAspectRatio, aspectRatio > 0 {
-                ExpandedPlayerWindowManager.shared.resizeToFitAspectRatio(
-                    aspectRatio,
-                    animated: true
-                )
-            }
-        }
-    }
-
-    private func handleMacOSAppear() {
-        guard !isCornerLayoutActive else { return }
-        guard let aspectRatio = playerState?.videoAspectRatio, aspectRatio > 0 else { return }
-
-        // Lock aspect ratio for manual resize unconditionally.
-        ExpandedPlayerWindowManager.shared.lockAspectRatio(aspectRatio)
-
-        if appEnvironment?.settingsManager.playerSheetAutoResize == true {
-            ExpandedPlayerWindowManager.shared.resizeToFitAspectRatio(aspectRatio, animated: false)
-        }
-    }
-}
-#endif
 
 // MARK: - Preview
 
@@ -1038,5 +847,3 @@ private struct PlayerMacOSEventHandlersModifier: ViewModifier {
         }
         .appEnvironment(.preview)
 }
-
-#endif

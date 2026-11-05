@@ -10,13 +10,9 @@ import SwiftUI
 struct HomeView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
-    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
     @Environment(\.scenePhase) private var scenePhase
-    #if !os(tvOS) && !os(macOS)
     @Namespace private var sheetTransition
-    #endif
     /// The device's own playlists. In an account context the card reads the
     /// remote playlists cache instead — the same store the playlists screen
     /// this shortcut leads to shows.
@@ -35,20 +31,12 @@ struct HomeView: View {
     /// enough on its own: a page that already came back races the switch, and
     /// its rows would land on a context nobody is looking at any more.
     @State private var serverHistoryGeneration = 0
-    #if !os(tvOS) && !os(macOS)
     @State private var showingSettings = false
-    #endif
     @State private var showingRemoteControl = false
     @State private var showingCustomizeHome = false
     @State private var channelsCount: Int = 0
     @State private var discoveredDevicesCount: Int = 0
     @State private var feedCache = SubscriptionFeedCache.shared
-    #if os(tvOS)
-    /// Whether the first pass over the Home data has finished. Every section
-    /// reads empty before it does, so the empty state waits for this rather than
-    /// flashing over content that is on its way.
-    @State private var hasLoadedHomeData = false
-    #endif
 
     /// What one probe of the account's server history brought back.
     private struct ServerHistorySnapshot {
@@ -113,16 +101,10 @@ struct HomeView: View {
         appEnvironment?.settingsManager.resolvedAccentColor ?? .accentColor
     }
 
-    #if !os(tvOS)
     private var downloadManager: DownloadManager? { appEnvironment?.downloadManager }
-    #endif
 
     private var columns: [GridItem] {
-        #if os(tvOS)
-        [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 16)]
-        #else
         [GridItem(.adaptive(minimum: 150), spacing: 8)]
-        #endif
     }
 
     private var sectionItemsLimit: Int {
@@ -159,7 +141,6 @@ struct HomeView: View {
 
     private var chrome: some View {
         mainContent
-        #if !os(tvOS)
         .navigationTitle(String(localized: "tabs.home"))
         .navigationSubtitleIfAvailable(
             settingsManager?.incognitoModeEnabled == true
@@ -167,19 +148,15 @@ struct HomeView: View {
                 : nil
         )
         .toolbarTitleDisplayMode(.inlineLarge)
-        #endif
         .toolbar {
             // No switcher wherever a sidebar shows one: the macOS sidebar row
             // and the iPad sidebar's bottom bar are the persistent switcher
             // surfaces there, so the toolbar menu is compact-width-only.
-            #if !os(tvOS) && !os(macOS)
             if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
                 ToolbarItem(placement: .primaryAction) {
                     DataContextSwitcherMenu()
                 }
             }
-            #endif
-            #if !os(tvOS) && !os(macOS)
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingSettings = true
@@ -190,9 +167,7 @@ struct HomeView: View {
                 .accessibilityLabel(String(localized: "settings.title"))
                 .liquidGlassTransitionSource(id: "homeSettings", in: sheetTransition)
             }
-            #endif
         }
-        #if !os(tvOS) && !os(macOS)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .liquidGlassSheetContent(sourceID: "homeSettings", in: sheetTransition)
@@ -202,12 +177,10 @@ struct HomeView: View {
         .onChange(of: appEnvironment?.navigationCoordinator.router.pendingSettingsSheet) { _, _ in
             presentPendingSettingsSheet()
         }
-        #endif
         .sheet(isPresented: $showingRemoteControl) {
             RemoteDevicesSheet()
         }
         .dismissesOnExternalNavigation($showingRemoteControl)
-        #if !os(tvOS)
         .sheet(isPresented: $showingCustomizeHome) {
             NavigationStack {
                 HomeSettingsView()
@@ -219,12 +192,8 @@ struct HomeView: View {
                         }
                     }
             }
-            #if os(macOS)
-            .frame(minWidth: 500, minHeight: 450)
-            #endif
         }
         .dismissesOnExternalNavigation($showingCustomizeHome)
-        #endif
         .onAppear {
             loadData()
         }
@@ -236,13 +205,6 @@ struct HomeView: View {
         .task {
             await feedCache.loadFromDiskIfNeeded()
             await appEnvironment?.homeInstanceCache.loadFromDiskIfNeeded()
-            #if os(tvOS)
-            // The disk caches are the last of the on-device data to land, so the
-            // empty state is honest from here on. A network refresh below can
-            // still add content later; it must not hold an empty Home behind a
-            // spinner for as long as a request can take.
-            hasLoadedHomeData = true
-            #endif
             await refreshHomeInstanceContent()
         }
         .onChange(of: appEnvironment?.navigationCoordinator.isPlayerExpanded) { _, isExpanded in
@@ -310,7 +272,6 @@ struct HomeView: View {
         }
     }
 
-    #if !os(tvOS) && !os(macOS)
     /// Presents Settings for a request the layout had no Settings section for.
     /// Deferred a turn: the same external navigation also dismisses sheets,
     /// and that reset must not land after this one.
@@ -322,142 +283,26 @@ struct HomeView: View {
             showingSettings = true
         }
     }
-    #endif
 
     // MARK: - Main Content
 
-    #if os(tvOS)
-    /// True on tvOS when no Home section would render content — prevents a focus trap
-    /// where the detail pane would otherwise be completely empty.
-    ///
-    /// Each case mirrors what `sectionView(for:)` actually renders: a section with
-    /// nothing to show renders nothing, so it must not count as content here.
-    private var isHomeEmpty: Bool {
-        let sections = settingsManager?.visibleSections() ?? HomeSectionItem.defaultOrder.filter { HomeSectionItem.defaultVisibility[$0] == true }
-        for section in sections {
-            switch section {
-            case .continueWatching:
-                if !recentContinueWatching.isEmpty { return false }
-            case .feed:
-                if !feedCache.videos.isEmpty { return false }
-            case .bookmarks:
-                if !recentBookmarks.isEmpty { return false }
-            case .history:
-                if case .server = historyDisplayMode {
-                    if !(serverHistory?.videos.isEmpty ?? true) { return false }
-                } else if !recentHistory.isEmpty {
-                    return false
-                }
-            case .downloads:
-                break
-            case .remoteServers:
-                if !homeRemoteServers.isEmpty { return false }
-            case .fileSources:
-                if !homeFileSources.isEmpty { return false }
-            case .instanceContent(let instanceID, let contentType):
-                if hasInstanceContent(instanceID: instanceID, contentType: contentType) { return false }
-            case .mediaSource:
-                // Legacy, stripped on load and rendered as empty.
-                break
-            }
-        }
-        return true
-    }
-
-    /// Whether an instance content section has something to render, matching the
-    /// conditions in `instanceContentSection(instanceID:contentType:)`.
-    private func hasInstanceContent(instanceID: UUID, contentType: InstanceContentType) -> Bool {
-        guard let instance = appEnvironment?.instancesManager.instances.first(where: { $0.id == instanceID }),
-              instance.isEnabled,
-              let videos = appEnvironment?.homeInstanceCache.videos(for: instanceID, contentType: contentType) else {
-            return false
-        }
-        return !videos.isEmpty
-    }
-
-    /// Whether any source is configured, read from the same managers the Sources
-    /// screen builds its list from. An empty Home is not the same thing as a
-    /// fresh install: with sources already added, telling the user to add one is
-    /// simply wrong.
-    private var hasConfiguredSources: Bool {
-        let hasInstances = !(appEnvironment?.instancesManager.instances.isEmpty ?? true)
-        let hasMediaSources = !(appEnvironment?.mediaSourcesManager.sources.isEmpty ?? true)
-        return hasInstances || hasMediaSources
-    }
-
-    private var emptyHomeView: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 12) {
-                if hasConfiguredSources {
-                    // Sources are set up, Home simply has nothing to show yet.
-                    Text(String(localized: "common.noContent"))
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                } else {
-                    Text(String(localized: "home.tvos.empty.title"))
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text(String(localized: "home.tvos.empty.message"))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            Button {
-                appEnvironment?.navigationCoordinator.router.select(.sources)
-            } label: {
-                Label(String(localized: "home.tvos.empty.openSources"), systemImage: "externaldrive.connected.to.line.below")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-            }
-        }
-        .padding(60)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var loadingHomeView: some View {
-        ProgressView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    #endif
 
     @ViewBuilder
     private var mainContent: some View {
-        #if os(tvOS)
-        if isHomeEmpty {
-            if hasLoadedHomeData {
-                emptyHomeView
-            } else {
-                loadingHomeView
-            }
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    homeContent
-                }
-            }
-            .scrollClipDisabled()
-        }
-        #else
         let backgroundStyle: ListBackgroundStyle = listStyle == .inset ? .grouped : .plain
         backgroundStyle.color
             .ignoresSafeArea()
             .overlay(
                 Group {
-                    #if os(iOS)
                     if horizontalSizeClass == .compact {
                         homeContent
                     } else {
                         dashboardScrollContent
                     }
-                    #else
-                    dashboardScrollContent
-                    #endif
                 }
             )
-        #endif
     }
 
-    #if !os(tvOS)
     private var dashboardScrollContent: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
@@ -466,48 +311,35 @@ struct HomeView: View {
             }
         }
     }
-    #endif
 
     // MARK: - Home Content
 
     @ViewBuilder
     private var homeContent: some View {
-        #if os(iOS)
         if horizontalSizeClass == .compact {
             YouTubeHomeFeed()
         } else {
             dashboardContent
         }
-        #else
-        dashboardContent
-        #endif
     }
 
     @ViewBuilder
     private var dashboardContent: some View {
-        #if !os(tvOS)
         if hasVisibleShortcuts {
             shortcutsSection
         }
-        #endif
 
         ForEach(settingsManager?.visibleSections() ?? HomeSectionItem.defaultOrder.filter { HomeSectionItem.defaultVisibility[$0] == true }) { section in
             sectionView(for: section)
         }
 
-        #if !os(tvOS)
         customizeButton
-        #endif
     }
 
     // MARK: - Section Header Helper
 
     private func sectionHeader(title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Group {
-            #if os(tvOS)
-            Text(title)
-                .fontWeight(.semibold)
-            #else
             Button(action: action) {
                 HStack(spacing: 4) {
                     Text(title)
@@ -518,37 +350,16 @@ struct HomeView: View {
                 .foregroundStyle(accentColor)
             }
             .buttonStyle(.plain)
-            #endif
         }
         .padding(.horizontal, listStyle == .inset ? 32 : 16)
         .padding(.top, 16)
-        #if os(tvOS)
-        .padding(.bottom, 24)
-        #else
         .padding(.bottom, 8)
-        #endif
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Customize Button
 
-    #if !os(tvOS)
     private var customizeButton: some View {
-        #if os(macOS)
-        HStack {
-            Spacer()
-            Button {
-                showingCustomizeHome = true
-            } label: {
-                Label(String(localized: "home.customize"), systemImage: "gear")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            Spacer()
-        }
-        .padding(.top, 16)
-        .padding(.bottom, 32)
-        #else
         Button {
             showingCustomizeHome = true
         } label: {
@@ -564,9 +375,7 @@ struct HomeView: View {
         .foregroundStyle(.secondary)
         .padding(.top, 16)
         .padding(.bottom, 32)
-        #endif
     }
-    #endif
 
     // MARK: - Shortcuts Section
 
@@ -602,11 +411,7 @@ struct HomeView: View {
     }
 
     private var shortcutsGrid: some View {
-        #if os(tvOS)
-        let gridSpacing: CGFloat = 16
-        #else
         let gridSpacing: CGFloat = 8
-        #endif
 
         let shortcuts = settingsManager?.visibleShortcuts() ?? HomeShortcutItem.defaultOrder
 
@@ -614,21 +419,17 @@ struct HomeView: View {
             ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
                 shortcutCardView(for: shortcut)
                     .environment(\.homeShortcutColorfulColor, colorfulColor(atPosition: index))
-                    #if !os(tvOS)
                     .contextMenu {
                         hideShortcutButton(for: shortcut)
                         editShortcutsButton
                     }
-                    #endif
             }
         }
-        #if os(iOS)
         // WORKAROUND: Prevent UICollectionView layout oscillation during iPad Stage Manager window resize.
         // The LazyVGrid inside a List section can cause 1pt height differences between layout passes,
         // triggering a feedback loop that crashes the app. Using geometryGroup() isolates the grid's
         // geometry calculations from the parent collection view's layout system.
         .geometryGroup()
-        #endif
     }
 
     /// Resolves the Regular-style fill color for a shortcut at the given grid
@@ -652,16 +453,13 @@ struct HomeView: View {
             ) {
                 shortcutRowView(for: shortcut)
             }
-            #if !os(tvOS)
             .contextMenu {
                 hideShortcutButton(for: shortcut)
                 editShortcutsButton
             }
-            #endif
         }
     }
 
-    #if !os(tvOS)
     /// Context menu action that hides the given shortcut from Home.
     private func hideShortcutButton(for shortcut: HomeShortcutItem) -> some View {
         Button {
@@ -682,7 +480,6 @@ struct HomeView: View {
             Label(String(localized: "home.editShortcuts"), systemImage: "gear")
         }
     }
-    #endif
 
     @ViewBuilder
     private func shortcutCardView(for shortcut: HomeShortcutItem) -> some View {
@@ -700,11 +497,7 @@ struct HomeView: View {
         case .history:
             historyShortcutCard
         case .downloads:
-            #if !os(tvOS)
             downloadsShortcutCard
-            #else
-            EmptyView()
-            #endif
         case .channels:
             channelsShortcutCard
         case .subscriptions:
@@ -734,11 +527,7 @@ struct HomeView: View {
         case .history:
             historyShortcutRow
         case .downloads:
-            #if !os(tvOS)
             downloadsShortcutRow
-            #else
-            EmptyView()
-            #endif
         case .channels:
             channelsShortcutRow
         case .subscriptions:
@@ -767,11 +556,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.openURL.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.openURL")
     }
 
@@ -793,11 +578,7 @@ struct HomeView: View {
                     .frame(width: 8, height: 8)
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.remoteControl")
     }
 
@@ -813,11 +594,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.playlists.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.playlists")
     }
 
@@ -833,11 +610,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.bookmarks.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.bookmarks")
     }
 
@@ -853,11 +626,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.continueWatching.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.continueWatching")
     }
 
@@ -873,15 +642,10 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.history.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.history")
     }
 
-    #if !os(tvOS)
     private var downloadsShortcutCard: some View {
         let count = downloadManager?.completedDownloads.count ?? 0
         return Button {
@@ -898,7 +662,6 @@ struct HomeView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.shortcut.downloads")
     }
-    #endif
 
     private var channelsShortcutCard: some View {
         Button {
@@ -912,11 +675,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.channels.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.channels")
     }
 
@@ -933,11 +692,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.subscriptions.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.subscriptions")
     }
 
@@ -956,11 +711,7 @@ struct HomeView: View {
                 colorfulColor: HomeShortcutItem.mediaSources.cardColor
             )
         }
-        #if os(tvOS)
-        .buttonStyle(TVHomeCardButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
         .accessibilityIdentifier("home.shortcut.mediaSources")
     }
 
@@ -981,11 +732,7 @@ struct HomeView: View {
                     colorfulColor: HomeShortcutItem.instanceContent(instanceID: instanceID, contentType: contentType).cardColor
                 )
             }
-            #if os(tvOS)
-            .buttonStyle(TVHomeCardButtonStyle())
-            #else
             .buttonStyle(.plain)
-            #endif
         }
     }
 
@@ -1006,11 +753,7 @@ struct HomeView: View {
                     colorfulColor: HomeShortcutItem.mediaSource(sourceID: sourceID).cardColor
                 )
             }
-            #if os(tvOS)
-            .buttonStyle(TVHomeCardButtonStyle())
-            #else
             .buttonStyle(.plain)
-            #endif
         }
     }
 
@@ -1099,7 +842,6 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    #if !os(tvOS)
     private var downloadsShortcutRow: some View {
         let count = downloadManager?.completedDownloads.count ?? 0
         return Button {
@@ -1113,7 +855,6 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
     }
-    #endif
 
     private var channelsShortcutRow: some View {
         Button {
@@ -1286,13 +1027,11 @@ struct HomeView: View {
         return ([], nil)  // No pagination for Home sections
     }
     
-    #if !os(tvOS)
     /// Stub callback for recent downloads queue continuation
     @Sendable
     private func loadMoreRecentDownloadsCallback() async throws -> ([Video], String?) {
         return ([], nil)  // No pagination for Home sections
     }
-    #endif
 
     // MARK: - Sections
 
@@ -1320,13 +1059,9 @@ struct HomeView: View {
                 historySection
             }
         case .downloads:
-            #if !os(tvOS)
             if let downloads = downloadManager?.completedDownloads, !downloads.isEmpty {
                 downloadsSection(downloads: downloads)
             }
-            #else
-            EmptyView()
-            #endif
         case .remoteServers:
             if !homeRemoteServers.isEmpty {
                 remoteServersSection
@@ -1378,13 +1113,7 @@ struct HomeView: View {
                                 detail: "\(instance.type.displayName) - \(instance.url.host ?? instance.url.absoluteString)"
                             )
                         }
-                        #if os(macOS)
-                        .buttonStyle(.plain)
-                        #elseif os(tvOS)
-                        .buttonStyle(TVHomeRowButtonStyle())
-                        #else
                         .foregroundStyle(.primary)
-                        #endif
                     }
                 }
             }
@@ -1418,13 +1147,7 @@ struct HomeView: View {
                                 needsPassword: needsPassword
                             )
                         }
-                        #if os(macOS)
-                        .buttonStyle(.plain)
-                        #elseif os(tvOS)
-                        .buttonStyle(TVHomeRowButtonStyle())
-                        #else
                         .foregroundStyle(.primary)
-                        #endif
                     }
                 }
             }
@@ -1433,20 +1156,10 @@ struct HomeView: View {
 
     /// Row content matching the Sources screen's listing.
     private func homeSourceRow(systemImage: String, name: String, detail: String, needsPassword: Bool = false) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
         return HStack(spacing: rowSpacing) {
             Image(systemName: systemImage)
                 .font(iconFont)
@@ -1471,11 +1184,9 @@ struct HomeView: View {
 
             Spacer()
 
-            #if !os(macOS)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-            #endif
         }
         .contentShape(Rectangle())
     }
@@ -1517,7 +1228,6 @@ struct HomeView: View {
                             loadMoreVideos: loadMoreContinueWatchingCallback
                         )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(
                         video: videoList[index],
                         fixedActions: [
@@ -1532,7 +1242,6 @@ struct HomeView: View {
                             }
                         ]
                     )
-                    #endif
                 }
             }
             }
@@ -1572,9 +1281,7 @@ struct HomeView: View {
                                     loadMoreVideos: loadMoreFeedCallback
                                 )
                         }
-                        #if !os(tvOS)
                         .videoSwipeActions(video: video)
-                        #endif
                     }
                 }
             }
@@ -1618,7 +1325,6 @@ struct HomeView: View {
                             loadMoreVideos: loadMoreRecentBookmarksCallback
                         )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(
                         video: videoList[index],
                         fixedActions: [
@@ -1633,7 +1339,6 @@ struct HomeView: View {
                             }
                         ]
                     )
-                    #endif
                 }
             }
             }
@@ -1677,7 +1382,6 @@ struct HomeView: View {
                             loadMoreVideos: loadMoreRecentHistoryCallback
                         )
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(
                         video: videoList[index],
                         fixedActions: [
@@ -1692,7 +1396,6 @@ struct HomeView: View {
                             }
                         ]
                     )
-                    #endif
                 }
             }
             }
@@ -1740,7 +1443,6 @@ struct HomeView: View {
         }
     }
 
-    #if !os(tvOS)
     private func downloadsSection(downloads: [Download]) -> some View {
         let limitedDownloads = Array(downloads.prefix(sectionItemsLimit))
         // Use toVideo() instead of videoAndStream() to avoid O(n²) file I/O on main thread
@@ -1798,7 +1500,6 @@ struct HomeView: View {
             }
         }
     }
-    #endif
 
     @ViewBuilder
     private func instanceContentSection(instanceID: UUID, contentType: InstanceContentType) -> some View {
@@ -1811,11 +1512,6 @@ struct HomeView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Group {
-                    #if os(tvOS)
-                    Text(verbatim: "\(contentType.localizedTitle) - \(instance.displayName)")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(accentColor)
-                    #else
                     Button {
                         appEnvironment?.navigationCoordinator.navigate(
                             to: .instanceBrowse(instance, initialTab: contentType.toBrowseTab())
@@ -1830,15 +1526,10 @@ struct HomeView: View {
                         .foregroundStyle(accentColor)
                     }
                     .buttonStyle(.plain)
-                    #endif
                 }
                 .padding(.horizontal, listStyle == .inset ? 32 : 16)
                 .padding(.top, 16)
-                #if os(tvOS)
-                .padding(.bottom, 24)
-                #else
                 .padding(.bottom, 8)
-                #endif
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 if sectionLayout == .grid {
@@ -1866,9 +1557,7 @@ struct HomeView: View {
                                         loadMoreVideos: loadMoreInstanceContentCallback
                                     )
                             }
-                            #if !os(tvOS)
                             .videoSwipeActions(video: video)
-                            #endif
                         }
                     }
                 }

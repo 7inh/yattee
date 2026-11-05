@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct DownloadsStorageView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
@@ -251,4 +250,3 @@ struct DownloadsStorageView: View {
     }
     .appEnvironment(.preview)
 }
-#endif

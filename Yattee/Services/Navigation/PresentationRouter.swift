@@ -30,11 +30,9 @@ enum AppSheet: Identifiable {
     case resumeAction(Video, resumeTime: TimeInterval, onContinue: () -> Void, onStartOver: () -> Void)
     /// Asks before a URL scheme action changes saved state.
     case linkActionConfirmation(LinkActionConfirmation)
-    #if !os(tvOS)
     /// Download quality picker. Streams and captions already loaded by the
     /// caller (the player) skip the sheet's own fetch.
     case downloadOptions(Video, streams: [Stream] = [], captions: [Caption] = [], dislikeCount: Int? = nil)
-    #endif
 
     var id: String {
         switch self {
@@ -52,10 +50,8 @@ enum AppSheet: Identifiable {
             return "resumeAction-\(video.id.id)"
         case .linkActionConfirmation(let confirmation):
             return "linkActionConfirmation-\(confirmation.id)"
-        #if !os(tvOS)
         case .downloadOptions(let video, _, _, _):
             return "downloadOptions-\(video.id.id)"
-        #endif
         }
     }
 }
@@ -135,9 +131,6 @@ private struct AppSheetHost: ViewModifier {
                     .sheetToastOverlay(scope: sheetToastLevel.scope, depth: sheetToastLevel.depth)
                     .environment(\.sheetToastLevel, sheetToastLevel)
             }
-            #if os(tvOS)
-            .linkActionConfirmationAlert(pendingConfirmation) { sheet = nil }
-            #endif
             // Declared before the request observer so a deep link that both
             // dismisses and presents ends with its own sheet up.
             .onChange(of: dismissGeneration) { _, _ in
@@ -151,22 +144,9 @@ private struct AppSheetHost: ViewModifier {
     /// The sheet to present as a sheet. On tvOS a link action confirmation
     /// is a compact alert instead: a tvOS sheet fills most of the screen.
     private var presentedSheet: Binding<AppSheet?> {
-        #if os(tvOS)
-        Binding {
-            if case .linkActionConfirmation = sheet { return nil }
-            return sheet
-        } set: { sheet = $0 }
-        #else
         $sheet
-        #endif
     }
 
-    #if os(tvOS)
-    private var pendingConfirmation: LinkActionConfirmation? {
-        if case .linkActionConfirmation(let confirmation) = sheet { return confirmation }
-        return nil
-    }
-    #endif
 
     private var dismissGeneration: Int? {
         dismissesOnExternalNavigation ? appEnvironment?.navigationCoordinator.dismissPresentationsGeneration : nil
@@ -203,10 +183,8 @@ private struct AppSheetHost: ViewModifier {
                 ResumeActionSheet(video: video, resumeTime: resumeTime, onContinue: onContinue, onStartOver: onStartOver)
             case .linkActionConfirmation(let confirmation):
                 LinkActionConfirmationSheet(confirmation: confirmation)
-            #if !os(tvOS)
             case .downloadOptions(let video, let streams, let captions, let dislikeCount):
                 DownloadQualitySheet(video: video, streams: streams, captions: captions, dislikeCount: dislikeCount)
-            #endif
             }
         }
         // The next level: sheets opened from inside this one. It goes away

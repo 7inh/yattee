@@ -12,9 +12,6 @@ struct HomeShortcutCardView<StatusIndicator: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Position-resolved colorful color; when set it overrides `colorfulColor`.
     @Environment(\.homeShortcutColorfulColor) private var positionColorfulColor
-    #if os(tvOS)
-    @Environment(\.isFocused) private var isFocused
-    #endif
 
     private var accentColor: Color {
         appEnvironment?.settingsManager.resolvedAccentColor ?? .accentColor
@@ -63,19 +60,11 @@ struct HomeShortcutCardView<StatusIndicator: View>: View {
     // MARK: - Card Style
 
     private var cardStyle: HomeShortcutCardStyle {
-        #if os(tvOS)
-        return .compact
-        #else
         return styleOverride ?? (appEnvironment?.settingsManager.homeShortcutCardStyle ?? .regular)
-        #endif
     }
 
     private var cardColor: HomeShortcutCardColor {
-        #if os(tvOS)
-        return .soft
-        #else
         return colorOverride ?? (appEnvironment?.settingsManager.homeShortcutCardColor ?? .soft)
-        #endif
     }
 
     private var isVibrant: Bool {
@@ -101,45 +90,21 @@ struct HomeShortcutCardView<StatusIndicator: View>: View {
     }
 
     // Platform-specific styling
-    #if os(tvOS)
-    private let iconSize: CGFloat = 36
-    private let titleFont: Font = .headline
-    private let subtitleFont: Font = .subheadline.monospacedDigit()
-    private let hPadding: CGFloat = 20
-    private let vPadding: CGFloat = 20
-    private let cornerRadius: CGFloat = 20
-    #elseif os(macOS)
-    private let iconSize: CGFloat = 28
-    private let titleFont: Font = .body
-    private let subtitleFont: Font = .subheadline.monospacedDigit()
-    private let hPadding: CGFloat = 12
-    private let vPadding: CGFloat = 12
-    private let cornerRadius: CGFloat = 16
-    #else
     private let iconSize: CGFloat = 28
     private let titleFont: Font = .subheadline
     private let subtitleFont: Font = .caption.monospacedDigit()
     private let hPadding: CGFloat = 12
     private let vPadding: CGFloat = 12
     private let cornerRadius: CGFloat = 16
-    #endif
 
     private var needsVerticalLayout: Bool {
-        #if os(tvOS)
-        return true  // Always vertical on tvOS for better readability
-        #else
         return dynamicTypeSize >= .xxxLarge
-        #endif
     }
 
     /// The Regular layout is the Reminders-style card:
     /// icon top-leading, count top-trailing, title at the bottom.
     private var useRemindersLayout: Bool {
-        #if os(tvOS)
-        return false
-        #else
         return cardStyle == .regular
-        #endif
     }
 
     private var hasSubtitle: Bool {
@@ -259,33 +224,18 @@ struct HomeShortcutCardView<StatusIndicator: View>: View {
 
     /// Minimum height for the text content area to ensure consistent card heights
     private var subtitleMinHeight: CGFloat {
-        #if os(tvOS)
-        // headline + subheadline + spacing
-        44
-        #elseif os(macOS)
-        // body + subheadline + spacing
-        38
-        #else
         // subheadline + caption + spacing
         34
-        #endif
     }
 
     /// Minimum content height for the Reminders-style layout so the title sits
     /// well below the icon/count row (matches Apple's roomier card proportions).
     private var remindersMinHeight: CGFloat {
-        #if os(macOS)
-        64
-        #else
         60
-        #endif
     }
 
     @ViewBuilder
     private var cardBackground: some View {
-        #if os(tvOS)
-        (isFocused ? Color.white.opacity(0.2) : Color.gray.opacity(0.3))
-        #else
         if isVibrant {
             // Solid fill plus a subtle top-to-bottom sheen for a gentle gradient.
             paletteColor.overlay(
@@ -298,15 +248,10 @@ struct HomeShortcutCardView<StatusIndicator: View>: View {
         } else {
             paletteColor.opacity(0.1)
         }
-        #endif
     }
 
     private var borderColor: Color {
-        #if os(tvOS)
-        return accentColor.opacity(0.3)
-        #else
         return isVibrant ? .clear : paletteColor.opacity(0.3)
-        #endif
     }
 }
 

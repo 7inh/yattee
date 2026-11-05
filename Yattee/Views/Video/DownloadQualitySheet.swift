@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct DownloadQualitySheet: View {
     enum DownloadTab: String, CaseIterable {
         case video
@@ -280,15 +279,9 @@ struct DownloadQualitySheet: View {
                     mainContent
                 }
             }
-            #if os(macOS)
-            .background(Color(nsColor: .windowBackgroundColor))
-            #else
             .background(Color(.systemGroupedBackground))
-            #endif
             .navigationTitle(String(localized: "download.selectQuality"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel")) {
@@ -345,12 +338,7 @@ struct DownloadQualitySheet: View {
                 }
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium, .large])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 500)
-        #endif
     }
 
     // MARK: - Main Content Views
@@ -432,11 +420,7 @@ struct DownloadQualitySheet: View {
                         .padding(.horizontal, 12)
                 }
             }
-            #if os(macOS)
-            .background(Color(nsColor: .controlBackgroundColor))
-            #else
             .background(Color(.secondarySystemGroupedBackground))
-            #endif
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             if requiresAudioTrack {
@@ -466,11 +450,7 @@ struct DownloadQualitySheet: View {
                         .padding(.horizontal, 12)
                 }
             }
-            #if os(macOS)
-            .background(Color(nsColor: .controlBackgroundColor))
-            #else
             .background(Color(.secondarySystemGroupedBackground))
-            #endif
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -490,11 +470,7 @@ struct DownloadQualitySheet: View {
                     .padding(.horizontal, 12)
             }
         }
-        #if os(macOS)
-        .background(Color(nsColor: .controlBackgroundColor))
-        #else
         .background(Color(.secondarySystemGroupedBackground))
-        #endif
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -550,11 +526,7 @@ struct DownloadQualitySheet: View {
                 }
             }
             .padding(12)
-            #if os(macOS)
-            .background(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
-            #else
             .background(Color(.tertiarySystemGroupedBackground))
-            #endif
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -992,4 +964,3 @@ struct DownloadQualitySheet: View {
     )
     .appEnvironment(.preview)
 }
-#endif

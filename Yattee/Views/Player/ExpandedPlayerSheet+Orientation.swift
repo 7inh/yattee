@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 import UIKit
 
 extension ExpandedPlayerSheet {
@@ -48,14 +47,12 @@ extension ExpandedPlayerSheet {
         let orientationManager = OrientationManager.shared
         let isOrientationLocked = appEnvironment?.settingsManager.inAppOrientationLock ?? false
 
-        MPVLogging.logTransition("toggleFullscreen",
-            fromSize: screenBounds.size,
-            toSize: isCurrentlyLandscape ? CGSize(width: screenBounds.height, height: screenBounds.width) : nil)
+        LoggingService.shared.logPlayer("toggleFullscreen")
 
 
         if isCurrentlyLandscape {
             // Exit fullscreen → rotate to portrait
-            MPVLogging.log("toggleFullscreen: exiting to portrait")
+            LoggingService.shared.logPlayer("toggleFullscreen: exiting to portrait")
             // Lock to portrait first (if lock enabled) so system allows only portrait rotation
             if isOrientationLocked {
                 orientationManager.lock(to: .portrait)
@@ -66,7 +63,7 @@ extension ExpandedPlayerSheet {
         } else {
             // Enter fullscreen → rotate to landscape
             let targetOrientation = Self.currentLandscapeInterfaceOrientation()
-            MPVLogging.log("toggleFullscreen: entering landscape")
+            LoggingService.shared.logPlayer("toggleFullscreen: entering landscape")
             // Lock to landscape first (if lock enabled) so system allows landscape rotation
             // Use .landscape to allow both directions initially
             if isOrientationLocked {
@@ -90,7 +87,7 @@ extension ExpandedPlayerSheet {
     /// rotates programmatically; remember that and do what the tap was meant
     /// to do — fill the screen with the video — via the details panel.
     private func handleFullscreenRotationFailure(_ error: Error) {
-        MPVLogging.log("toggleFullscreen: requestGeometryUpdate failed: \(error.localizedDescription)")
+        LoggingService.shared.logPlayer("toggleFullscreen: requestGeometryUpdate failed: \(error.localizedDescription)")
         guard OrientationManager.shared.noteGeometryUpdateFailure(error) else { return }
         if appEnvironment?.settingsManager.inAppOrientationLock ?? false {
             OrientationManager.shared.unlock()
@@ -122,7 +119,7 @@ extension ExpandedPlayerSheet {
     func setupRotationMonitoring() {
         guard let appEnvironment else { return }
 
-        MPVLogging.log("setupRotationMonitoring: starting")
+        LoggingService.shared.logPlayer("setupRotationMonitoring: starting")
         let rotationManager = DeviceRotationManager.shared
 
         // Set up callback for landscape detection (request landscape rotation)
@@ -146,8 +143,7 @@ extension ExpandedPlayerSheet {
                 let screenBounds = windowScene.screen.bounds
                 if screenBounds.height > screenBounds.width {
                     let targetOrientation = Self.currentLandscapeInterfaceOrientation()
-                    MPVLogging.logTransition("onLandscapeDetected: requesting landscape",
-                        fromSize: screenBounds.size, toSize: nil)
+                    LoggingService.shared.logPlayer("onLandscapeDetected: requesting landscape")
                     windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: targetOrientation)) { _ in }
                 }
             }
@@ -167,8 +163,7 @@ extension ExpandedPlayerSheet {
 
                 let screenBounds = windowScene.screen.bounds
                 if screenBounds.width > screenBounds.height {
-                    MPVLogging.logTransition("onPortraitDetected: requesting portrait",
-                        fromSize: screenBounds.size, toSize: nil)
+                    LoggingService.shared.logPlayer("onPortraitDetected: requesting portrait")
                     windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in }
                 }
             }
@@ -195,7 +190,7 @@ extension ExpandedPlayerSheet {
                     .landscape
                 }
 
-                MPVLogging.logTransition("onLandscapeOrientationChanged: \(newOrientation.rawValue)")
+                LoggingService.shared.logPlayer("onLandscapeOrientationChanged: \(newOrientation.rawValue)")
                 windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: targetOrientation)) { _ in }
             }
         }
@@ -219,5 +214,3 @@ extension ExpandedPlayerSheet {
     }
 
 }
-
-#endif

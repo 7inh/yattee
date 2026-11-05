@@ -396,7 +396,6 @@ final class BackgroundFeedRefresher {
     /// Filters out videos the user has already started or finished watching.
     /// - Parameter newVideos: Array of new videos with their channel names
     private func sendNotificationsIfNeeded(newVideos: [(video: Video, channelName: String)]) async {
-        #if !os(tvOS)
         guard !newVideos.isEmpty else {
             LoggingService.shared.debug("No new videos found", category: .notifications)
             return
@@ -449,6 +448,5 @@ final class BackgroundFeedRefresher {
                 category: .notifications
             )
         }
-        #endif
     }
 }

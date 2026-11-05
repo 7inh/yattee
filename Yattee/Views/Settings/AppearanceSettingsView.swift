@@ -6,9 +6,6 @@
 //
 
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 
 struct AppearanceSettingsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
@@ -17,35 +14,23 @@ struct AppearanceSettingsView: View {
         SettingsFormContainer {
             if let settings = appEnvironment?.settingsManager {
                 // Theme section
-                #if !os(tvOS)
                 ThemeSection(settings: settings)
-                #endif
 
                 // App icon section
-                #if !os(tvOS)
                 AppIconSection(settings: settings)
-                #endif
 
                 // Accent color section
-                #if !os(tvOS)
                 AccentColorSection(settings: settings)
-                #endif
 
                 // List style section
-                #if !os(tvOS)
                 ListStyleSection(settings: settings)
-                #endif
 
                 // Thumbnail section
                 ThumbnailSection(settings: settings)
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "settings.appearance.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 
@@ -71,7 +56,6 @@ private struct ThemeSection: View {
 
 // MARK: - App Icon Section
 
-#if !os(tvOS)
 private struct AppIconSection: View {
     @Bindable var settings: SettingsManager
 
@@ -134,12 +118,9 @@ private struct AppIconPickerView: View {
             }
         }
         .navigationTitle(String(localized: "settings.appearance.appIcon.header"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
-#endif
 
 // MARK: - Accent Color Section
 
@@ -152,11 +133,9 @@ private struct AccentColorSection: View {
 
     var body: some View {
         SettingsFormSection("settings.appearance.accentColor.header") {
-            #if !os(tvOS)
             Toggle(isOn: $settings.useSeparateDarkAccentColor) {
                 Text(String(localized: "settings.appearance.accentColor.separateColors"))
             }
-            #endif
 
             if settings.useSeparateDarkAccentColor {
                 Text(String(localized: "settings.appearance.accentColor.light"))
@@ -197,9 +176,7 @@ private struct AccentColorGrid: View {
                 )
             }
 
-            #if !os(tvOS)
             CustomAccentColorButton(selection: selection, customColor: customColor)
-            #endif
         }
         .padding(.vertical, 8)
     }
@@ -270,48 +247,12 @@ private struct AccentColorButton: View {
 
 // MARK: - Custom Accent Color Button
 
-#if !os(tvOS)
 private struct CustomAccentColorButton: View {
     @Binding var selection: AccentColor
     @Binding var customColor: Color
 
     private var isSelected: Bool { selection == .custom }
 
-    #if os(macOS)
-    var body: some View {
-        Button {
-            selection = .custom
-            ColorPanelBridge.shared.open(with: NSColor(customColor)) { nsColor in
-                customColor = Color(nsColor: nsColor)
-                selection = .custom
-            }
-        } label: {
-            ZStack {
-                Circle()
-                    .strokeBorder(
-                        AngularGradient(
-                            colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
-                            center: .center
-                        ),
-                        lineWidth: 4
-                    )
-                    .frame(width: 40, height: 40)
-
-                Circle()
-                    .fill(customColor)
-                    .frame(width: 28, height: 28)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "settings.appearance.accentColor.custom"))
-    }
-    #else
     private var pickedColor: Binding<Color> {
         Binding(
             get: { customColor },
@@ -345,33 +286,8 @@ private struct CustomAccentColorButton: View {
         }
         .accessibilityLabel(String(localized: "settings.appearance.accentColor.custom"))
     }
-    #endif
 }
 
-#if os(macOS)
-/// Routes NSColorPanel target/action callbacks to the settings binding.
-/// NSColorPanel keeps only a weak target, so this must outlive the view.
-@MainActor
-private final class ColorPanelBridge: NSObject {
-    static let shared = ColorPanelBridge()
-    private var onChange: ((NSColor) -> Void)?
-
-    func open(with color: NSColor, onChange: @escaping (NSColor) -> Void) {
-        self.onChange = onChange
-        let panel = NSColorPanel.shared
-        panel.showsAlpha = false
-        panel.color = color
-        panel.setTarget(self)
-        panel.setAction(#selector(colorChanged(_:)))
-        panel.makeKeyAndOrderFront(nil)
-    }
-
-    @objc private func colorChanged(_ sender: NSColorPanel) {
-        onChange?(sender.color)
-    }
-}
-#endif
-#endif
 
 // MARK: - Theme Display Names
 

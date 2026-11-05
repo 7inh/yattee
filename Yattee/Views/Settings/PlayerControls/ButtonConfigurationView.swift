@@ -38,7 +38,6 @@ struct ButtonConfigurationView: View {
             Form {
                 // Visibility mode (all buttons); portrait/wide modes have no
                 // meaning on macOS, where every button is always shown.
-                #if os(iOS)
                 Section {
                     Picker(
                         String(localized: "settings.playerControls.visibility"),
@@ -56,27 +55,14 @@ struct ButtonConfigurationView: View {
                 } footer: {
                     Text(String(localized: "settings.playerControls.visibilityFooter"))
                 }
-                #endif
 
                 // Type-specific settings
                 if config.buttonType.hasSettings {
                     typeSpecificSettings(for: config)
                 }
-                #if os(macOS)
-                if !config.buttonType.hasSettings {
-                    Section {
-                        Text(String(localized: "settings.playerControls.noButtonSettings"))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                #endif
             }
             .navigationTitle(config.buttonType.displayName)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #elseif os(macOS)
-            .formStyle(.grouped)
-            #endif
             .opaqueSettingsFormBackground()
             .onAppear {
                 syncFromConfiguration(config)
@@ -150,7 +136,6 @@ struct ButtonConfigurationView: View {
                 updateSpacerSettings(isFlexible: newValue, width: Int(spacerWidth))
             }
 
-            #if !os(tvOS)
             if !spacerIsFlexible {
                 HStack {
                     Text(String(localized: "settings.playerControls.spacer.width"))
@@ -168,7 +153,6 @@ struct ButtonConfigurationView: View {
                     updateSpacerSettings(isFlexible: spacerIsFlexible, width: Int(newValue))
                 }
             }
-            #endif
         } header: {
             Text(String(localized: "settings.playerControls.spacer.header"))
         } footer: {
@@ -209,7 +193,6 @@ struct ButtonConfigurationView: View {
     @ViewBuilder
     private var seekSettings: some View {
         Section {
-            #if !os(tvOS)
             HStack {
                 Text(String(localized: "settings.playerControls.seek.seconds"))
                 Spacer()
@@ -225,7 +208,6 @@ struct ButtonConfigurationView: View {
             .onChange(of: seekSeconds) { _, newValue in
                 updateSettings(.seek(SeekSettings(seconds: Int(newValue), direction: seekDirection)))
             }
-            #endif
 
             // Quick presets
             HStack {
@@ -260,7 +242,6 @@ struct ButtonConfigurationView: View {
                 updateSettings(.seek(SeekSettings(seconds: Int(seekSeconds), direction: newValue)))
             }
 
-            #if !os(tvOS)
             HStack {
                 Text(String(localized: "settings.playerControls.seek.seconds"))
                 Spacer()
@@ -276,7 +257,6 @@ struct ButtonConfigurationView: View {
             .onChange(of: seekSeconds) { _, newValue in
                 updateSettings(.seek(SeekSettings(seconds: Int(newValue), direction: seekDirection)))
             }
-            #endif
 
             // Quick presets
             HStack {

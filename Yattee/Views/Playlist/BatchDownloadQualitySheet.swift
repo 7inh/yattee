@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 struct BatchDownloadQualitySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appEnvironment) private var appEnvironment
@@ -40,15 +39,9 @@ struct BatchDownloadQualitySheet: View {
                     Toggle(String(localized: "batchDownload.includeSubtitles"), isOn: $includeSubtitles)
                 }
             }
-            #if os(macOS)
-            .background(Color(nsColor: .windowBackgroundColor))
-            #else
             .background(Color(.systemGroupedBackground))
-            #endif
             .navigationTitle(String(localized: "batchDownload.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel")) {
@@ -85,12 +78,7 @@ struct BatchDownloadQualitySheet: View {
                 }
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 450, minHeight: 300)
-        #endif
     }
 }
 
@@ -100,4 +88,3 @@ struct BatchDownloadQualitySheet: View {
     BatchDownloadQualitySheet(videoCount: 15) { _, _ in }
     .appEnvironment(.preview)
 }
-#endif

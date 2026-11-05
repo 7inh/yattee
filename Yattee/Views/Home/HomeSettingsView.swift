@@ -36,47 +36,21 @@ struct HomeSettingsView: View {
     // loadSettings on pop-back would clobber edits made through bindings.
     @State private var hasLoadedSettings = false
 
-    #if os(macOS)
-    // macOS: drive the style page programmatically. A List-embedded NavigationLink
-    // gets stuck in the selected (blue) state after popping back and can't be
-    // re-activated, so navigate via navigationDestination(isPresented:) instead.
-    @State private var showingStyleSettings = false
-    #endif
 
     private var settingsManager: SettingsManager? { appEnvironment?.settingsManager }
 
     var body: some View {
         List {
-            #if !os(tvOS)
             shortcutsSection
             availableShortcutsSection
-            #endif
             sectionsSection
             availableSectionsSection
             itemsLimitSection
         }
-        #if os(iOS)
         .environment(\.editMode, isEditMode ? .constant(.active) : .constant(.inactive))
-        #endif
-        #if os(macOS)
-        .listStyle(.inset)
-        .navigationDestination(isPresented: $showingStyleSettings) {
-            HomeShortcutStyleView(
-                style: $shortcutCardStyle,
-                color: $shortcutCardColor,
-                palette: $shortcutColorfulPalette,
-                customColors: $shortcutCustomPaletteColors,
-                onSave: saveSettingsIfLoaded
-            )
-        }
-        #endif
         .opaqueSettingsFormBackground()
-        #if !os(tvOS)
         .navigationTitle(String(localized: "home.settings.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .onAppear {
             guard !hasLoadedSettings else { return }
             hasLoadedSettings = true
@@ -91,7 +65,6 @@ struct HomeSettingsView: View {
 
     private var shortcutsSection: some View {
         Section {
-            #if !os(tvOS)
             // Layout picker (List vs Cards)
             Picker(String(localized: "home.settings.shortcuts.layout"), selection: $shortcutLayout) {
                 ForEach(HomeShortcutLayout.allCases, id: \.self) { layout in
@@ -104,24 +77,6 @@ struct HomeSettingsView: View {
             // Card style (Compact / Regular) — navigates to a page with a
             // selector and a live preview. Only for cards layout.
             if shortcutLayout == .cards {
-                #if os(macOS)
-                Button {
-                    showingStyleSettings = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Label(String(localized: "home.settings.shortcuts.style"), systemImage: "paintpalette")
-                        Spacer()
-                        Text(shortcutCardStyle.displayName)
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                #else
                 SettingsNavigationRow(
                     "home.settings.shortcuts.style",
                     systemImage: "paintpalette",
@@ -135,34 +90,14 @@ struct HomeSettingsView: View {
                         onSave: saveSettingsIfLoaded
                     )
                 }
-                #endif
             }
-            #endif
 
-            #if os(tvOS)
-            ForEach(Array(shortcutOrder.enumerated()), id: \.element.id) { index, card in
-                if card != .downloads {
-                    TVHomeItemRow(
-                        icon: card.icon,
-                        title: card.localizedTitle,
-                        isVisible: shortcutBinding(for: card),
-                        canMoveUp: index > 0 && shortcutOrder[index - 1] != .downloads,
-                        canMoveDown: index < shortcutOrder.count - 1,
-                        onMoveUp: { moveShortcut(at: index, direction: -1) },
-                        onMoveDown: { moveShortcut(at: index, direction: 1) },
-                        canDelete: canDelete(shortcut: card),
-                        onDelete: { removeShortcut(card) }
-                    )
-                }
-            }
-            #else
             ForEach(shortcutOrder) { card in
                 shortcutRowView(for: card)
             }
             .onMove { from, to in
                 shortcutOrder.move(fromOffsets: from, toOffset: to)
             }
-            #endif
         } header: {
             Text(String(localized: "home.settings.shortcuts.header"))
         }
@@ -201,34 +136,14 @@ struct HomeSettingsView: View {
                         .tag(layout)
                 }
             }
-            #if !os(tvOS)
             .pickerStyle(.segmented)
-            #endif
 
-            #if os(tvOS)
-            ForEach(Array(sectionOrder.enumerated()), id: \.element.id) { index, section in
-                if section != .downloads {
-                    TVHomeItemRow(
-                        icon: section.icon,
-                        title: section.localizedTitle,
-                        isVisible: sectionBinding(for: section),
-                        canMoveUp: index > 0 && sectionOrder[index - 1] != .downloads,
-                        canMoveDown: index < sectionOrder.count - 1,
-                        onMoveUp: { moveSection(at: index, direction: -1) },
-                        onMoveDown: { moveSection(at: index, direction: 1) },
-                        canDelete: canDelete(section: section),
-                        onDelete: { removeSection(section) }
-                    )
-                }
-            }
-            #else
             ForEach(sectionOrder) { section in
                 sectionRowView(for: section)
             }
             .onMove { from, to in
                 sectionOrder.move(fromOffsets: from, toOffset: to)
             }
-            #endif
         } header: {
             Text(String(localized: "home.settings.sections.header"))
         } footer: {
@@ -256,42 +171,9 @@ struct HomeSettingsView: View {
         }
     }
 
-    #if os(tvOS)
-    private func moveShortcut(at index: Int, direction: Int) {
-        let newIndex = index + direction
-        guard newIndex >= 0, newIndex < shortcutOrder.count else { return }
-        shortcutOrder.swapAt(index, newIndex)
-    }
-
-    private func moveSection(at index: Int, direction: Int) {
-        let newIndex = index + direction
-        guard newIndex >= 0, newIndex < sectionOrder.count else { return }
-        sectionOrder.swapAt(index, newIndex)
-    }
-    #endif
 
     private var itemsLimitSection: some View {
         Section {
-            #if os(tvOS)
-            HStack {
-                Text(String(localized: "home.settings.itemsLimit"))
-                Spacer()
-                Button {
-                    if sectionItemsLimit > 1 { sectionItemsLimit -= 1 }
-                } label: {
-                    Image(systemName: "minus.circle")
-                }
-                .buttonStyle(TVSettingsButtonStyle())
-                Text("\(sectionItemsLimit)")
-                    .monospacedDigit()
-                Button {
-                    if sectionItemsLimit < 20 { sectionItemsLimit += 1 }
-                } label: {
-                    Image(systemName: "plus.circle")
-                }
-                .buttonStyle(TVSettingsButtonStyle())
-            }
-            #else
             Stepper(value: $sectionItemsLimit, in: 1...20) {
                 HStack {
                     Text(String(localized: "home.settings.itemsLimit"))
@@ -300,7 +182,6 @@ struct HomeSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            #endif
         }
     }
 
@@ -478,7 +359,6 @@ struct HomeSettingsView: View {
                     isDisabled: isDisabled,
                     disabledReason: disabledReason(instance: instance, contentType: contentType)
                 )
-                #if os(iOS)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         removeShortcut(card)
@@ -487,7 +367,6 @@ struct HomeSettingsView: View {
                     }
                     .tint(.red)
                 }
-                #endif
                 .contextMenu {
                     Button(role: .destructive) {
                         removeShortcut(card)
@@ -507,7 +386,6 @@ struct HomeSettingsView: View {
                     isDisabled: isDisabled,
                     disabledReason: isDisabled ? String(localized: "home.settings.sourceDisabled") : nil
                 )
-                #if os(iOS)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         removeShortcut(card)
@@ -516,7 +394,6 @@ struct HomeSettingsView: View {
                     }
                     .tint(.red)
                 }
-                #endif
                 .contextMenu {
                     Button(role: .destructive) {
                         removeShortcut(card)
@@ -548,7 +425,6 @@ struct HomeSettingsView: View {
                     isDisabled: isDisabled,
                     disabledReason: disabledReason(instance: instance, contentType: contentType)
                 )
-                #if os(iOS)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         removeSection(section)
@@ -557,7 +433,6 @@ struct HomeSettingsView: View {
                     }
                     .tint(.red)
                 }
-                #endif
                 .contextMenu {
                     Button(role: .destructive) {
                         removeSection(section)
@@ -600,9 +475,7 @@ struct HomeSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(isDisabled)
             }
-            #if !os(tvOS)
             .help(isDisabled ? (disabledReason(instance: instance, contentType: contentType) ?? "") : "")
-            #endif
         }
     }
     
@@ -631,9 +504,7 @@ struct HomeSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(isDisabled)
             }
-            #if !os(tvOS)
             .help(isDisabled ? (disabledReason(instance: instance, contentType: contentType) ?? "") : "")
-            #endif
         }
     }
 
@@ -681,114 +552,13 @@ struct HomeSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(isDisabled)
             }
-            #if !os(tvOS)
             .help(isDisabled ? String(localized: "home.settings.sourceDisabled") : "")
-            #endif
         }
     }
 }
 
 // MARK: - Home Item Row
 
-#if os(tvOS)
-private struct TVHomeItemRow: View {
-    let icon: String
-    let title: String
-    @Binding var isVisible: Bool
-    let canMoveUp: Bool
-    let canMoveDown: Bool
-    let onMoveUp: () -> Void
-    let onMoveDown: () -> Void
-    var canDelete: Bool = false
-    var onDelete: (() -> Void)? = nil
-    
-    @State private var showingDeleteConfirmation = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Move buttons - compact style
-            VStack(spacing: 4) {
-                Button {
-                    onMoveUp()
-                } label: {
-                    Image(systemName: "chevron.up")
-                        .font(.caption)
-                        .foregroundStyle(canMoveUp ? .primary : .tertiary)
-                        .frame(width: 30, height: 24)
-                }
-                .buttonStyle(TVCompactButtonStyle())
-                .disabled(!canMoveUp)
-
-                Button {
-                    onMoveDown()
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(canMoveDown ? .primary : .tertiary)
-                        .frame(width: 30, height: 24)
-                }
-                .buttonStyle(TVCompactButtonStyle())
-                .disabled(!canMoveDown)
-            }
-
-            // Main content - toggle visibility
-            Button {
-                isVisible.toggle()
-            } label: {
-                HStack {
-                    Image(systemName: icon)
-                        .frame(width: 24)
-                        .foregroundStyle(.secondary)
-                    Text(title)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: isVisible ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isVisible ? .green : .secondary)
-                        .font(.title3)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(TVFormRowButtonStyle())
-            
-            // Delete button (only for instance content)
-            if canDelete {
-                Button {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .frame(width: 30, height: 24)
-                }
-                .buttonStyle(TVCompactButtonStyle())
-                .alert(String(localized: "home.removeConfirmation.title"), isPresented: $showingDeleteConfirmation) {
-                    Button(String(localized: "common.cancel"), role: .cancel) { }
-                    Button("common.remove", role: .destructive) {
-                        onDelete?()
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-/// Compact button style for small controls like up/down arrows
-private struct TVCompactButtonStyle: ButtonStyle {
-    @Environment(\.isFocused) private var isFocused
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isFocused ? Color.white.opacity(0.2) : Color.clear)
-            )
-            .scaleEffect(configuration.isPressed ? 0.9 : (isFocused ? 1.1 : 1.0))
-            .animation(.easeInOut(duration: 0.1), value: isFocused)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-#endif
 
 private struct HomeItemRow: View {
     let icon: String
@@ -798,28 +568,6 @@ private struct HomeItemRow: View {
     var disabledReason: String? = nil
 
     var body: some View {
-        #if os(tvOS)
-        Button {
-            if !isDisabled {
-                isVisible.toggle()
-            }
-        } label: {
-            HStack {
-                Image(systemName: icon)
-                    .frame(width: 24)
-                    .foregroundStyle(isDisabled ? .tertiary : .secondary)
-                Text(title)
-                    .foregroundStyle(isDisabled ? .tertiary : .primary)
-                Spacer()
-                Image(systemName: isVisible ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isDisabled ? .secondary.opacity(0.5) : (isVisible ? .green : .secondary))
-                    .font(.title3)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(TVFormRowButtonStyle())
-        .disabled(isDisabled)
-        #else
         HStack {
             Image(systemName: icon)
                 .frame(width: 24)
@@ -832,7 +580,6 @@ private struct HomeItemRow: View {
                 .disabled(isDisabled)
         }
         .help(disabledReason ?? "")
-        #endif
     }
 }
 

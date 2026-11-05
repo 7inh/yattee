@@ -71,16 +71,10 @@ private struct EditRemoteServerContent: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        formContent
-            .accessibilityIdentifier("editSource.view")
-        #else
         NavigationStack {
             formContent
                 .navigationTitle(String(localized: "sources.editSource"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: "common.cancel")) {
@@ -95,10 +89,6 @@ private struct EditRemoteServerContent: View {
                 }
                 .accessibilityIdentifier("editSource.view")
         }
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 450)
-        #endif
-        #endif
     }
 
     private var formContent: some View {
@@ -109,36 +99,17 @@ private struct EditRemoteServerContent: View {
             }
 
             Section {
-                #if os(tvOS)
-                TVSettingsTextField(title: String(localized: "sources.field.name"), text: $name)
-                TVSettingsToggle(title: String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #elseif os(macOS)
-                LabeledContent(String(localized: "sources.field.name")) {
-                    TextField("", text: $name)
-                }
-                Toggle(String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #else
                 TextField(String(localized: "sources.field.name"), text: $name)
                 Toggle(String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #endif
             }
 
             if instance.type == .piped {
                 Section {
-                    #if os(tvOS)
-                    TVSettingsTextField(title: String(localized: "sources.field.frontendURL"), text: $frontendURLString)
-                    #elseif os(macOS)
-                    LabeledContent(String(localized: "sources.field.frontendURL")) {
-                        TextField("", text: $frontendURLString)
-                            .autocorrectionDisabled()
-                    }
-                    #else
                     TextField(String(localized: "sources.field.frontendURL"), text: $frontendURLString)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    #endif
                 } footer: {
                     Text(String(localized: "sources.footer.frontendURL"))
                 }
@@ -164,16 +135,12 @@ private struct EditRemoteServerContent: View {
                         if info.config?.allowAllSitesForExtraction == true {
                             LabeledContent(String(localized: "sources.field.extractors"), value: String(localized: "sources.serverInfo.allSitesSupported"))
                         } else if let sites = info.sites, !sites.isEmpty {
-                            #if os(tvOS)
-                            LabeledContent(String(localized: "sources.field.extractors"), value: "\(sites.count)")
-                            #else
                             DisclosureGroup(String(localized: "sources.serverInfo.enabledExtractors \(sites.count)")) {
                                 ForEach(sites, id: \.name) { site in
                                     Text(site.name)
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            #endif
                         } else {
                             LabeledContent(String(localized: "sources.field.extractors"), value: String(localized: "sources.serverInfo.noneConfigured"))
                         }
@@ -197,17 +164,7 @@ private struct EditRemoteServerContent: View {
                     Section {
                         if instance.type.accountCapabilities.supportsSubscriptions {
                             NavigationLink {
-                                #if os(tvOS)
-                                TVSidebarDetailContainer(
-                                    systemImage: "person.2",
-                                    title: String(localized: "sources.import.subscriptions"),
-                                    showsDismissButton: true
-                                ) {
-                                    ImportSubscriptionsView(instance: instance)
-                                }
-                                #else
                                 ImportSubscriptionsView(instance: instance)
-                                #endif
                             } label: {
                                 Label(String(localized: "sources.import.subscriptions"), systemImage: "person.2")
                             }
@@ -216,17 +173,7 @@ private struct EditRemoteServerContent: View {
 
                         if instance.type.accountCapabilities.supportsPlaylistReads {
                             NavigationLink {
-                                #if os(tvOS)
-                                TVSidebarDetailContainer(
-                                    systemImage: "list.bullet.rectangle",
-                                    title: String(localized: "sources.import.playlists"),
-                                    showsDismissButton: true
-                                ) {
-                                    ImportPlaylistsView(instance: instance)
-                                }
-                                #else
                                 ImportPlaylistsView(instance: instance)
-                                #endif
                             } label: {
                                 Label(String(localized: "sources.import.playlists"), systemImage: "list.bullet.rectangle")
                             }
@@ -240,40 +187,16 @@ private struct EditRemoteServerContent: View {
 
             Section {
                 if instance.supportsHTTPBasicAuthProxy {
-                    #if os(tvOS)
-                    TVSettingsTextField(title: String(localized: "sources.field.username"), text: $basicAuthUsername)
-                    TVSettingsTextField(title: String(localized: "sources.field.password"), text: $basicAuthPassword, isSecure: true)
-                    #elseif os(macOS)
-                    LabeledContent(String(localized: "sources.field.username")) {
-                        TextField("", text: $basicAuthUsername)
-                            .textContentType(.username)
-                            .autocorrectionDisabled()
-                    }
-                    LabeledContent(String(localized: "sources.field.password")) {
-                        SecureField("", text: $basicAuthPassword)
-                            .textContentType(.password)
-                    }
-                    #else
                     TextField(String(localized: "sources.field.username"), text: $basicAuthUsername)
                         .textContentType(.username)
-                        #if os(iOS)
                         .textInputAutocapitalization(.never)
-                        #endif
                         .autocorrectionDisabled()
 
                     SecureField(String(localized: "sources.field.password"), text: $basicAuthPassword)
                         .textContentType(.password)
-                    #endif
                 }
 
-                #if os(tvOS)
-                TVSettingsToggle(
-                    title: String(localized: "sources.field.allowInvalidCertificates"),
-                    isOn: $allowInvalidCertificates
-                )
-                #else
                 Toggle(String(localized: "sources.field.allowInvalidCertificates"), isOn: $allowInvalidCertificates)
-                #endif
             } header: {
                 Text(String(localized: "sources.header.security"))
             } footer: {
@@ -288,14 +211,7 @@ private struct EditRemoteServerContent: View {
 
             if instance.supportsVideoProxying {
                 Section {
-                    #if os(tvOS)
-                    TVSettingsToggle(
-                        title: String(localized: "sources.field.proxiesVideos"),
-                        isOn: $proxiesVideos
-                    )
-                    #else
                     Toggle(String(localized: "sources.field.proxiesVideos"), isOn: $proxiesVideos)
-                    #endif
                 } header: {
                     Text(String(localized: "sources.header.proxy"))
                 } footer: {
@@ -303,16 +219,6 @@ private struct EditRemoteServerContent: View {
                 }
             }
 
-            #if os(tvOS)
-            Section {
-                Button {
-                    saveChanges()
-                } label: {
-                    Label(String(localized: "common.save"), systemImage: "checkmark.circle")
-                }
-                .buttonStyle(TVSettingsButtonStyle())
-            }
-            #endif
 
             Section {
                 Button(role: .destructive) {
@@ -320,17 +226,9 @@ private struct EditRemoteServerContent: View {
                 } label: {
                     Label(String(localized: "sources.deleteSource"), systemImage: "trash")
                 }
-                #if os(tvOS)
-                .buttonStyle(TVSettingsButtonStyle())
-                #endif
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .confirmationDialog(
             String(localized: "sources.delete.confirmation.single \(instance.displayName)"),
@@ -533,19 +431,10 @@ private struct EditFileSourceContent: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        formContent
-            .onAppear {
-                hasExistingPassword = appEnvironment?.mediaSourcesManager.password(for: source) != nil
-                smbProtocolVersion = source.smbProtocolVersion ?? .auto
-            }
-        #else
         NavigationStack {
             formContent
                 .navigationTitle(String(localized: "sources.editSource"))
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: "common.cancel")) {
@@ -565,27 +454,13 @@ private struct EditFileSourceContent: View {
                     smbProtocolVersion = source.smbProtocolVersion ?? .auto
                 }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, minHeight: 450)
-        #endif
-        #endif
     }
 
     private var formContent: some View {
         Form {
             Section {
-                #if os(tvOS)
-                TVSettingsTextField(title: String(localized: "sources.field.name"), text: $name)
-                TVSettingsToggle(title: String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #elseif os(macOS)
-                LabeledContent(String(localized: "sources.field.name")) {
-                    TextField("", text: $name)
-                }
-                Toggle(String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #else
                 TextField(String(localized: "sources.field.name"), text: $name)
                 Toggle(String(localized: "sources.field.enabled"), isOn: $isEnabled)
-                #endif
             } header: {
                 Text(String(localized: "sources.header.general"))
             }
@@ -597,19 +472,8 @@ private struct EditFileSourceContent: View {
                     Label(source.type.displayName, systemImage: source.type.systemImage)
                         .foregroundStyle(.secondary)
                 }
-                #if !os(tvOS)
                 .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] }
-                #endif
 
-                #if os(macOS)
-                HStack {
-                    Text(String(localized: "sources.field.url"))
-                    Spacer()
-                    Text(source.url.absoluteString)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                #else
                 if source.type != .localFolder {
                     HStack {
                         Text(String(localized: "sources.field.url"))
@@ -619,41 +483,13 @@ private struct EditFileSourceContent: View {
                             .lineLimit(1)
                     }
                 }
-                #endif
             }
 
             if source.type == .webdav || source.type == .smb {
                 Section {
-                    #if os(tvOS)
-                    TVSettingsTextField(title: String(localized: "sources.field.username"), text: $username)
-                    TVSettingsTextField(
-                        title: hasExistingPassword
-                            ? String(localized: "sources.field.passwordKeep")
-                            : String(localized: "sources.field.passwordRequired"),
-                        text: $password,
-                        isSecure: true
-                    )
-                    #elseif os(macOS)
-                    LabeledContent(String(localized: "sources.field.username")) {
-                        TextField("", text: $username)
-                            .textContentType(.username)
-                            .autocorrectionDisabled()
-                    }
-                    LabeledContent(String(localized: "sources.field.password")) {
-                        SecureField(
-                            hasExistingPassword
-                                ? String(localized: "sources.field.passwordKeep")
-                                : String(localized: "sources.field.passwordRequired"),
-                            text: $password
-                        )
-                        .textContentType(.password)
-                    }
-                    #else
                     TextField(String(localized: "sources.field.username"), text: $username)
                         .textContentType(.username)
-                        #if os(iOS)
                         .textInputAutocapitalization(.never)
-                        #endif
                         .autocorrectionDisabled()
 
                     SecureField(
@@ -663,7 +499,6 @@ private struct EditFileSourceContent: View {
                         text: $password
                     )
                     .textContentType(.password)
-                    #endif
                 } header: {
                     Text(String(localized: "sources.header.auth"))
                 }
@@ -685,14 +520,7 @@ private struct EditFileSourceContent: View {
 
             if source.type == .webdav {
                 Section {
-                    #if os(tvOS)
-                    TVSettingsToggle(
-                        title: String(localized: "sources.field.allowInvalidCertificates"),
-                        isOn: $allowInvalidCertificates
-                    )
-                    #else
                     Toggle(String(localized: "sources.field.allowInvalidCertificates"), isOn: $allowInvalidCertificates)
-                    #endif
                 } header: {
                     Text(String(localized: "sources.header.security"))
                 } footer: {
@@ -700,17 +528,6 @@ private struct EditFileSourceContent: View {
                 }
             }
 
-            #if os(tvOS)
-            Section {
-                Button {
-                    saveChanges()
-                } label: {
-                    Label(String(localized: "common.save"), systemImage: "checkmark.circle")
-                }
-                .disabled(name.isEmpty)
-                .buttonStyle(TVSettingsButtonStyle())
-            }
-            #endif
 
             Section {
                 Button(role: .destructive) {
@@ -719,17 +536,9 @@ private struct EditFileSourceContent: View {
                     Label(String(localized: "sources.deleteSource"), systemImage: "trash")
                         .foregroundStyle(.red)
                 }
-                #if os(tvOS)
-                .buttonStyle(TVSettingsButtonStyle())
-                #endif
             }
         }
-        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .confirmationDialog(
             String(localized: "sources.delete.confirmation.single \(source.name)"),

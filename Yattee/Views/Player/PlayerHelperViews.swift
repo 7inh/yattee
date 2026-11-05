@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS) || os(tvOS)
 
 // MARK: - Playback Info
 
@@ -108,11 +107,8 @@ struct ErrorDetailsSheet: View {
                 .padding()
             }
             .navigationTitle(String(localized: "player.error.details.title"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
-                #if !os(tvOS)
                 sheetCloseToolbarItem { dismiss() }
 
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -130,24 +126,13 @@ struct ErrorDetailsSheet: View {
                     }
                     .accessibilityLabel(String(localized: "player.error.share.accessibilityLabel"))
                 }
-                #endif
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 450, minHeight: 300)
-        #endif
     }
 
     private func copyToClipboard() {
-        #if os(iOS)
         UIPasteboard.general.string = errorMessage
-        #elseif os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(errorMessage, forType: .string)
-        #endif
     }
 }
 
@@ -184,5 +169,3 @@ struct PlayerOverlayButton: View {
         }
     }
 }
-
-#endif

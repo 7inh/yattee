@@ -38,19 +38,11 @@ struct SearchPlaylistRowView: View {
     }
     
     private var titleFont: Font {
-        #if os(tvOS)
-        style == .compact ? .caption : .subheadline
-        #else
         .subheadline
-        #endif
     }
     
     private var authorFont: Font {
-        #if os(tvOS)
         style == .compact ? .caption2 : .caption
-        #else
-        style == .compact ? .caption2 : .caption
-        #endif
     }
 
     var body: some View {

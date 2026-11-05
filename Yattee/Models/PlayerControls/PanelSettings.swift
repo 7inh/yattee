@@ -521,13 +521,7 @@ struct PanelSettings: Codable, Hashable, Sendable {
     /// Whether this device has a screen the corner layout fits on: iPad,
     /// macOS, and foldable iPhones (interior display).
     static var canHostCornerLayout: Bool {
-        #if os(macOS)
-        return true
-        #elseif os(iOS)
         return UIDevice.current.userInterfaceIdiom == .pad || deviceHasHinge
-        #else
-        return false
-        #endif
     }
 
     private static let deviceHasHingeKey = "deviceHasHinge"
@@ -579,11 +573,7 @@ struct PanelSettings: Codable, Hashable, Sendable {
     /// Whether this platform renders comments below the video (the comments
     /// pill on the portrait info panel exists on iOS only).
     static var supportsBelowVideoComments: Bool {
-        #if os(iOS)
         return true
-        #else
-        return false
-        #endif
     }
 
     /// The pages list with any page types this app version knows about but
@@ -664,11 +654,7 @@ struct PanelSettings: Codable, Hashable, Sendable {
     /// iPhone has no page switcher: every host renders one info page with
     /// inline sections, so settings talk about "sections" rather than "pages".
     static var isSectionsOnlyDevice: Bool {
-        #if os(iOS)
         return UIDevice.current.userInterfaceIdiom == .phone
-        #else
-        return false
-        #endif
     }
 
     /// Enabled pages an inline-sections host renders below the video info,

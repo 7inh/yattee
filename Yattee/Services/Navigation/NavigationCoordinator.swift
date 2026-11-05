@@ -37,11 +37,6 @@ final class NavigationCoordinator {
     /// Sheets observe it via `.dismissesOnExternalNavigation(_:)`.
     var dismissPresentationsGeneration = 0
 
-    #if os(macOS)
-    /// Bumped to ask the main window to open the Settings window, which only a
-    /// view can do (`openWindow`).
-    var openSettingsWindowRequest = 0
-    #endif
 
     /// Whether the mini player is expanded to full screen.
     var isPlayerExpanded = false {
@@ -251,10 +246,6 @@ final class NavigationCoordinator {
     /// Reference to MediaSourcesManager for navigating to media source directories.
     private weak var mediaSourcesManager: MediaSourcesManager?
 
-    #if os(macOS)
-    /// Reference to SettingsManager for the player window mode.
-    private weak var settingsManager: SettingsManager?
-    #endif
 
     // MARK: - Handoff Integration
 
@@ -268,12 +259,6 @@ final class NavigationCoordinator {
         self.mediaSourcesManager = manager
     }
 
-    #if os(macOS)
-    /// Set the SettingsManager reference for the player window mode.
-    func setSettingsManager(_ manager: SettingsManager) {
-        self.settingsManager = manager
-    }
-    #endif
 
     // MARK: - Navigation Actions
 
@@ -293,11 +278,7 @@ final class NavigationCoordinator {
     /// section where the layout has one, otherwise the Home screen's sheet
     /// (`NavigationRouter.ensureSelectionIsAvailable`), or on macOS its window.
     func openSettings() {
-        #if os(macOS)
-        openSettingsWindowRequest += 1
-        #else
         router.select(.settings)
-        #endif
     }
 
     // MARK: - Sheet Presentation
@@ -346,11 +327,7 @@ final class NavigationCoordinator {
     /// A macOS player in its own window doesn't cover the main window, so it
     /// stays open.
     func navigateToOpenedLink(_ destination: NavigationDestination) {
-        #if os(macOS)
-        let coversMainWindow = settingsManager?.macPlayerSeparateWindow != true
-        #else
         let coversMainWindow = true
-        #endif
         if isPlayerExpanded, coversMainWindow {
             isPlayerCollapsing = true
             isPlayerExpanded = false

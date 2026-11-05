@@ -124,12 +124,10 @@ struct VideoChannelRow: View {
 
             Spacer()
 
-            #if !os(tvOS)
             VideoContextMenuView(
                 video: video,
                 accentColor: accentColor
             )
-            #endif
         }
         .padding(.top, 4)
     }
@@ -166,4 +164,3 @@ struct VideoChannelRow: View {
         }
     }
 }
-

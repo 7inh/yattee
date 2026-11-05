@@ -28,13 +28,7 @@ struct ExpandedCommentsView: View {
     @State private var isDismissThresholdReached = false
 
     private var backgroundColor: Color {
-        #if os(iOS)
         Color(.systemBackground)
-        #elseif os(macOS)
-        Color(nsColor: .windowBackgroundColor)
-        #else
-        Color.black
-        #endif
     }
 
     // MARK: - Drag Handle
@@ -63,12 +57,10 @@ struct ExpandedCommentsView: View {
                         .id("commentsTop")
 
                     // Top padding so content isn't initially obscured by drag handle
-                    #if os(iOS)
                     if showDragHandle {
                         Color.clear
                             .frame(height: 17)
                     }
-                    #endif
 
                     // Header - height matches the floating X button (52pt)
                     Text(String(localized: "player.comments"))
@@ -83,7 +75,6 @@ struct ExpandedCommentsView: View {
                         .padding(.horizontal)
                 }
             }
-            #if os(iOS)
             .modifier(CommentsScrollDetectionModifier(
                 showScrollButton: $showScrollButton,
                 scrollBounceOffset: $scrollBounceOffset,
@@ -95,7 +86,6 @@ struct ExpandedCommentsView: View {
                     appEnvironment?.settingsManager.triggerHapticFeedback(for: .commentsDismiss)
                 }
             ))
-            #endif
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Color.clear
                     .frame(height: 0)
@@ -109,7 +99,6 @@ struct ExpandedCommentsView: View {
         }
 
             // Drag handle overlay for panel resizing (only in portrait mode with callbacks)
-            #if os(iOS)
             if showDragHandle {
                 VStack(spacing: 0) {
                     dragHandle
@@ -136,22 +125,14 @@ struct ExpandedCommentsView: View {
                         }
                 )
             }
-            #endif
         }
         .background {
-            #if os(iOS)
             Color(.systemBackground)
-            #elseif os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-            #else
-            Color.black
-            #endif
         }
         // Top and bottom fade gradients (below buttons)
         .overlay {
             VStack(spacing: 0) {
                 // Top fade (skip when drag handle is shown - it provides its own fade)
-                #if os(iOS)
                 if !showDragHandle {
                     LinearGradient(
                         colors: [backgroundColor, .clear],
@@ -160,14 +141,6 @@ struct ExpandedCommentsView: View {
                     )
                     .frame(height: 40)
                 }
-                #else
-                LinearGradient(
-                    colors: [backgroundColor, .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 40)
-                #endif
 
                 Spacer()
 
@@ -357,7 +330,6 @@ struct CommentsListContent: View {
 
 // MARK: - Scroll Detection
 
-#if os(iOS)
 private struct CommentsScrollDetectionModifier: ViewModifier {
     @Binding var showScrollButton: Bool
     @Binding var scrollBounceOffset: CGFloat
@@ -428,4 +400,3 @@ private struct CommentsScrollDetectionModifier: ViewModifier {
         }
     }
 }
-#endif

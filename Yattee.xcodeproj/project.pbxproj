@@ -7,14 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		370E71982F9A1A41000E04B2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = 370E71972F9A1A41000E04B2 /* Sparkle */; };
 		37767AB32F05766100D248FC /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 37767AB22F05766100D248FC /* Nuke */; };
 		37767AB52F05766100D248FC /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 37767AB42F05766100D248FC /* NukeUI */; };
-		378CF2FE2EF21767002C1CD7 /* MPVKit-GPL in Frameworks */ = {isa = PBXBuildFile; productRef = 378CF2FD2EF21767002C1CD7 /* MPVKit-GPL */; };
-		378CF3012EF21783002C1CD7 /* MPVKit-GPL in Frameworks */ = {isa = PBXBuildFile; productRef = 378CF3002EF21783002C1CD7 /* MPVKit-GPL */; };
 		37BA19A62EE4DFEE001D7B0F /* Yattee2.icon in Resources */ = {isa = PBXBuildFile; fileRef = 37BA19A52EE4DFEE001D7B0F /* Yattee2.icon */; };
-		37BA19B52EE4EB7F001D7B0F /* YatteeShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 37BA19AB2EE4EB7F001D7B0F /* YatteeShareExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		37C0AAAA00000000AAAA000C /* YatteeTopShelf.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 37C0AAAA00000000AAAA0002 /* YatteeTopShelf.appex */; platformFilters = (tvos, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		37BA19B52EE4EB7F001D7B0F /* YatteeShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 37BA19AB2EE4EB7F001D7B0F /* YatteeShareExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,13 +20,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 37BA19AA2EE4EB7F001D7B0F;
 			remoteInfo = YatteeShareExtension;
-		};
-		37C0AAAA00000000AAAA0008 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 372D1A1F2EDB163800F58F7A /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 37C0AAAA00000000AAAA0001;
-			remoteInfo = YatteeTopShelf;
 		};
 		37D0B2982EDB23BD00B9C4ED /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -42,16 +31,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		37BA19BA2EE4EB7F001D7B0F /* Embed Foundation Extensions */ = {
+		37BA19BA2EE4EB7F001D7B0F /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				37BA19B52EE4EB7F001D7B0F /* YatteeShareExtension.appex in Embed Foundation Extensions */,
-				37C0AAAA00000000AAAA000C /* YatteeTopShelf.appex in Embed Foundation Extensions */,
+				37BA19B52EE4EB7F001D7B0F /* YatteeShareExtension.appex in Embed App Extensions */,
 			);
-			name = "Embed Foundation Extensions";
+			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -60,7 +48,6 @@
 		372D1A272EDB163800F58F7A /* Yattee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Yattee.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		37BA19A52EE4DFEE001D7B0F /* Yattee2.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Yattee2.icon; sourceTree = "<group>"; };
 		37BA19AB2EE4EB7F001D7B0F /* YatteeShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = YatteeShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		37C0AAAA00000000AAAA0002 /* YatteeTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = YatteeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		37D0B2942EDB23BD00B9C4ED /* YatteeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = YatteeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -68,7 +55,6 @@
 		37A11F692EDC5DD700213864 /* Exceptions for "Yattee" folder in "Yattee" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"Info-tvOS.plist",
 				Info.plist,
 			);
 			target = 372D1A262EDB163800F58F7A /* Yattee */;
@@ -79,13 +65,6 @@
 				Info.plist,
 			);
 			target = 37BA19AA2EE4EB7F001D7B0F /* YatteeShareExtension */;
-		};
-		37C0AAAA00000000AAAA000D /* Exceptions for "YatteeTopShelf" folder in "YatteeTopShelf" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 37C0AAAA00000000AAAA0001 /* YatteeTopShelf */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -106,14 +85,6 @@
 			path = YatteeShareExtension;
 			sourceTree = "<group>";
 		};
-		37C0AAAA00000000AAAA0003 /* YatteeTopShelf */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				37C0AAAA00000000AAAA000D /* Exceptions for "YatteeTopShelf" folder in "YatteeTopShelf" target */,
-			);
-			path = YatteeTopShelf;
-			sourceTree = "<group>";
-		};
 		37D0B2952EDB23BD00B9C4ED /* YatteeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = YatteeTests;
@@ -126,22 +97,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				370E71982F9A1A41000E04B2 /* Sparkle in Frameworks */,
 				37767AB32F05766100D248FC /* Nuke in Frameworks */,
-				378CF2FE2EF21767002C1CD7 /* MPVKit-GPL in Frameworks */,
-				378CF3012EF21783002C1CD7 /* MPVKit-GPL in Frameworks */,
 				37767AB52F05766100D248FC /* NukeUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		37BA19A82EE4EB7F001D7B0F /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		37C0AAAA00000000AAAA0005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -164,7 +125,6 @@
 				372D1A292EDB163800F58F7A /* Yattee */,
 				37D0B2952EDB23BD00B9C4ED /* YatteeTests */,
 				37BA19AC2EE4EB7F001D7B0F /* YatteeShareExtension */,
-				37C0AAAA00000000AAAA0003 /* YatteeTopShelf */,
 				372D1A282EDB163800F58F7A /* Products */,
 				37BA19A52EE4DFEE001D7B0F /* Yattee2.icon */,
 			);
@@ -176,7 +136,6 @@
 				372D1A272EDB163800F58F7A /* Yattee.app */,
 				37D0B2942EDB23BD00B9C4ED /* YatteeTests.xctest */,
 				37BA19AB2EE4EB7F001D7B0F /* YatteeShareExtension.appex */,
-				37C0AAAA00000000AAAA0002 /* YatteeTopShelf.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -191,25 +150,20 @@
 				372D1A232EDB163800F58F7A /* Sources */,
 				372D1A242EDB163800F58F7A /* Frameworks */,
 				372D1A252EDB163800F58F7A /* Resources */,
-				37BA19BA2EE4EB7F001D7B0F /* Embed Foundation Extensions */,
-				37C0FEE100000000FEE100A1 /* Strip Sparkle (non-DeveloperID) */,
+				37BA19BA2EE4EB7F001D7B0F /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				37BA19B42EE4EB7F001D7B0F /* PBXTargetDependency */,
-				37C0AAAA00000000AAAA0007 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				372D1A292EDB163800F58F7A /* Yattee */,
 			);
 			name = Yattee;
 			packageProductDependencies = (
-				378CF2FD2EF21767002C1CD7 /* MPVKit-GPL */,
-				378CF3002EF21783002C1CD7 /* MPVKit-GPL */,
 				37767AB22F05766100D248FC /* Nuke */,
 				37767AB42F05766100D248FC /* NukeUI */,
-				370E71972F9A1A41000E04B2 /* Sparkle */,
 			);
 			productName = Yattee;
 			productReference = 372D1A272EDB163800F58F7A /* Yattee.app */;
@@ -236,28 +190,6 @@
 			productName = YatteeShareExtension;
 			productReference = 37BA19AB2EE4EB7F001D7B0F /* YatteeShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
-		};
-		37C0AAAA00000000AAAA0001 /* YatteeTopShelf */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 37C0AAAA00000000AAAA0009 /* Build configuration list for PBXNativeTarget "YatteeTopShelf" */;
-			buildPhases = (
-				37C0AAAA00000000AAAA0004 /* Sources */,
-				37C0AAAA00000000AAAA0005 /* Frameworks */,
-				37C0AAAA00000000AAAA0006 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				37C0AAAA00000000AAAA0003 /* YatteeTopShelf */,
-			);
-			name = YatteeTopShelf;
-			packageProductDependencies = (
-			);
-			productName = YatteeTopShelf;
-			productReference = 37C0AAAA00000000AAAA0002 /* YatteeTopShelf.appex */;
-			productType = "com.apple.product-type.tv-app-extension";
 		};
 		37D0B2932EDB23BD00B9C4ED /* YatteeTests */ = {
 			isa = PBXNativeTarget;
@@ -298,9 +230,6 @@
 					37BA19AA2EE4EB7F001D7B0F = {
 						CreatedOnToolsVersion = 26.2;
 					};
-					37C0AAAA00000000AAAA0001 = {
-						CreatedOnToolsVersion = 26.2;
-					};
 					37D0B2932EDB23BD00B9C4ED = {
 						CreatedOnToolsVersion = 26.1.1;
 						TestTargetID = 372D1A262EDB163800F58F7A;
@@ -317,9 +246,7 @@
 			mainGroup = 372D1A1E2EDB163800F58F7A;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				378CF2FF2EF21783002C1CD7 /* XCRemoteSwiftPackageReference "MPVKit" */,
 				37767AB12F05766100D248FC /* XCRemoteSwiftPackageReference "Nuke" */,
-				370E71962F9A1A41000E04B2 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 372D1A282EDB163800F58F7A /* Products */;
@@ -329,7 +256,6 @@
 				372D1A262EDB163800F58F7A /* Yattee */,
 				37D0B2932EDB23BD00B9C4ED /* YatteeTests */,
 				37BA19AA2EE4EB7F001D7B0F /* YatteeShareExtension */,
-				37C0AAAA00000000AAAA0001 /* YatteeTopShelf */,
 			);
 		};
 /* End PBXProject section */
@@ -350,13 +276,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		37C0AAAA00000000AAAA0006 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		37D0B2922EDB23BD00B9C4ED /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -367,25 +286,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		37C0FEE100000000FEE100A1 /* Strip Sparkle (non-DeveloperID) */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Strip Sparkle (non-DeveloperID)";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" = \"Release-DeveloperID\" ] || [ \"${CONFIGURATION}\" = \"Debug\" ] || [ \"${CONFIGURATION}\" = \"Debug-CKDev\" ]; then\n    echo \"Skipping Sparkle strip (config=${CONFIGURATION})\"\n    exit 0\nfi\nFW=\"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Sparkle.framework\"\nif [ -d \"$FW\" ]; then\n    echo \"Stripping Sparkle.framework (config=${CONFIGURATION})\"\n    chflags -R nouchg \"$FW\" 2>/dev/null || true\n    chmod -R u+w \"$FW\" 2>/dev/null || true\n    TMP=\"${FW}.stripping.$$\"\n    if mv \"$FW\" \"$TMP\" 2>/dev/null; then\n        TARGET=\"$TMP\"\n    else\n        TARGET=\"$FW\"\n    fi\n    for i in 1 2 3 4 5; do\n        rm -rf \"$TARGET\" && break\n        sleep 0.2\n    done\n    if [ -e \"$TARGET\" ]; then\n        echo \"warning: failed to fully remove $TARGET\" >&2\n        exit 1\n    fi\nfi\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -397,13 +297,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		37BA19A72EE4EB7F001D7B0F /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		37C0AAAA00000000AAAA0004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -425,14 +318,6 @@
 			platformFilter = ios;
 			target = 37BA19AA2EE4EB7F001D7B0F /* YatteeShareExtension */;
 			targetProxy = 37BA19B32EE4EB7F001D7B0F /* PBXContainerItemProxy */;
-		};
-		37C0AAAA00000000AAAA0007 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			platformFilters = (
-				tvos,
-			);
-			target = 37C0AAAA00000000AAAA0001 /* YatteeTopShelf */;
-			targetProxy = 37C0AAAA00000000AAAA0008 /* PBXContainerItemProxy */;
 		};
 		37D0B2992EDB23BD00B9C4ED /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -659,17 +544,9 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
-					"GLES_SILENCE_DEPRECATION=1",
-					"GL_SILENCE_DEPRECATION=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Libsmbclient.framework/Headers/samba-4.0",
-					"$(BUILT_PRODUCTS_DIR)/Libsmbclient.framework/Headers/samba-4.0",
-				);
 				INFOPLIST_FILE = Yattee/Info.plist;
-				"INFOPLIST_FILE[sdk=appletvos*]" = "Yattee/Info-tvOS.plist";
-				"INFOPLIST_FILE[sdk=appletvsimulator*]" = "Yattee/Info-tvOS.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Yattee;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Arkadiusz Fal";
@@ -686,8 +563,6 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -698,9 +573,9 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
@@ -708,9 +583,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Yattee/Yattee-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -744,17 +617,9 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
-					"GLES_SILENCE_DEPRECATION=1",
-					"GL_SILENCE_DEPRECATION=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Libsmbclient.framework/Headers/samba-4.0",
-					"$(BUILT_PRODUCTS_DIR)/Libsmbclient.framework/Headers/samba-4.0",
-				);
 				INFOPLIST_FILE = Yattee/Info.plist;
-				"INFOPLIST_FILE[sdk=appletvos*]" = "Yattee/Info-tvOS.plist";
-				"INFOPLIST_FILE[sdk=appletvsimulator*]" = "Yattee/Info-tvOS.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Yattee;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Arkadiusz Fal";
@@ -771,8 +636,6 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -783,9 +646,9 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
@@ -793,9 +656,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Yattee/Yattee-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = "Debug-CKDev";
 		};
@@ -806,7 +667,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = Yattee/Yattee.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Yattee/Yattee-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 278;
 				DEAD_CODE_STRIPPING = YES;
@@ -828,17 +688,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-					"GLES_SILENCE_DEPRECATION=1",
-					"GL_SILENCE_DEPRECATION=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Libsmbclient.framework/Headers/samba-4.0",
-					"$(BUILT_PRODUCTS_DIR)/Libsmbclient.framework/Headers/samba-4.0",
-				);
 				INFOPLIST_FILE = Yattee/Info.plist;
-				"INFOPLIST_FILE[sdk=appletvos*]" = "Yattee/Info-tvOS.plist";
-				"INFOPLIST_FILE[sdk=appletvsimulator*]" = "Yattee/Info-tvOS.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Yattee;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Arkadiusz Fal";
@@ -855,13 +707,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
-				"OTHER_LDFLAGS[sdk=macosx*]" = (
-					"$(inherited)",
-					"-Wl,-dead_strip_dylibs",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -871,9 +717,9 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
@@ -881,9 +727,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Yattee/Yattee-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -951,7 +795,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = Yattee/Yattee.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Yattee/Yattee-macOS-DeveloperID.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 278;
 				DEAD_CODE_STRIPPING = YES;
@@ -973,17 +816,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-					"GLES_SILENCE_DEPRECATION=1",
-					"GL_SILENCE_DEPRECATION=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Libsmbclient.framework/Headers/samba-4.0",
-					"$(BUILT_PRODUCTS_DIR)/Libsmbclient.framework/Headers/samba-4.0",
-				);
 				INFOPLIST_FILE = Yattee/Info.plist;
-				"INFOPLIST_FILE[sdk=appletvos*]" = "Yattee/Info-tvOS.plist";
-				"INFOPLIST_FILE[sdk=appletvsimulator*]" = "Yattee/Info-tvOS.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Yattee;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Arkadiusz Fal";
@@ -1000,8 +835,6 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1012,20 +845,17 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "SPARKLE $(inherited)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Yattee/Yattee-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = "Release-DeveloperID";
 		};
@@ -1039,22 +869,19 @@
 				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.YatteeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Yattee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Yattee";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
 			};
 			name = "Release-DeveloperID";
 		};
@@ -1086,41 +913,6 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = "Release-DeveloperID";
-		};
-		376D70492F996E0700255B09 /* Release-DeveloperID */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = YatteeTopShelf/YatteeTopShelf.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 278;
-				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = YatteeTopShelf/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Yattee Top Shelf";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_ENTRY_POINT = _NSExtensionMain;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.TopShelf;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 18.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = "Release-DeveloperID";
@@ -1219,109 +1011,6 @@
 			};
 			name = Release;
 		};
-		37C0AAAA00000000AAAA000A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = YatteeTopShelf/YatteeTopShelf.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 278;
-				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = YatteeTopShelf/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Yattee Top Shelf";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_ENTRY_POINT = _NSExtensionMain;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.TopShelf;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-			};
-			name = Debug;
-		};
-		37CCD0E00000000000000004 /* Debug-CKDev */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = YatteeTopShelf/YatteeTopShelf.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 278;
-				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = YatteeTopShelf/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Yattee Top Shelf";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_ENTRY_POINT = _NSExtensionMain;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.TopShelf;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-			};
-			name = "Debug-CKDev";
-		};
-		37C0AAAA00000000AAAA000B /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = YatteeTopShelf/YatteeTopShelf.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 278;
-				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = YatteeTopShelf/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Yattee Top Shelf";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_ENTRY_POINT = _NSExtensionMain;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.TopShelf;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 		37D0B29B2EDB23BD00B9C4ED /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1332,22 +1021,19 @@
 				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.YatteeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Yattee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Yattee";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
 			};
 			name = Debug;
 		};
@@ -1361,22 +1047,19 @@
 				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.YatteeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Yattee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Yattee";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
 			};
 			name = "Debug-CKDev";
 		};
@@ -1390,22 +1073,19 @@
 				DEVELOPMENT_TEAM = 78Z5H3M6RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = stream.yattee.app.YatteeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Yattee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Yattee";
-				TVOS_DEPLOYMENT_TARGET = 18.0;
-				XROS_DEPLOYMENT_TARGET = 26.1;
 			};
 			name = Release;
 		};
@@ -1445,17 +1125,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		37C0AAAA00000000AAAA0009 /* Build configuration list for PBXNativeTarget "YatteeTopShelf" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				37C0AAAA00000000AAAA000A /* Debug */,
-				37CCD0E00000000000000004 /* Debug-CKDev */,
-				37C0AAAA00000000AAAA000B /* Release */,
-				376D70492F996E0700255B09 /* Release-DeveloperID */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		37D0B29A2EDB23BD00B9C4ED /* Build configuration list for PBXNativeTarget "YatteeTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1470,14 +1139,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		370E71962F9A1A41000E04B2 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.9.1;
-			};
-		};
 		37767AB12F05766100D248FC /* XCRemoteSwiftPackageReference "Nuke" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kean/Nuke";
@@ -1486,22 +1147,9 @@
 				minimumVersion = 12.8.0;
 			};
 		};
-		378CF2FF2EF21783002C1CD7 /* XCRemoteSwiftPackageReference "MPVKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/yattee/MPVKit.git";
-			requirement = {
-				kind = exactVersion;
-				version = 1.0.2;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		370E71972F9A1A41000E04B2 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 370E71962F9A1A41000E04B2 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
 		37767AB22F05766100D248FC /* Nuke */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 37767AB12F05766100D248FC /* XCRemoteSwiftPackageReference "Nuke" */;
@@ -1511,15 +1159,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 37767AB12F05766100D248FC /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = NukeUI;
-		};
-		378CF2FD2EF21767002C1CD7 /* MPVKit-GPL */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = "MPVKit-GPL";
-		};
-		378CF3002EF21783002C1CD7 /* MPVKit-GPL */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 378CF2FF2EF21783002C1CD7 /* XCRemoteSwiftPackageReference "MPVKit" */;
-			productName = "MPVKit-GPL";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -9,9 +9,7 @@ import SwiftUI
 
 struct HistoryListView: View {
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
     @Namespace private var sheetTransition
 
     /// One row, from whichever history the screen is reading.
@@ -253,67 +251,15 @@ struct HistoryListView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
-            #if os(tvOS)
-            VStack(spacing: 0) {
-                // tvOS: Inline search field and action button for better focus navigation
-                HStack(spacing: 24) {
-                    TextField("search.history.placeholder", text: $searchText)
-                        .textFieldStyle(.plain)
-
-                    Button {
-                        showViewOptions = true
-                    } label: {
-                        Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                    }
-
-                    // The server has no clear-all, so this is the device's
-                    // history only — the same menu it has always been.
-                    if displayMode.isLocal, !rows.isEmpty {
-                        Menu {
-                            ForEach(ClearHistoryOption.allCases, id: \.self) { option in
-                                Button(role: .destructive) {
-                                    selectedClearOption = option
-                                    showingClearConfirmation = true
-                                } label: {
-                                    Label(option.localizedTitle, systemImage: option.systemImage)
-                                }
-                            }
-                        } label: {
-                            Label(String(localized: "home.history.clear"), systemImage: "trash")
-                        }
-                    }
-
-                    if DataContextSwitcherVisibility.showsPickers(in: appEnvironment) {
-                        DataContextSwitcherButton()
-                    }
-                }
-                .focusSection()
-                .padding(.horizontal, 48)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
-
-                // Content
-                content
-                    .focusSection()
-            }
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            #else
             content
                 .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                     viewWidth = newWidth
                 }
-            #endif
         }
         // Above the list rather than inside it: the rows are local data while
         // this is showing, and nothing else on screen says so.
@@ -322,28 +268,18 @@ struct HistoryListView: View {
                 DataContextUnavailableBanner(reason: contextUnavailability)
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "home.history.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $searchText, prompt: Text(String(localized: "history.search.placeholder")))
         .toolbar {
-            #if os(macOS)
-            // Pin the trailing group (search field + toolbar buttons) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
             // No switcher wherever a sidebar shows one: the macOS sidebar row
             // and the iPad sidebar's bottom bar are the persistent switcher
             // surfaces there, so the toolbar menu is compact-width-only.
-            #if !os(macOS)
             if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
                 ToolbarItem(placement: viewOptionsPlacement) {
                     DataContextSwitcherMenu()
                 }
             }
-            #endif
             // View options button (always visible)
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
@@ -352,11 +288,6 @@ struct HistoryListView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "historyViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
 
             // Clear history menu (local history only, and only when not empty):
@@ -378,13 +309,10 @@ struct HistoryListView: View {
                 }
             }
         }
-        #endif
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "historyViewOptions", in: sheetTransition)
         }
-        #endif
         .confirmationDialog(
             confirmationTitle,
             isPresented: $showingClearConfirmation,
@@ -523,7 +451,6 @@ struct HistoryListView: View {
                     ) {
                         entryRowView(row: row, index: index)
                     }
-                    #if !os(tvOS)
                     .videoSwipeActions(
                         video: row.video,
                         fixedActions: [
@@ -537,7 +464,6 @@ struct HistoryListView: View {
                             }
                         ]
                     )
-                    #endif
                 }
             },
             footer: {
@@ -658,9 +584,6 @@ struct HistoryListView: View {
                 loadMoreFooter
             }
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 
     private var confirmationTitle: String {

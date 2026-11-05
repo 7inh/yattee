@@ -5,7 +5,6 @@
 //  UIKit gesture recognizer coordinator for player gestures.
 //
 
-#if os(iOS)
 import UIKit
 
 /// Coordinates UIKit gesture recognizers for player tap and seek gestures.
@@ -231,4 +230,3 @@ final class PlayerGestureCoordinator: NSObject, UIGestureRecognizerDelegate {
         return false
     }
 }
-#endif

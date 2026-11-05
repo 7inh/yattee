@@ -8,11 +8,7 @@
 import CoreGraphics
 import Foundation
 
-#if os(macOS)
-import AppKit
-#else
 import UIKit
-#endif
 
 /// Parsed VTT entry mapping time range to image URL and crop region
 struct VTTEntry: Sendable {

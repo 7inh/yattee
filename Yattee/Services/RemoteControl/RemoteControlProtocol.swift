@@ -17,15 +17,7 @@ enum DevicePlatform: String, Codable, Sendable {
 
     /// Returns the platform of the current device.
     static var current: DevicePlatform {
-        #if os(iOS)
         return .iOS
-        #elseif os(macOS)
-        return .macOS
-        #elseif os(tvOS)
-        return .tvOS
-        #else
-        return .iOS
-        #endif
     }
 
     /// SF Symbol name for the platform icon.
@@ -78,7 +70,7 @@ struct RemotePlayerState: Codable, Sendable, Equatable {
     let rate: Float
     let volume: Float
     let isMuted: Bool
-    /// Volume mode of the device (mpv = in-app control, system = device volume).
+    /// Volume mode of the device (player = in-app control, system = device volume).
     /// When system mode, remote devices should hide volume controls.
     let volumeMode: String?
 
@@ -106,7 +98,7 @@ struct RemotePlayerState: Codable, Sendable, Equatable {
         rate: 1.0,
         volume: 1.0,
         isMuted: false,
-        volumeMode: "mpv",
+        volumeMode: "inApp",
         isFullscreen: false,
         canToggleFullscreen: false,
         hasPrevious: false,
@@ -115,7 +107,7 @@ struct RemotePlayerState: Codable, Sendable, Equatable {
 
     /// Whether this device accepts in-app volume control.
     var acceptsVolumeControl: Bool {
-        volumeMode == nil || volumeMode == "mpv"
+        volumeMode == nil || (volumeMode == "inApp" || volumeMode == VolumeMode.inApp.rawValue)
     }
 }
 

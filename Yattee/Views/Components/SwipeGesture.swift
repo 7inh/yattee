@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 /// Value passed to gesture callbacks containing translation and velocity.
 struct SwipeGestureValue {
@@ -73,5 +72,3 @@ private extension CGPoint {
         CGSize(width: x, height: y)
     }
 }
-
-#endif

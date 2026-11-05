@@ -1336,7 +1336,7 @@ private struct InvidiousVideoDetails: Decodable, Sendable {
         }
 
         // Add DASH stream (adaptive - supports VP9, AV1, higher qualities)
-        // MPV can play DASH manifests directly
+        // player can play DASH manifests directly
         if let dashUrl {
             // Resolve relative DASH URLs against instance base URL
             let resolvedDashURL: URL?

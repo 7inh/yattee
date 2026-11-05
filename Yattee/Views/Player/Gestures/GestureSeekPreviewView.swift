@@ -5,7 +5,6 @@
 //  Seek preview overlay shown during drag-to-seek gesture.
 //
 
-#if os(iOS)
 import SwiftUI
 
 /// Preview overlay shown during drag-to-seek gesture.
@@ -74,4 +73,3 @@ struct GestureSeekPreviewView: View {
         )
     }
 }
-#endif

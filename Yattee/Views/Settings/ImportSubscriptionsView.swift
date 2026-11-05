@@ -12,9 +12,6 @@ struct ImportSubscriptionsView: View {
     let instance: Instance
 
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(tvOS)
-    @Environment(\.dismiss) private var dismiss
-    #endif
 
     @State private var channels: [Channel] = []
     @State private var subscribedChannelIDs: Set<String> = []
@@ -54,13 +51,9 @@ struct ImportSubscriptionsView: View {
 
     var body: some View {
         content
-            #if !os(tvOS)
             .navigationTitle(String(localized: "import.subscriptions.title"))
-            #endif
             .accessibilityIdentifier(AccessibilityID.view)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 if !unsubscribedChannels.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
@@ -141,13 +134,6 @@ struct ImportSubscriptionsView: View {
         } description: {
             Text(String(localized: "import.subscriptions.emptyDescription"))
         } actions: {
-            #if os(tvOS)
-            // Nothing in the content is focusable here; the container's
-            // toolbar Done is not something to rely on to keep the remote free.
-            Button(String(localized: "common.done")) {
-                dismiss()
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier(AccessibilityID.emptyState)
@@ -176,29 +162,10 @@ struct ImportSubscriptionsView: View {
     // MARK: - Destination Picker
 
     private var destinationPicker: some View {
-        #if os(tvOS)
-        // A tvOS menu picker shows only its value; the name of the control has
-        // to be the row's own — the same shape as the playlist selector's.
-        Menu {
-            Picker(selection: $selectedDestination) {
-                destinationOptionRows
-            } label: {}
-        } label: {
-            HStack {
-                Text(String(localized: "accounts.switcher.title"))
-                Spacer(minLength: 8)
-                Text(DataContextSwitcherLabels.title(for: selectedDestination, in: appEnvironment))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        }
-        #else
         Picker(String(localized: "accounts.switcher.title"), selection: $selectedDestination) {
             destinationOptionRows
         }
         .pickerStyle(.menu)
-        #endif
     }
 
     @ViewBuilder private var destinationOptionRows: some View {

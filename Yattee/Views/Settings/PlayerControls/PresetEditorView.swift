@@ -85,9 +85,6 @@ struct PresetEditorView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        macOSDialog
-        #else
         NavigationStack {
             Form {
                 // Base Layout Picker (only for create mode)
@@ -104,9 +101,7 @@ struct PresetEditorView: View {
                 }
             }
             .navigationTitle(mode.title)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "settings.playerControls.cancel")) {
@@ -125,10 +120,7 @@ struct PresetEditorView: View {
                 isNameFocused = true
             }
         }
-        #if os(iOS)
         .presentationDetents([.medium])
-        #endif
-        #endif
     }
 
     // MARK: - Shared Controls
@@ -167,47 +159,6 @@ struct PresetEditorView: View {
 
     // MARK: - macOS Dialog
 
-    #if os(macOS)
-    /// Compact dialog layout matching native macOS sheets (title, fields,
-    /// trailing action buttons) instead of the iOS navigation-bar form.
-    private var macOSDialog: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(mode.title)
-                .font(.headline)
-
-            if case .create(_, _) = mode {
-                basePicker
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                nameField
-                    .textFieldStyle(.roundedBorder)
-
-                nameFooter
-                    .font(.caption)
-            }
-
-            HStack {
-                Spacer()
-                Button(String(localized: "settings.playerControls.cancel")) {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button(mode.saveButtonTitle) {
-                    saveIfValid()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!isValid)
-            }
-        }
-        .padding(20)
-        .frame(width: 400)
-        .onAppear {
-            isNameFocused = true
-        }
-    }
-    #endif
 
     private func saveIfValid() {
         guard isValid else { return }

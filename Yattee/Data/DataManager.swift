@@ -87,13 +87,9 @@ final class DataManager {
         // immediately and keep the synchronous behavior they rely on.
         // macOS has no suspend-time lock kill and tvOS has no crash evidence,
         // so both keep opening at init until there is a reason to change them.
-        #if os(iOS)
         if inMemory {
             openStore(trigger: "in-memory init")
         }
-        #else
-        openStore(trigger: "init")
-        #endif
 
         // Listen for bookmark changes from CloudKit sync to refresh cache
         NotificationCenter.default.addObserver(
@@ -117,7 +113,7 @@ final class DataManager {
     func openStore(trigger: String) {
         guard store == nil else { return }
 
-        #if DEBUG && os(iOS)
+        #if DEBUG
         // Enforces the lifecycle boundary in development, before SQLite takes
         // any lock: anything that touches the store from `YatteeApp.init()` /
         // `AppEnvironment.init` would reintroduce the pre-UIApplicationMain

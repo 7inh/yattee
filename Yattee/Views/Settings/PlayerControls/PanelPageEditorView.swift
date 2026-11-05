@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct PanelPageEditorView: View {
     let pageType: PanelPageType
@@ -67,11 +66,7 @@ struct PanelPageEditorView: View {
             }
         }
         .navigationTitle(pageType.displayName)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #elseif os(macOS)
-        .formStyle(.grouped)
-        #endif
         .opaqueSettingsFormBackground()
         .onAppear {
             syncLocalState()
@@ -290,11 +285,7 @@ struct PanelPageEditorView: View {
     /// Chapters and related render as collapsible inline sections on iOS
     /// (iPhone everywhere, iPad portrait); macOS always uses pages.
     private static var hasInlineSections: Bool {
-        #if os(iOS)
         return true
-        #else
-        return false
-        #endif
     }
 
     // MARK: - Queue Elements Section
@@ -366,5 +357,3 @@ struct PanelPageEditorView: View {
         showNowPlaying = queueSettings.effectiveShowNowPlaying
     }
 }
-
-#endif

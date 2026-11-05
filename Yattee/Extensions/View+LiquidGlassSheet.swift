@@ -16,16 +16,12 @@ struct LiquidGlassTransitionSourceModifier: ViewModifier {
     let namespace: Namespace.ID
 
     func body(content: Content) -> some View {
-        #if os(iOS)
         if #available(iOS 26, *) {
             content
                 .matchedTransitionSource(id: id, in: namespace)
         } else {
             content
         }
-        #else
-        content
-        #endif
     }
 }
 
@@ -38,16 +34,12 @@ struct LiquidGlassSheetContentModifier: ViewModifier {
     let namespace: Namespace.ID
 
     func body(content: Content) -> some View {
-        #if os(iOS)
         if #available(iOS 26, *) {
             content
                 .navigationTransition(.zoom(sourceID: sourceID, in: namespace))
         } else {
             content
         }
-        #else
-        content
-        #endif
     }
 }
 

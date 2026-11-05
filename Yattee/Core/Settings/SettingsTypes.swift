@@ -7,11 +7,7 @@
 
 import Foundation
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 // MARK: - Theme & Appearance
 
@@ -28,7 +24,6 @@ enum AppTheme: String, CaseIterable, Codable {
         }
     }
 
-    #if canImport(UIKit)
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .system: return .unspecified
@@ -36,15 +31,6 @@ enum AppTheme: String, CaseIterable, Codable {
         case .dark: return .dark
         }
     }
-    #elseif canImport(AppKit)
-    var appearance: NSAppearance? {
-        switch self {
-        case .system: return nil
-        case .light: return NSAppearance(named: .aqua)
-        case .dark: return NSAppearance(named: .darkAqua)
-        }
-    }
-    #endif
 }
 
 enum AccentColor: String, CaseIterable, Codable {
@@ -156,14 +142,8 @@ enum VideoQuality: String, CaseIterable, Codable {
 
     /// Returns the recommended quality for the current platform
     static var recommendedForPlatform: VideoQuality {
-        #if os(tvOS)
-        return .hd4k
-        #elseif os(macOS)
-        return .hd1080p
-        #elseif os(iOS)
         // iPad vs iPhone would be determined at runtime
         return .hd720p
-        #endif
     }
 
     /// Returns the maximum resolution for this quality setting
@@ -389,7 +369,6 @@ enum MiniPlayerVideoTapAction: String, CaseIterable, Codable {
 // MARK: - Navigation Style
 
 /// Navigation layout on screens that fit the sidebar (iPad, iPhone Duo inner screen).
-#if os(iOS)
 enum NavigationStyle: String, CaseIterable, Codable {
     /// Sidebar where it fits, tab bar elsewhere.
     case automatic
@@ -405,12 +384,10 @@ enum NavigationStyle: String, CaseIterable, Codable {
         }
     }
 }
-#endif
 
 // MARK: - Mini Player Minimize Behavior
 
 /// Behavior for minimizing the mini player (iOS 26+ only).
-#if os(iOS)
 @available(iOS 26, *)
 enum MiniPlayerMinimizeBehavior: String, CaseIterable, Codable {
     case onScrollDown
@@ -425,7 +402,6 @@ enum MiniPlayerMinimizeBehavior: String, CaseIterable, Codable {
         }
     }
 }
-#endif
 
 // MARK: - Video Tap Action
 
@@ -517,14 +493,14 @@ enum ResumeAction: String, CaseIterable, Codable {
 
 /// How volume is controlled during playback.
 enum VolumeMode: String, CaseIterable, Codable {
-    /// In-app volume control via MPV.
-    case mpv
+    /// In-app volume control via player.
+    case inApp = "mpv" // Legacy persisted value; independent of the playback engine.
     /// Use device system volume (hardware buttons/OS controls).
     case system
 
     var displayName: String {
         switch self {
-        case .mpv: return String(localized: "settings.playback.volume.mode.inApp")
+        case .inApp: return String(localized: "settings.playback.volume.mode.inApp")
         case .system: return String(localized: "settings.playback.volume.mode.system")
         }
     }
@@ -562,7 +538,6 @@ enum SystemControlsSeekDuration: Int, CaseIterable, Codable {
 // MARK: - Video Swipe Actions
 
 /// Available swipe actions for video lists.
-#if !os(tvOS)
 enum VideoSwipeAction: String, CaseIterable, Codable, Identifiable {
     case playNext
     case addToQueue
@@ -633,4 +608,3 @@ enum VideoSwipeAction: String, CaseIterable, Codable, Identifiable {
         return visibility
     }
 }
-#endif

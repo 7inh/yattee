@@ -10,10 +10,6 @@ import SwiftUI
 struct ContinueWatchingView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Namespace private var sheetTransition
-    #if os(tvOS)
-    @FocusState private var focusedVideoID: String?
-    @State private var lastFocusedVideoID: String?
-    #endif
     @State private var watchHistory: [WatchEntry] = []
 
     // View options (persisted)
@@ -53,65 +49,11 @@ struct ContinueWatchingView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
-            #if os(tvOS)
-            VStack(spacing: 0) {
-                if !inProgressEntries.isEmpty {
-                    HStack(spacing: 24) {
-                        Text(String(localized: "home.continueWatching.title"))
-                            .font(.title2)
-                            .fontWeight(.semibold)
-
-                        Spacer()
-
-                        Button {
-                            showViewOptions = true
-                        } label: {
-                            Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                        }
-
-                        Menu {
-                            Button(role: .destructive) {
-                                clearAllProgress()
-                            } label: {
-                                Label(String(localized: "continueWatching.clearAll"), systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                    }
-                    .focusSection()
-                    .padding(.horizontal, 48)
-                    .padding(.top, 40)
-                    .padding(.bottom, 40)
-                }
-
-                Group {
-                    if inProgressEntries.isEmpty {
-                        emptyState
-                    } else {
-                        switch layout {
-                        case .list:
-                            listContent
-                        case .grid:
-                            gridContent
-                        }
-                    }
-                }
-                .focusSection()
-            }
-            .onChange(of: geometry.size.width, initial: true) { _, newWidth in
-                viewWidth = newWidth
-            }
-            #else
             Group {
                 if inProgressEntries.isEmpty {
                     emptyState
@@ -127,9 +69,7 @@ struct ContinueWatchingView: View {
             .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                 viewWidth = newWidth
             }
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "home.continueWatching.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
@@ -141,11 +81,6 @@ struct ContinueWatchingView: View {
                         Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                     }
                     .liquidGlassTransitionSource(id: "continueWatchingViewOptions", in: sheetTransition)
-                    #if os(macOS)
-                    .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                        viewOptionsSheetContent
-                    }
-                    #endif
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -160,56 +95,16 @@ struct ContinueWatchingView: View {
                 }
             }
         }
-        #endif
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "continueWatchingViewOptions", in: sheetTransition)
         }
-        #endif
         .onAppear {
             loadHistory()
         }
         .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
             loadHistory()
         }
-        #if os(tvOS)
-        .onChange(of: inProgressEntries.first?.videoID, initial: true) { oldValue, newValue in
-            // Work around tvOS ScrollView + prefersDefaultFocus bug: set initial focus
-            // to the first video after LazyVGrid has time to materialize cells.
-            // Only on first population — later list changes are handled below.
-            guard let newValue, oldValue == nil else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                focusedVideoID = newValue
-            }
-        }
-        .onChange(of: focusedVideoID) { _, newValue in
-            if let newValue {
-                lastFocusedVideoID = newValue
-            }
-        }
-        .onChange(of: inProgressEntries.map(\.videoID)) { oldIDs, newIDs in
-            // When the focused video is removed (marked watched / removed from
-            // history), move focus to the entry that took its place, or the
-            // previous one if it was last — otherwise focus is lost entirely.
-            guard let removed = lastFocusedVideoID,
-                  !newIDs.contains(removed),
-                  !newIDs.isEmpty else { return }
-            let oldIndex = oldIDs.firstIndex(of: removed) ?? 0
-            let target = newIDs[min(oldIndex, newIDs.count - 1)]
-            LoggingService.shared.info("Continue Watching: focused entry \(removed) removed, refocusing \(target)")
-            // The context menu's dismissal restores focus to the (now removed)
-            // source view after our first assert lands, so re-assert until the
-            // focus engine actually takes the new target.
-            for delay in [0.2, 0.7, 1.4] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    if focusedVideoID == nil {
-                        focusedVideoID = target
-                    }
-                }
-            }
-        }
-        #endif
     }
 
     // MARK: - Content
@@ -220,15 +115,6 @@ struct ContinueWatchingView: View {
         } description: {
             Text(String(localized: "home.continueWatching.empty"))
         } actions: {
-            #if os(tvOS)
-            // Without a focusable element the focus engine has nowhere to
-            // land, and the remote can no longer reach the sidebar either.
-            Button {
-                appEnvironment?.navigationCoordinator.router.select(.search)
-            } label: {
-                Label(String(localized: "continueWatching.empty.search"), systemImage: "magnifyingglass")
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -247,9 +133,6 @@ struct ContinueWatchingView: View {
                 ) {
                     entryRowView(entry: entry, index: index)
                 }
-                #if os(tvOS)
-                .focused($focusedVideoID, equals: entry.videoID)
-                #else
                 .videoSwipeActions(
                     video: entry.toVideo(),
                     fixedActions: [
@@ -263,7 +146,6 @@ struct ContinueWatchingView: View {
                         }
                     ]
                 )
-                #endif
             }
         }
     }
@@ -308,15 +190,9 @@ struct ContinueWatchingView: View {
                     TappableContinueWatchingGridCard(entry: entry, onRemove: {
                         removeEntry(entry)
                     })
-                    #if os(tvOS)
-                    .focused($focusedVideoID, equals: entry.videoID)
-                    #endif
                 }
             }
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 
     // MARK: - Actions

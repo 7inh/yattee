@@ -108,9 +108,6 @@ struct LinkActionPerformer {
     }
 
     private func download(_ url: URL) async -> LinkActionResult {
-        #if os(tvOS)
-        return .failure(code: "unsupported", message: String(localized: "linkAction.error.downloadUnsupported", defaultValue: "Downloads aren't available on this device."))
-        #else
         let video: Video, streams: [Stream], captions: [Caption], storyboards: [Storyboard]
         switch await resolve(url) {
         case .success(let resolved): (video, streams, captions, storyboards) = resolved
@@ -147,7 +144,6 @@ struct LinkActionPerformer {
             return .failure(code: "downloadFailed", message: error.localizedDescription)
         }
         return .success(values(for: video).merging(["status": "queued"]) { $1 })
-        #endif
     }
 
     private func bookmark(_ url: URL) async -> LinkActionResult {

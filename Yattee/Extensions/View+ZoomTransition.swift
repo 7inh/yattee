@@ -9,13 +9,11 @@
 
 import SwiftUI
 
-#if os(iOS)
 /// Whether the iOS binary is running on a Mac (Catalyst or "Designed for iPad").
 /// Zoom transitions trap inside UIKit's _UIZoomTransitionController when a sheet
 /// is dismissed on the Mac presentation path, so they must stay off there.
 private let zoomTransitionsRunningOnMac: Bool =
     ProcessInfo.processInfo.isMacCatalystApp || ProcessInfo.processInfo.isiOSAppOnMac
-#endif
 
 // MARK: - Environment Keys
 
@@ -56,16 +54,12 @@ struct ZoomTransitionSourceModifier<ID: Hashable>: ViewModifier {
     @Environment(\.zoomTransitionsEnabled) private var zoomTransitionsEnabled
 
     func body(content: Content) -> some View {
-        #if os(iOS)
         if zoomTransitionsEnabled, !zoomTransitionsRunningOnMac, let namespace {
             content
                 .matchedTransitionSource(id: id, in: namespace)
         } else {
             content
         }
-        #else
-        content
-        #endif
     }
 }
 
@@ -82,16 +76,12 @@ struct ZoomTransitionDestinationModifier<ID: Hashable>: ViewModifier {
     @Environment(\.zoomTransitionsEnabled) private var zoomTransitionsEnabled
 
     func body(content: Content) -> some View {
-        #if os(iOS)
         if zoomTransitionsEnabled, !zoomTransitionsRunningOnMac, let namespace {
             content
                 .navigationTransition(.zoom(sourceID: id, in: namespace))
         } else {
             content
         }
-        #else
-        content
-        #endif
     }
 }
 

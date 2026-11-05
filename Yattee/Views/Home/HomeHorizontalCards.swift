@@ -15,17 +15,10 @@ struct HomeHorizontalCards: View {
     let sourceLabel: String
     var loadMoreVideos: LoadMoreVideosCallback? = nil
 
-    #if os(tvOS)
-    private let cardWidth: CGFloat = 320
-    private let cardHeight: CGFloat = 340
-    private let spacing: CGFloat = 60
-    private let verticalPadding: CGFloat = 28
-    #else
     private let cardWidth: CGFloat = 180
     private let cardHeight: CGFloat = 210
     private let spacing: CGFloat = 28
     private let verticalPadding: CGFloat = 8
-    #endif
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -45,12 +38,6 @@ struct HomeHorizontalCards: View {
             }
             .padding(.horizontal)
             .padding(.vertical, verticalPadding)
-            #if os(tvOS)
-            .focusSection()
-            #endif
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 }

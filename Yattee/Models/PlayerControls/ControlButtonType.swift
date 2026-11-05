@@ -11,7 +11,6 @@ import Foundation
 enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
     case close
     case airplay
-    case mpvDebug
     case brightness
     case volume
     case pictureInPicture
@@ -43,6 +42,19 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
     case seek
     case keepOnTop
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        // Keep saved layouts readable after removing the decoder debug button.
+        if value == "mpvDebug" {
+            self = .spacer
+        } else if let type = Self(rawValue: value) {
+            self = type
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown control: \(value)")
+        }
+    }
+
     // MARK: - Version Tracking
 
     /// The app version when this button was added.
@@ -61,8 +73,6 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
             return String(localized: "controls.button.close")
         case .airplay:
             return String(localized: "controls.button.airplay")
-        case .mpvDebug:
-            return String(localized: "controls.button.debug")
         case .brightness:
             return String(localized: "controls.button.brightness")
         case .volume:
@@ -133,8 +143,6 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
             return "xmark"
         case .airplay:
             return "airplayaudio"
-        case .mpvDebug:
-            return "info.circle"
         case .brightness:
             return "sun.max.fill"
         case .volume:
@@ -234,31 +242,6 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
 
     /// Button types available for top/bottom sections.
     static var availableForHorizontalSections: [ControlButtonType] {
-        #if os(macOS)
-        [
-            .spacer,
-            .timeDisplay,
-            .titleAuthor,
-            .playPrevious,
-            .playPause,
-            .playNext,
-            .seek,
-            .queue,
-            .close,
-            .keepOnTop,
-            .volume,
-            .pictureInPicture,
-            .fullscreen,
-            .controlsLock,
-            .settings,
-            .playbackSpeed,
-            .share,
-            .contextMenu,
-            .autoPlayNext,
-            .audioMode,
-            .mpvDebug
-        ]
-        #else
         [
             .spacer,
             .timeDisplay,
@@ -289,9 +272,7 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
             .autoPlayNext,
             .audioMode,
             .airplay,
-            .mpvDebug
         ]
-        #endif
     }
 
     /// Button types available for the player pill (curated subset).
@@ -319,25 +300,6 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
 
     /// Button types available for the mini player (curated subset for compact UI).
     static var availableForMiniPlayer: [ControlButtonType] {
-        #if os(macOS)
-        [
-            // Transport
-            .playPause,
-            .playPrevious,
-            .playNext,
-            .seek,
-            // Queue & Actions
-            .queue,
-            .close,
-            // Player Actions
-            .share,
-            .addToPlaylist,
-            .pictureInPicture,
-            // Utility
-            .playbackSpeed,
-            .audioMode
-        ]
-        #else
         [
             // Transport
             .playPause,
@@ -356,6 +318,5 @@ enum ControlButtonType: String, Codable, Hashable, Sendable, CaseIterable {
             .playbackSpeed,
             .audioMode
         ]
-        #endif
     }
 }

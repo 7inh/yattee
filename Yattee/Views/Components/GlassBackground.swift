@@ -64,22 +64,16 @@ struct GlassBackgroundModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        #if os(iOS) || os(macOS)
         if #available(iOS 26.0, macOS 26.0, *) {
             content.modifier(LiquidGlassModifier(style: style, shape: shape, colorScheme: colorScheme))
         } else {
             content.modifier(FallbackGlassModifier(shape: shape, material: fallbackMaterial, colorScheme: colorScheme))
         }
-        #else
-        // tvOS doesn't have glassEffect, always use fallback material
-        content.modifier(FallbackGlassModifier(shape: shape, material: fallbackMaterial, colorScheme: colorScheme))
-        #endif
     }
 }
 
 // MARK: - iOS 26+ / macOS 26+ Liquid Glass
 
-#if os(iOS) || os(macOS)
 @available(iOS 26.0, macOS 26.0, *)
 private struct LiquidGlassModifier: ViewModifier {
     let style: GlassStyle
@@ -120,7 +114,6 @@ private struct LiquidGlassModifier: ViewModifier {
         }
     }
 }
-#endif
 
 // MARK: - Fallback for older iOS / macOS
 

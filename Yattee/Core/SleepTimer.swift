@@ -8,7 +8,6 @@
 import Foundation
 import Observation
 
-#if os(iOS)
 
 @MainActor
 @Observable
@@ -114,5 +113,3 @@ final class SleepTimer {
         return true
     }
 }
-
-#endif

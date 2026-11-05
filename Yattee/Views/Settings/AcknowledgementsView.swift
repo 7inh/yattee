@@ -13,15 +13,11 @@ struct AcknowledgementsView: View {
     var body: some View {
         SettingsFormContainer {
             SettingsFormSection("settings.acknowledgements.dependencies.header") {
-                dependencyLink("mpv", url: "https://github.com/mpv-player/mpv")
-                dependencyLink("MPVKit", url: "https://github.com/mpvkit/MPVKit")
                 dependencyLink("Nuke", url: "https://github.com/kean/Nuke")
             }
         }
         .navigationTitle(String(localized: "settings.acknowledgements.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     @ViewBuilder
@@ -34,16 +30,11 @@ struct AcknowledgementsView: View {
             HStack {
                 Text(name)
                 Spacer()
-                #if !os(tvOS)
                 Image(systemName: "arrow.up.right")
                     .foregroundStyle(.secondary)
-                #endif
             }
             .contentShape(Rectangle())
         }
-        #if os(macOS)
-        .buttonStyle(.plain)
-        #endif
     }
 }
 

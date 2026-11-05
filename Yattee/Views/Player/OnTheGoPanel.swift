@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 
-#if os(iOS)
 
 private let onTheGoAccent = Color.red
 
@@ -477,5 +476,3 @@ private struct OnTheGoTransportButtonStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
-
-#endif

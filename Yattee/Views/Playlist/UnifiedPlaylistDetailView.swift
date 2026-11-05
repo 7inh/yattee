@@ -131,17 +131,12 @@ struct UnifiedPlaylistDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var isDescriptionExpanded = false
 
-    #if os(tvOS)
-    @State private var isDescriptionScrollLocked = false
-    #endif
 
-    #if !os(tvOS)
     @State private var downloadCoordinator = BatchDownloadCoordinator()
     // Cache download state to avoid triggering @Observable tracking on every render.
     // Prevents entire playlist view re-rendering when download progress updates.
     @State private var cachedAllVideosDownloaded = false
     @State private var hasLoadedDownloadState = false
-    #endif
 
     @State private var watchEntriesMap: [String: WatchEntry] = [:]
 
@@ -256,21 +251,8 @@ struct UnifiedPlaylistDetailView: View {
                 notFoundView
             }
         }
-        #if os(iOS)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        #elseif os(macOS)
-        .navigationTitle(navigationTitleText)
-        .toolbarTitleDisplayMode(.inlineLarge)
-        .navigationSubtitleIfAvailable(playlistSummaryText)
-        #endif
-        #if os(macOS)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                macOSNavigationTitle
-            }
-        }
-        #endif
         .sheet(isPresented: $showingEditSheet) {
             if let localPlaylist {
                 PlaylistFormSheet(mode: .edit(localPlaylist)) { newTitle, newDescription in
@@ -331,7 +313,6 @@ struct UnifiedPlaylistDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: .credentialIdentityScopeDidChange)) { _ in
             discardAccountLoadedContentAndReload()
         }
-        #if !os(tvOS)
         .batchDownload(coordinator: downloadCoordinator)
         .onAppear {
             downloadCoordinator.setEnvironment(appEnvironment)
@@ -341,48 +322,14 @@ struct UnifiedPlaylistDetailView: View {
             // Update cache when videos change (e.g., after loading)
             updateAllVideosDownloadedCache()
         }
-        #endif
     }
 
     // MARK: - Content
 
-    #if os(macOS)
-    private var macOSNavigationTitle: some View {
-        HStack(spacing: 8) {
-            LazyImage(url: navigationThumbnailURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: "list.bullet.rectangle")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 26, height: 15)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            .accessibilityHidden(true)
-
-            Text(navigationTitleText)
-                .font(.headline)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-    }
-    #endif
 
     @ViewBuilder
     private var playlistContent: some View {
-        #if os(tvOS)
-        tvOSTwoColumnContent
-        #else
         scrollablePlaylistContent()
-        #endif
     }
 
     @ViewBuilder
@@ -397,10 +344,8 @@ struct UnifiedPlaylistDetailView: View {
                 playlistBody
             }
         }
-        #if os(iOS)
         // Let the last row scroll above the floating tab bar.
         .contentMargins(.bottom, 80, for: .scrollContent)
-        #endif
         .refreshable {
             if case .remote = source {
                 await loadPlaylist()
@@ -433,12 +378,6 @@ struct UnifiedPlaylistDetailView: View {
     /// root that cannot be popped — so Cancel lands on the error and its Retry.
     private var loadingSpinner: some View {
         ProgressView()
-            #if os(tvOS)
-            .tvStalledLoadCancel {
-                isLoading = false
-                errorMessage = String(localized: "common.loadingStopped")
-            }
-            #endif
     }
 
     /// Shows cached header with a spinner below while loading full playlist data.
@@ -459,9 +398,7 @@ struct UnifiedPlaylistDetailView: View {
                     .padding(.top, 40)
             }
         }
-        #if os(iOS)
         .contentMargins(.bottom, 80, for: .scrollContent)
-        #endif
     }
 
     private func playlistHeader() -> some View {
@@ -485,18 +422,15 @@ struct UnifiedPlaylistDetailView: View {
             if videoCount > 0 || !isLoading {
                 parts.append(String(localized: "playlist.videoCount \(videoCount)"))
             }
-            #if os(iOS)
             if let author = remotePlaylist?.authorName.trimmingCharacters(in: .whitespacesAndNewlines), !author.isEmpty {
                 parts.append(author)
             }
-            #endif
             if let localPlaylist {
                 parts.append(localPlaylist.formattedTotalDuration)
             }
             return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }()
 
-        #if os(iOS)
         return VStack(alignment: .leading, spacing: 8) {
             Text(navigationTitleText)
                 .font(.title3.bold())
@@ -525,39 +459,8 @@ struct UnifiedPlaylistDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 12)
-        #else
-        return VStack(alignment: .leading, spacing: 12) {
-            #if os(macOS)
-            if let summaryText {
-                Text(summaryText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            #endif
-
-            // Description (full width, expandable)
-            if let descriptionText, !descriptionText.isEmpty {
-                ExpandableText(text: descriptionText, lineLimit: 2, isExpanded: $isDescriptionExpanded)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Action buttons row (iOS/macOS only).
-            //
-            // An owned playlist keeps its row after the last video is removed:
-            // renaming and deleting it are the only things left to do with it,
-            // and the row is where both live.
-            #if !os(tvOS)
-            if !videos.isEmpty || localPlaylist != nil || canEditRemotePlaylist {
-                playlistActionButtons
-            }
-            #endif
-        }
-        .padding()
-        #endif
     }
 
-    #if os(iOS)
     /// Ignore differences in whitespace, punctuation and case for repeated titles.
     private func distinctPlaylistDescription(_ description: String?) -> String? {
         guard let description = description?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -573,14 +476,11 @@ struct UnifiedPlaylistDetailView: View {
 
         return normalized(description) == normalized(navigationTitleText) ? nil : description
     }
-    #endif
 
     // MARK: - Action Buttons Row
 
-    #if !os(tvOS)
     @ViewBuilder
     private var playlistActionButtons: some View {
-        #if os(iOS)
         if #available(iOS 26, *) {
             GlassEffectContainer(spacing: 8) {
                 compactPlaylistActionButtons
@@ -588,64 +488,6 @@ struct UnifiedPlaylistDetailView: View {
         } else {
             compactPlaylistActionButtons
         }
-        #else
-        HStack(spacing: 12) {
-            // Playing and downloading need videos to act on; the menu does not.
-            if !videos.isEmpty {
-                // Play button (only when queue is enabled)
-                if isQueueEnabled {
-                    Button {
-                        playAll()
-                    } label: {
-                        Label(String(localized: "playlist.play"), systemImage: "play.fill")
-                            .fontWeight(.semibold)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                // Download button with three states
-                if downloadCoordinator.isDownloading {
-                    Button {
-                        // No action while downloading
-                    } label: {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                            if let progress = downloadCoordinator.progress {
-                                Text("\(progress.current)/\(progress.total)")
-                                    .monospacedDigit()
-                            }
-                        }
-                    }
-                    .fontWeight(.semibold)
-                    .buttonStyle(.bordered)
-                    .disabled(true)
-                } else if cachedAllVideosDownloaded {
-                    Button {
-                        // No action - already downloaded
-                    } label: {
-                        Label(String(localized: "playlist.downloaded"), systemImage: "checkmark.circle.fill")
-                    }
-                    .fontWeight(.semibold)
-                    .buttonStyle(.bordered)
-                    .disabled(true)
-                } else {
-                    Button {
-                        downloadCoordinator.startDownload(videos: videos)
-                    } label: {
-                        Label(String(localized: "playlist.downloadAll"), systemImage: "arrow.down.circle")
-                    }
-                    .fontWeight(.semibold)
-                    .buttonStyle(.bordered)
-                }
-            }
-
-            Spacer()
-
-            playlistMenu
-        }
-        .padding(.top, 8)
-        #endif
     }
 
     private var playlistMenu: some View {
@@ -690,25 +532,12 @@ struct UnifiedPlaylistDetailView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.body.weight(.medium))
-                #if os(macOS)
-                .frame(width: 44, height: 44)
-                .background(.regularMaterial, in: Circle())
-                #endif
         }
         .menuIndicator(.hidden)
-        #if os(iOS)
         .modifier(PlaylistActionStyleModifier(isIconOnly: true))
         .accessibilityLabel(String(localized: "videoInfo.toolbar.moreActions"))
-        #endif
-        #if os(macOS)
-        // The default macOS menu style renders as a bordered pull-down that
-        // stretches to fill available width on macOS 15 (Sequoia).
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        #endif
     }
 
-    #if os(iOS)
     private var compactPlaylistActionButtons: some View {
         HStack(spacing: 8) {
             if !videos.isEmpty {
@@ -773,176 +602,10 @@ struct UnifiedPlaylistDetailView: View {
         guard downloadCoordinator.isDownloading, let progress = downloadCoordinator.progress else { return "" }
         return "\(progress.current)/\(progress.total)"
     }
-    #endif
-    #endif
 
     // MARK: - tvOS Two-Column Layout
 
-    #if os(tvOS)
-    @ViewBuilder
-    private var tvOSTwoColumnContent: some View {
-        GeometryReader { geometry in
-            let leftWidth = geometry.size.width * 0.30
-            HStack(alignment: .top, spacing: 40) {
-                tvOSLeftColumn
-                    .frame(width: leftWidth, alignment: .leading)
-                    .focusSection()
 
-                tvOSRightColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .focusSection()
-            }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 40)
-        }
-    }
-
-    @ViewBuilder
-    private var tvOSLeftColumn: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            tvOSPlaylistThumbnail
-                .frame(maxWidth: .infinity)
-
-            if !title.isEmpty {
-                Text(title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if let summaryText = playlistSummaryText {
-                Text(summaryText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            // An owned playlist keeps its buttons after the last video is
-            // removed: editing and deleting are all that is left to do with it.
-            if !isDescriptionScrollLocked, !videos.isEmpty || localPlaylist != nil || canEditRemotePlaylist {
-                tvOSPlaylistActionButtons
-            }
-
-            if let descriptionText, !descriptionText.isEmpty {
-                TVScrollableDescription(
-                    description: descriptionText,
-                    isScrollLocked: $isDescriptionScrollLocked,
-                    showsHeader: false
-                )
-                .frame(maxHeight: .infinity)
-            } else {
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(.vertical, 8)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .animation(.easeInOut(duration: 0.25), value: isDescriptionScrollLocked)
-    }
-
-    @ViewBuilder
-    private var tvOSPlaylistThumbnail: some View {
-        let urls = (videos.first?.thumbnailURLsByQuality ?? [])
-            + [Thumbnail.reliableURL(for: thumbnailURL)].compactMap { $0 }
-        FallbackLazyImage(urls: urls) { state in
-            if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 56, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-            }
-        }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.4), radius: 10, y: 5)
-    }
-
-    @ViewBuilder
-    private var tvOSRightColumn: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                playlistBody
-            }
-            .padding(.vertical, 20)
-        }
-        .scrollClipDisabled()
-    }
-
-    @ViewBuilder
-    private var tvOSPlaylistActionButtons: some View {
-        VStack(spacing: 12) {
-            // Play (only when queue is enabled, and only with something to play)
-            if isQueueEnabled, !videos.isEmpty {
-                Button {
-                    playAll()
-                } label: {
-                    Label(String(localized: "playlist.play"), systemImage: "play.fill")
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .font(.headline)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-
-            // Remote-only: Save to Library
-            if case .remote = source, let remotePlaylist, !remotePlaylist.isLocal, !videos.isEmpty {
-                Button {
-                    Task { await importToLocal() }
-                } label: {
-                    Group {
-                        if isImporting, let progress = importProgress {
-                            Label(String(localized: "playlist.savingToLibrary \(progress.current) \(progress.total)"), systemImage: "plus.rectangle.on.folder")
-                        } else {
-                            Label(String(localized: "playlist.saveToLibrary"), systemImage: "plus.rectangle.on.folder")
-                        }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .font(.headline)
-                }
-                .buttonStyle(.bordered)
-                .disabled(isImporting)
-            }
-
-            // Edit and Delete: local playlists, and server-side ones this
-            // account owns.
-            if (isLocal && localPlaylist != nil) || canEditRemotePlaylist {
-                Button {
-                    beginEdit()
-                } label: {
-                    Group {
-                        if isPreparingEdit {
-                            ProgressView()
-                        } else {
-                            Label(String(localized: "playlist.edit"), systemImage: "pencil")
-                        }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .font(.headline)
-                }
-                .buttonStyle(.bordered)
-                .disabled(isPreparingEdit)
-
-                Button {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Label(String(localized: "playlist.delete"), systemImage: "trash")
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .font(.headline)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
-    #endif
-
-    #if !os(tvOS)
     /// Loads download state once on appear to avoid continuous re-renders from @Observable.
     private func loadDownloadStateIfNeeded() {
         guard !hasLoadedDownloadState else { return }
@@ -962,7 +625,6 @@ struct UnifiedPlaylistDetailView: View {
             downloadManager.downloadingVideoIDs.contains(video.id)
         }
     }
-    #endif
 
     private var emptyPlaylistView: some View {
         ContentUnavailableView {
@@ -970,15 +632,6 @@ struct UnifiedPlaylistDetailView: View {
         } description: {
             Text(String(localized: "playlist.empty.description"))
         } actions: {
-            #if os(tvOS)
-            // The left column has no buttons for an empty remote playlist this
-            // account does not own; without one the remote has nowhere to go.
-            if case .remote = source {
-                Button(String(localized: "common.refresh")) {
-                    Task { await loadPlaylist() }
-                }
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 40)
@@ -990,25 +643,11 @@ struct UnifiedPlaylistDetailView: View {
         } description: {
             Text(String(localized: "playlist.notFound.description"))
         } actions: {
-            #if os(tvOS)
-            // Nothing else on this screen is focusable, and as a sidebar
-            // playlist it is a tab root that Menu cannot pop.
-            if case .remote = source {
-                Button(String(localized: "common.retry")) {
-                    Task { await loadPlaylist() }
-                }
-            } else {
-                Button(String(localized: "playlist.notFound.openPlaylists")) {
-                    appEnvironment?.navigationCoordinator.router.select(.playlistsList)
-                }
-            }
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var videoList: some View {
-        #if os(iOS)
         LazyVStack(spacing: 0) {
             ForEach(Array(videos.enumerated()), id: \.offset) { index, video in
                 playlistVideoButton(at: index, video: video)
@@ -1016,29 +655,6 @@ struct UnifiedPlaylistDetailView: View {
                     .padding(.vertical, 6)
             }
         }
-        #else
-        #if os(tvOS)
-        let indexColumnWidth: CGFloat = 60
-        #else
-        let indexColumnWidth: CGFloat = 32
-        #endif
-        return LazyVStack(spacing: 0) {
-            // Keyed by row rather than by video: a playlist may hold the same
-            // video twice, and two rows sharing an identity leave SwiftUI free
-            // to pair a row's view with the other one's index — which is what
-            // the removal closure is addressed by.
-            ForEach(Array(videos.enumerated()), id: \.offset) { index, video in
-                VideoListRow(
-                    isLast: index == videos.count - 1,
-                    rowStyle: .regular,
-                    listStyle: .plain,
-                    indexWidth: indexColumnWidth  // Index column width in VideoRowView
-                ) {
-                    playlistVideoButton(at: index, video: video)
-                }
-            }
-        }
-        #endif
     }
 
     private func playlistVideoButton(at index: Int, video: Video) -> some View {
@@ -1630,7 +1246,6 @@ struct UnifiedPlaylistDetailView: View {
 
 // MARK: - iOS Action Styling
 
-#if os(iOS)
 private struct PlaylistActionStyleModifier: ViewModifier {
     var isProminent = false
     var isIconOnly = false
@@ -1667,7 +1282,6 @@ private struct PlaylistActionStyleModifier: ViewModifier {
         }
     }
 }
-#endif
 
 // MARK: - Preview
 

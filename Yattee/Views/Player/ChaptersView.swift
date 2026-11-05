@@ -27,9 +27,7 @@ struct ChaptersView: View {
                 }
             }
             .navigationTitle(String(localized: "player.chapters"))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 sheetCloseToolbarItem { dismiss() }
             }

@@ -14,10 +14,6 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping (Item) -> Content
     ) -> some View {
-        #if os(tvOS)
-        fullScreenCover(item: item, onDismiss: onDismiss, content: content)
-        #else
         sheet(item: item, onDismiss: onDismiss, content: content)
-        #endif
     }
 }

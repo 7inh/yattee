@@ -39,9 +39,7 @@ struct ReturnYouTubeDislikeSettingsView: View {
             }
         }
         .navigationTitle(String(localized: "settings.returnYouTubeDislike.title"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 }
 

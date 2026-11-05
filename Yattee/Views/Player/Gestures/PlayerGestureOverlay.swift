@@ -5,7 +5,6 @@
 //  SwiftUI overlay for handling player gestures.
 //
 
-#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -120,4 +119,3 @@ private struct GestureRecognizerView: UIViewRepresentable {
         coordinator.detach()
     }
 }
-#endif

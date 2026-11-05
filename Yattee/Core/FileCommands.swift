@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if !os(tvOS)
 /// File-related menu bar commands.
 struct FileCommands: Commands {
     var body: some Commands {
@@ -19,18 +18,3 @@ struct FileCommands: Commands {
         }
     }
 }
-#endif
-
-#if os(macOS)
-/// App menu Settings… item that opens the dedicated Settings window.
-struct SettingsWindowMenuItem: View {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Button(String(localized: "menu.app.settings")) {
-            openWindow(id: "settings")
-        }
-        .keyboardShortcut(",", modifiers: [.command])
-    }
-}
-#endif

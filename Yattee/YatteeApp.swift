@@ -6,17 +6,11 @@
 //
 
 import SwiftUI
-#if !os(tvOS)
 import TipKit
-#endif
 import Combine
 import CloudKit
 import Nuke
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 extension URL: @retroactive Identifiable {
     public var id: String { absoluteString }
@@ -24,11 +18,7 @@ extension URL: @retroactive Identifiable {
 
 @main
 struct YatteeApp: App {
-    #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    #elseif os(macOS)
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    #endif
 
     @State private var appEnvironment = AppEnvironment.shared
     @State private var backgroundTasksRegistered = false
@@ -46,12 +36,10 @@ struct YatteeApp: App {
     // Ambiguous-link prompts are stored on NavigationCoordinator so they can
     // be dual-hosted by the root app view (here) and the expanded player sheet.
 
-    #if !os(tvOS)
     /// Configures TipKit. Called once per launch.
     static func configureTips() {
         try? Tips.configure([.displayFrequency(.immediate), .datastoreLocation(.applicationDefault)])
     }
-    #endif
 
     init() {
         // Configure Nuke image loading pipeline
@@ -61,17 +49,12 @@ struct YatteeApp: App {
         // TipKit opens its own SwiftData store, so on iOS it is configured from
         // `AppDelegate.didFinishLaunching` together with the app store, never
         // here: this init also runs during prewarm launches (0xdead10cc).
-        #if os(macOS)
-        Self.configureTips()
-        #endif
 
         // Register background tasks early — Apple requires BGTaskScheduler.register()
         // to be called during the app launch sequence, before the run loop starts.
         appEnvironment.backgroundRefreshManager.registerBackgroundTasks()
 
-        #if os(iOS)
         BackgroundDiagnostics.shared.start(playerService: AppEnvironment.shared.playerService)
-        #endif
         PerformanceMonitor.shared.start(appEnvironment: AppEnvironment.shared)
     }
 
@@ -79,14 +62,7 @@ struct YatteeApp: App {
         WindowGroup {
             ContentView()
                 .appEnvironment(appEnvironment)
-                #if !os(tvOS)
                 .tint(appEnvironment.settingsManager.resolvedAccentColor)
-                #endif
-                #if os(macOS)
-                .frame(minWidth: 800, minHeight: 500)
-                // Required on the view to prevent new windows on URL open
-                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
-                #endif
                 .onOpenURL { url in
                     let callback = XCallback(url)
                     if let action = LinkActionParser().parse(url) {
@@ -121,17 +97,8 @@ struct YatteeApp: App {
                     handleContinuedActivity(activity)
                 }
                 .onAppear {
-                    #if !os(tvOS)
                     SettingsManager.applyTheme(appEnvironment.settingsManager.theme)
-                    #endif
                     registerBackgroundTasksIfNeeded()
-                    #if os(tvOS)
-                    TopShelfSnapshotWriter.startObserving(dataManager: appEnvironment.dataManager)
-                    TopShelfSnapshotWriter.writeAll(
-                        dataManager: appEnvironment.dataManager,
-                        settingsManager: appEnvironment.settingsManager
-                    )
-                    #endif
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .continueUserActivity)) { notification in
                     if let activity = notification.object as? NSUserActivity {
@@ -139,7 +106,6 @@ struct YatteeApp: App {
                         handleContinuedActivity(activity)
                     }
                 }
-                #if os(iOS) || os(macOS)
                 .alert(String(localized: "alert.openVideo.title"), isPresented: $showingClipboardAlert) {
                     Button(String(localized: "common.open")) {
                         if let url = detectedClipboardURL {
@@ -152,7 +118,6 @@ struct YatteeApp: App {
                         Text(String(localized: "alert.openVideo.message \(url.host ?? "clipboard")"))
                     }
                 }
-                #endif
                 // First-launch iCloud sync prompt
                 .alert(
                     String(localized: "settings.icloud.enable.confirmation.title"),
@@ -178,47 +143,18 @@ struct YatteeApp: App {
                 } message: {
                     Text(String(localized: "migration.accounts.prompt.message"))
                 }
-                #if os(macOS)
-                .sheet(isPresented: $showingICloudProgress) {
-                    ICloudSyncProgressView()
-                        .appEnvironment(appEnvironment)
-                        .interactiveDismissDisabled()
-                }
-                #else
                 .fullScreenCover(isPresented: $showingICloudProgress) {
                     ICloudSyncProgressView()
                         .appEnvironment(appEnvironment)
                         // tvOS full screen covers have a transparent background,
                         // letting the view below leak through.
-                        .tvFullScreenCoverBackground()
                 }
-                #endif
-                #if os(tvOS)
-                // tvOS sheets render as a small centered card that cannot fit
-                // the sidebar-detail layout — use a full screen cover instead.
-                .fullScreenCover(isPresented: $showingLegacyAccountsImport) {
-                    NavigationStack {
-                        TVSidebarDetailContainer(
-                            systemImage: "person.badge.key",
-                            title: String(localized: "migration.accounts.title")
-                        ) {
-                            LegacyAccountsImportView()
-                        }
-                        .appEnvironment(appEnvironment)
-                    }
-                    .tvFullScreenCoverBackground()
-                }
-                #else
                 .sheet(isPresented: $showingLegacyAccountsImport) {
                     NavigationStack {
                         LegacyAccountsImportView()
                             .appEnvironment(appEnvironment)
                     }
-                    #if os(macOS)
-                    .frame(minWidth: 560, minHeight: 560)
-                    #endif
                 }
-                #endif
                 .onReceive(NotificationCenter.default.publisher(for: .showOpenLinkSheet)) { _ in
                     appEnvironment.navigationCoordinator.isPlayerExpanded = false
                     appEnvironment.navigationCoordinator.presenter.present(.openLink(nil))
@@ -246,21 +182,11 @@ struct YatteeApp: App {
                     appEnvironment: appEnvironment
                 )
         }
-        #if os(macOS)
-        .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified)
-        .defaultSize(width: 1200, height: 800)
-        // Handle URLs in the existing window instead of opening a new one
-        .handlesExternalEvents(matching: Set(["*"]))
-        #endif
-        #if os(iOS) || os(macOS)
         .commands {
             FileCommands()
             PlaybackCommands(appEnvironment: appEnvironment)
             NavigationCommands(appEnvironment: appEnvironment)
         }
-        #endif
-        #if os(tvOS)
         .onChange(of: scenePhase) { _, newPhase in
             LoggingService.shared.logCloudKit("[ScenePhase] Transition to: \(newPhase)")
 
@@ -270,49 +196,9 @@ struct YatteeApp: App {
             // Refresh remote control services after returning from background
             appEnvironment.remoteControlCoordinator.handleScenePhase(newPhase)
 
-            // Handle pending notification navigation and warm cache when becoming active
-            if newPhase == .active {
-                // Refresh media source password status (Keychain state can change in background)
-                appEnvironment.mediaSourcesManager.refreshPasswordStoredStatus()
-
-                // Identity, statuses, deletion repair and the fetch, in that
-                // order — each one is what makes the next one correct.
-                Task {
-                    await resumeAccountState()
-                }
-
-                // Start periodic polling as fallback for missed push notifications
-                appEnvironment.cloudKitSync.startForegroundPolling()
-            }
-
-            // Flush pending CloudKit changes when entering background
-            if newPhase == .background {
-                appEnvironment.cloudKitSync.stopForegroundPolling()
-                // Queue current watch progress so the position reaches other devices
-                appEnvironment.playerService.syncWatchProgress()
-                Task {
-                    await appEnvironment.cloudKitSync.flushPendingChanges()
-                    // The progress save above is what enqueues the server-history
-                    // post, so the flush is created after it.
-                    await appEnvironment.watchHistorySync.flushPending()
-                }
-            }
-        }
-        #else
-        .onChange(of: scenePhase) { _, newPhase in
-            LoggingService.shared.logCloudKit("[ScenePhase] Transition to: \(newPhase)")
-
-            // Handle background playback
-            appEnvironment.playerService.handleScenePhase(newPhase)
-
-            // Refresh remote control services after returning from background
-            appEnvironment.remoteControlCoordinator.handleScenePhase(newPhase)
-
-            #if os(iOS)
             // Notify rotation manager - stops monitoring in background to prevent
             // fullscreen entry while app is not visible
             DeviceRotationManager.shared.handleScenePhase(newPhase)
-            #endif
 
             // Handle pending notification navigation and warm cache when becoming active
             if newPhase == .active {
@@ -341,7 +227,6 @@ struct YatteeApp: App {
                 // Queue current watch progress so the position reaches other devices
                 appEnvironment.playerService.syncWatchProgress()
 
-                #if os(iOS)
                 // Persist pending SwiftData changes and run the CloudKit flush
                 // inside a background-task assertion. iOS terminates apps with
                 // 0xdead10cc when they hold the SwiftData/SQLite database lock
@@ -374,36 +259,8 @@ struct YatteeApp: App {
                 if appEnvironment.settingsManager.backgroundNotificationsEnabled {
                     appEnvironment.backgroundRefreshManager.scheduleIOSBackgroundRefresh()
                 }
-                #else
-                Task {
-                    await appEnvironment.cloudKitSync.flushPendingChanges()
-                    // The progress save above is what enqueues the server-history
-                    // post, so the flush is created after it.
-                    await appEnvironment.watchHistorySync.flushPending()
-                }
-                #endif
             }
         }
-        #endif
-        #if os(macOS)
-        Window(String(localized: "menu.app.settings"), id: "settings") {
-            SettingsView(showCloseButton: false)
-                .appEnvironment(appEnvironment)
-                .frame(minWidth: 600, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 600, maxHeight: .infinity)
-        }
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 900, height: 600)
-        .commands {
-            CommandGroup(replacing: .appSettings) {
-                SettingsWindowMenuItem()
-            }
-            #if SPARKLE
-            CommandGroup(after: .appInfo) {
-                CheckForUpdatesMenuItem()
-            }
-            #endif
-        }
-        #endif
     }
 
     /// The part of foreground activation that has to happen in order.
@@ -444,11 +301,9 @@ struct YatteeApp: App {
         backgroundTasksRegistered = true
 
         // If notifications are enabled, schedule the first refresh
-        #if os(iOS)
         if appEnvironment.settingsManager.backgroundNotificationsEnabled {
             appEnvironment.backgroundRefreshManager.scheduleIOSBackgroundRefresh()
         }
-        #endif
 
         // Auto-delete old history entries based on retention setting
         performHistoryCleanup()
@@ -624,17 +479,10 @@ struct YatteeApp: App {
             }
 
         case .download:
-            #if !os(tvOS)
             // Fetch video and show download sheet
             Task {
                 await downloadVideoFromDeepLink(videoID: videoID)
             }
-            #else
-            // tvOS doesn't support downloads, fall back to open
-            Task {
-                await playVideoFromDeepLink(videoID: videoID, url: originalURL, startTime: startTime)
-            }
-            #endif
 
         case .ask:
             // Show the video's details page, carrying the link's timestamp
@@ -652,15 +500,10 @@ struct YatteeApp: App {
             appEnvironment.navigationCoordinator.navigate(to: .externalVideo(externalURL))
 
         case .download:
-            #if !os(tvOS)
             // Extract and show download sheet
             Task {
                 await downloadExternalVideoFromDeepLink(url: externalURL)
             }
-            #else
-            // tvOS doesn't support downloads, fall back to open
-            appEnvironment.navigationCoordinator.navigate(to: .externalVideo(externalURL))
-            #endif
 
         case .ask:
             // Extract, then show the video's details page
@@ -754,7 +597,6 @@ struct YatteeApp: App {
         }
     }
 
-    #if !os(tvOS)
     /// Download a video from a deep link.
     private func downloadVideoFromDeepLink(videoID: VideoID) async {
         guard let instance = appEnvironment.instancesManager.instance(for: videoID.source) else { return }
@@ -777,7 +619,7 @@ struct YatteeApp: App {
 
     /// Download an external video from a deep link.
     private func downloadExternalVideoFromDeepLink(url: URL) async {
-        // A file mpv plays as-is can be downloaded straight from its URL
+        // A file player plays as-is can be downloaded straight from its URL
         if let probe = await DirectMediaProbe.probe(url) {
             let video = DirectMediaHelper.createVideo(from: url, probe: probe)
             let stream = DirectMediaHelper.createStream(from: url, probe: probe)
@@ -805,7 +647,6 @@ struct YatteeApp: App {
             appEnvironment.navigationCoordinator.navigate(to: .externalVideo(url))
         }
     }
-    #endif
 
     // MARK: - Handoff
 
@@ -864,11 +705,7 @@ struct YatteeApp: App {
             // Always expand player after handoff (unless PiP is active)
             // We add a small delay to ensure ContentView has set up its .onChange observers
             // (during app launch via Handoff, the trigger can fire before the view is ready)
-            #if os(iOS) || os(macOS)
             let isPiPActive = appEnvironment.playerService.state.pipState == .active
-            #else
-            let isPiPActive = false
-            #endif
             LoggingService.shared.debug("[Handoff] isPiPActive: \(isPiPActive), isPlayerExpanded: \(appEnvironment.navigationCoordinator.isPlayerExpanded)", category: .general)
             if !isPiPActive {
                 // Small delay to ensure view hierarchy is ready to observe trigger changes
@@ -887,7 +724,6 @@ struct YatteeApp: App {
 
     /// Check clipboard for external video URLs when app becomes active.
     private func checkClipboardForExternalURL() {
-        #if os(iOS)
         guard appEnvironment.settingsManager.clipboardURLDetectionEnabled else { return }
 
         let clipboardURL: URL?
@@ -918,31 +754,6 @@ struct YatteeApp: App {
 
         detectedClipboardURL = url
         showingClipboardAlert = true
-        #elseif os(macOS)
-        guard appEnvironment.settingsManager.clipboardURLDetectionEnabled else { return }
-
-        guard let string = NSPasteboard.general.string(forType: .string),
-              let url = URL(string: string),
-              url.scheme == "http" || url.scheme == "https" else {
-            return
-        }
-
-        // Skip if we already checked this URL
-        guard url != lastCheckedClipboardURL else { return }
-        lastCheckedClipboardURL = url
-
-        // Skip YouTube URLs
-        if isYouTubeURL(url) { return }
-
-        // Skip known non-video sites
-        if isExcludedHost(url) { return }
-
-        // Only prompt if Yattee Server is configured
-        guard appEnvironment.instancesManager.yatteeServerInstance != nil else { return }
-
-        detectedClipboardURL = url
-        showingClipboardAlert = true
-        #endif
     }
 
     private func isYouTubeURL(_ url: URL) -> Bool {

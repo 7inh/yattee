@@ -9,17 +9,11 @@ import SwiftUI
 
 struct PlaylistsListView: View {
     @Environment(\.appEnvironment) private var appEnvironment
-    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
     @Namespace private var sheetTransition
     @State private var localPlaylists: [LocalPlaylist] = []
     @State private var searchText = ""
     @State private var playlistToEdit: LocalPlaylist?
-    #if os(tvOS)
-    @FocusState private var focusedPlaylistID: PlaylistListItemID?
-    @State private var didSetInitialFocus = false
-    #endif
 
     // MARK: - Remote state
 
@@ -107,11 +101,7 @@ struct PlaylistsListView: View {
 
     /// View options button lives on the leading edge on macOS, trailing elsewhere.
     private var viewOptionsPlacement: ToolbarItemPlacement {
-        #if os(macOS)
-        .navigation
-        #else
         .primaryAction
-        #endif
     }
 
     // MARK: - Context
@@ -200,11 +190,7 @@ struct PlaylistsListView: View {
     var body: some View {
         GeometryReader { geometry in
             Group {
-                #if os(tvOS)
-                tvOSContent
-                #else
                 content
-                #endif
             }
             .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                 viewWidth = newWidth
@@ -217,7 +203,6 @@ struct PlaylistsListView: View {
                 DataContextUnavailableBanner(reason: contextUnavailability)
             }
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "home.playlists.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $searchText, prompt: Text(String(localized: "playlists.search.placeholder")))
@@ -225,23 +210,14 @@ struct PlaylistsListView: View {
             await load()
         }
         .toolbar {
-            #if os(macOS)
-            // Pin the trailing group (search field + toolbar buttons) to the right edge,
-            // matching the global Search view.
-            if #available(macOS 26, *) {
-                ToolbarSpacer(.flexible, placement: .primaryAction)
-            }
-            #endif
             // No switcher wherever a sidebar shows one: the macOS sidebar row
             // and the iPad sidebar's bottom bar are the persistent switcher
             // surfaces there, so the toolbar menu is compact-width-only.
-            #if !os(macOS)
             if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
                 ToolbarItem(placement: viewOptionsPlacement) {
                     DataContextSwitcherMenu()
                 }
             }
-            #endif
             ToolbarItem(placement: viewOptionsPlacement) {
                 Button {
                     showViewOptions = true
@@ -249,11 +225,6 @@ struct PlaylistsListView: View {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
                 .liquidGlassTransitionSource(id: "playlistsViewOptions", in: sheetTransition)
-                #if os(macOS)
-                .popover(isPresented: $showViewOptions, arrowEdge: .bottom) {
-                    viewOptionsSheetContent
-                }
-                #endif
             }
             if canCreatePlaylist {
                 ToolbarItem(placement: .primaryAction) {
@@ -265,13 +236,10 @@ struct PlaylistsListView: View {
                 }
             }
         }
-        #endif
-        #if !os(macOS)
         .sheet(isPresented: $showViewOptions) {
             viewOptionsSheetContent
                 .liquidGlassSheetContent(sourceID: "playlistsViewOptions", in: sheetTransition)
         }
-        #endif
         .sheet(item: $creation) { creation in
             if let account = creation.account {
                 PlaylistFormSheet(
@@ -402,63 +370,6 @@ struct PlaylistsListView: View {
         }
     }
 
-    #if os(tvOS)
-    // MARK: - tvOS Content
-
-    private var tvOSContent: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 24) {
-                TextField(String(localized: "playlists.search.placeholder"), text: $searchText)
-                    .textFieldStyle(.plain)
-
-                if canCreatePlaylist {
-                    Button {
-                        beginCreate()
-                    } label: {
-                        Label(String(localized: "home.playlists.new"), systemImage: "plus")
-                    }
-                }
-
-                // Pull to refresh has no equivalent here, and a server-side list
-                // is the only one that can go stale.
-                if contextAccount != nil {
-                    Button {
-                        startLoad()
-                    } label: {
-                        Label(String(localized: "common.refresh"), systemImage: "arrow.clockwise")
-                    }
-                }
-
-                Button {
-                    showViewOptions = true
-                } label: {
-                    Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                }
-
-                if DataContextSwitcherVisibility.showsPickers(in: appEnvironment) {
-                    DataContextSwitcherButton()
-                }
-            }
-            .focusSection()
-            .padding(.horizontal, 48)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
-
-            content
-                .focusSection()
-        }
-        .onChange(of: items.first?.id, initial: true) { _, newValue in
-            // Work around tvOS focus bug: set initial focus to first playlist once cells materialize.
-            // Only ever the first time cells appear — a refetch, or a switch the
-            // user made in the header, must not pull focus out from under them.
-            guard !didSetInitialFocus, let newValue else { return }
-            didSetInitialFocus = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                focusedPlaylistID = newValue
-            }
-        }
-    }
-    #endif
 
     // MARK: - Empty View
 
@@ -533,27 +444,11 @@ struct PlaylistsListView: View {
         ) {
             playlistRow(item: item)
         }
-        #if !os(tvOS)
         .swipeActions(actionsArray: swipeActions(for: item))
-        #endif
 
-        #if os(tvOS)
-        // There is no swipe here, so a menu is the only way to reach a
-        // server-side playlist's actions. Local rows keep exactly the
-        // affordances they had — and an account that may not change its
-        // playlists gets no menu rather than an empty one.
-        if case .remote = item, writableAccount != nil {
-            row.contextMenu {
-                rowActions(for: item)
-            }
-        } else {
-            row
-        }
-        #else
         // Everywhere else the menu hangs off the row's button instead — see
         // `playlistRow(item:)`.
         row
-        #endif
     }
 
     // MARK: - Grid Layout
@@ -566,25 +461,12 @@ struct PlaylistsListView: View {
                 }
             }
         }
-        #if os(tvOS)
-        .scrollClipDisabled()
-        #endif
     }
 
     // MARK: - Helper Views
 
     @ViewBuilder
     private func playlistRow(item: PlaylistListItem) -> some View {
-        #if os(tvOS)
-        NavigationLink(value: NavigationDestination.playlist(source(for: item))) {
-            rowContent(for: item)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .zoomTransitionSource(id: item.transitionID)
-        .focused($focusedPlaylistID, equals: item.id)
-        #else
         // A button rather than a tap gesture, and the menu hangs off the button
         // itself: that is what carries a row's actions to the accessibility
         // layer, exactly as a video row does. A bare shape with a gesture on it
@@ -610,7 +492,6 @@ struct PlaylistsListView: View {
         } else {
             button
         }
-        #endif
     }
 
     @ViewBuilder
@@ -625,23 +506,6 @@ struct PlaylistsListView: View {
 
     @ViewBuilder
     private func playlistCard(item: PlaylistListItem) -> some View {
-        #if os(tvOS)
-        let card = NavigationLink(value: NavigationDestination.playlist(source(for: item))) {
-            cardContent(for: item)
-                .frame(maxHeight: .infinity, alignment: .top)
-        }
-        .buttonStyle(.plain)
-        .zoomTransitionSource(id: item.transitionID)
-        .focused($focusedPlaylistID, equals: item.id)
-
-        if case .remote = item, writableAccount != nil {
-            card.contextMenu {
-                rowActions(for: item)
-            }
-        } else {
-            card
-        }
-        #else
         // A button for the same reason the list row is one: the card's menu is
         // only reachable by assistive tech and by the keyboard from a control.
         let card = Button {
@@ -661,7 +525,6 @@ struct PlaylistsListView: View {
         } else {
             card
         }
-        #endif
     }
 
     /// Whether a row has anything to offer in a menu.

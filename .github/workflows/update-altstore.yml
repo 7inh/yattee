@@ -79,7 +79,7 @@ jobs:
       - name: Publish to dl.yattee.stream (gh-pages)
         run: |
           # Served as https://dl.yattee.stream/altstore.json. The release
-          # workflow's Sparkle job pushes appcast.xml to the same branch, so
+          # other workflows may push to the same branch, so
           # retry on a rejected push instead of racing it.
           git fetch origin +refs/heads/gh-pages:refs/heads/gh-pages
           git worktree add gh-pages gh-pages

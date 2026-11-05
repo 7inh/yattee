@@ -7,11 +7,7 @@
 
 import Foundation
 
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 /// Manages Apple Handoff activities for seamless cross-device continuation.
 @MainActor
@@ -100,9 +96,7 @@ final class HandoffManager {
         let activity = NSUserActivity(activityType: Self.activityType)
         activity.isEligibleForHandoff = true
         activity.isEligibleForSearch = false
-        #if os(iOS)
         activity.isEligibleForPrediction = false
-        #endif
 
         guard configureActivity(activity, for: destination) else {
             LoggingService.shared.debug("[Handoff] Skipping activity for destination (not eligible)", category: .general)

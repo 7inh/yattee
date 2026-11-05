@@ -7,12 +7,6 @@
 
 import SwiftUI
 
-#if os(tvOS)
-/// Padding used inside selection row buttons so the tvOS focus background
-/// fills the whole row.
-private let tvRowVerticalPadding: CGFloat = 14
-private let tvRowHorizontalPadding: CGFloat = 20
-#endif
 
 // MARK: - Adaptive Stream Row
 
@@ -68,18 +62,9 @@ struct AdaptiveStreamRowView: View {
                         .foregroundStyle(.tint)
                 }
             }
-            #if os(tvOS)
-            .padding(.vertical, tvRowVerticalPadding)
-            .padding(.horizontal, tvRowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #endif
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 }
 
@@ -113,18 +98,9 @@ struct VideoStreamRowView: View {
                 }
             }
             .frame(minHeight: showAdvancedDetails ? nil : 36)
-            #if os(tvOS)
-            .padding(.vertical, tvRowVerticalPadding)
-            .padding(.horizontal, tvRowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #endif
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 
     @ViewBuilder
@@ -276,18 +252,9 @@ struct AudioStreamRowView: View {
                 }
             }
             .frame(minHeight: showAdvancedDetails ? nil : 36)
-            #if os(tvOS)
-            .padding(.vertical, tvRowVerticalPadding)
-            .padding(.horizontal, tvRowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #endif
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 
     @ViewBuilder
@@ -375,18 +342,9 @@ struct CaptionRowView: View {
                 }
             }
             .frame(minHeight: 36)
-            #if os(tvOS)
-            .padding(.vertical, tvRowVerticalPadding)
-            .padding(.horizontal, tvRowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #endif
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 
     @ViewBuilder
@@ -416,9 +374,9 @@ struct CaptionRowView: View {
 
 // MARK: - Embedded Track Row
 
-/// Row view for embedded (in-container) audio/subtitle tracks reported by mpv.
+/// Row view for embedded (in-container) audio/subtitle tracks reported by player.
 struct EmbeddedTrackRowView: View {
-    let track: MPVTrack
+    let track: MediaTrack
     let isSelected: Bool
     let isPreferred: Bool
     let showAdvancedDetails: Bool
@@ -444,18 +402,9 @@ struct EmbeddedTrackRowView: View {
                 }
             }
             .frame(minHeight: showAdvancedDetails ? nil : 36)
-            #if os(tvOS)
-            .padding(.vertical, tvRowVerticalPadding)
-            .padding(.horizontal, tvRowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #endif
             .contentShape(Rectangle())
         }
-        #if os(tvOS)
-        .buttonStyle(TVSettingsRowButtonStyle())
-        #else
         .buttonStyle(.plain)
-        #endif
     }
 
     @ViewBuilder

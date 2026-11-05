@@ -46,9 +46,7 @@ struct DynamicSheetContainer<Content: View>: View {
                     }
                 }
             ))
-            #if os(iOS)
             .modifier(SheetHeightModifier(height: contentHeight))
-            #endif
     }
 }
 

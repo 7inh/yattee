@@ -35,20 +35,10 @@ final class ImageLoadingService: Sendable {
     /// Call this once at app launch.
     func configure() {
         // Memory cache limits (platform-specific)
-        #if os(tvOS)
-        let memoryCacheLimit = 50 * 1024 * 1024  // 50 MB
-        #else
         let memoryCacheLimit = 100 * 1024 * 1024 // 100 MB
-        #endif
 
         // Disk cache limits (platform-specific)
-        #if os(tvOS)
-        let diskCacheLimit = 100 * 1024 * 1024   // 100 MB
-        #elseif os(macOS)
-        let diskCacheLimit = 500 * 1024 * 1024   // 500 MB
-        #else
         let diskCacheLimit = 300 * 1024 * 1024   // 300 MB (iOS)
-        #endif
 
         // Create data cache
         let dataCache: DataCache? = {

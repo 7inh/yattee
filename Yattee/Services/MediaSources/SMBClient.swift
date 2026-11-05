@@ -19,7 +19,7 @@ actor SMBClient {
     private var operationInProgress: Set<UUID> = []
     
     // Callback to check if SMB playback is currently active
-    // When SMB video is playing via MPV/FFmpeg, directory browsing must be blocked
+    // When SMB video is playing via player, directory browsing must be blocked
     // because libsmbclient has internal state conflicts when used concurrently
     private var isSMBPlaybackActiveCallback: (@Sendable @MainActor () -> Bool)?
 
@@ -38,7 +38,7 @@ actor SMBClient {
     ///   - file: The media file to construct a URL for.
     ///   - source: The media source configuration.
     ///   - password: The password for authentication (stored separately in Keychain).
-    /// - Returns: A URL with embedded credentials for MPV playback.
+    /// - Returns: A URL with embedded credentials for player playback.
     func constructPlaybackURL(
         for file: MediaFile,
         source: MediaSource,
@@ -234,7 +234,7 @@ actor SMBClient {
         }
         
         // Check if SMB playback is active - if so, we cannot use libsmbclient
-        // because it has internal state conflicts with MPV/FFmpeg's concurrent usage
+        // because it has internal state conflicts with player's concurrent usage
         if let callback = isSMBPlaybackActiveCallback {
             let isActive = await callback()
             if isActive {

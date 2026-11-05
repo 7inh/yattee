@@ -19,46 +19,22 @@ enum VideoRowStyle: String {
     var thumbnailWidth: CGFloat {
         switch self {
         case .large:
-            #if os(tvOS)
-            return 220
-            #else
             return 160
-            #endif
         case .regular:
-            #if os(tvOS)
-            return 180
-            #else
             return 120
-            #endif
         case .compact:
-            #if os(tvOS)
-            return 120
-            #else
             return 70
-            #endif
         }
     }
 
     var thumbnailHeight: CGFloat {
         switch self {
         case .large:
-            #if os(tvOS)
-            return 124
-            #else
             return 90
-            #endif
         case .regular:
-            #if os(tvOS)
-            return 101
-            #else
             return 68
-            #endif
         case .compact:
-            #if os(tvOS)
-            return 68
-            #else
             return 39
-            #endif
         }
     }
 }

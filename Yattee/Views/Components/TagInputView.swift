@@ -46,9 +46,7 @@ struct TagInputView: View {
             HStack {
                 TextField(String(localized: "bookmark.tags.placeholder"), text: $inputText)
                     .focused($textFieldFocused)
-                    #if !os(tvOS)
                     .textFieldStyle(.roundedBorder)
-                    #endif
                     .onSubmit {
                         addTag()
                     }

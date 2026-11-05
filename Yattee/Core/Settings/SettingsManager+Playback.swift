@@ -10,9 +10,9 @@ import Foundation
 extension SettingsManager {
     // MARK: - Playback Settings
 
-    /// The player backend type. Always returns MPV as it's the only supported backend.
+    /// The player backend type. Always returns player as it's the only supported backend.
     var preferredBackend: PlayerBackendType {
-        .mpv
+        .avFoundation
     }
 
     var preferredQuality: VideoQuality {
@@ -49,25 +49,7 @@ extension SettingsManager {
     }
 
     private var backgroundPlaybackDefault: Bool {
-        #if os(tvOS)
-        return false
-        #else
         return true
-        #endif
-    }
-
-    /// tvOS only: when enabled, the Siri remote Menu button closes the video
-    /// (clears queue, stops playback) instead of only collapsing the player.
-    /// When enabled, the explicit top-bar close button is hidden.
-    var tvOSMenuButtonClosesVideo: Bool {
-        get {
-            if let cached = _tvOSMenuButtonClosesVideo { return cached }
-            return bool(for: .tvOSMenuButtonClosesVideo, default: false)
-        }
-        set {
-            _tvOSMenuButtonClosesVideo = newValue
-            set(newValue, for: .tvOSMenuButtonClosesVideo)
-        }
     }
 
     var allowSoftwareDecodedFormats: Bool {
@@ -81,19 +63,10 @@ extension SettingsManager {
         }
     }
 
-    /// Audio-only ("music") mode: when enabled, only the audio track is loaded
-    /// for every video until turned off. Persisted per platform.
     var audioOnlyModeEnabled: Bool {
-        get {
-            if let cached = _audioOnlyModeEnabled { return cached }
-            return bool(for: .audioOnlyMode, default: false)
-        }
-        set {
-            _audioOnlyModeEnabled = newValue
-            set(newValue, for: .audioOnlyMode)
-        }
+        get { true }
+        set { set(true, for: .audioOnlyMode) }
     }
-
     /// Preferred audio language code (e.g., "en", "de", "ja").
     /// When set, audio streams in this language will be auto-selected and shown first.
     /// nil means no preference (use original/default audio).
@@ -118,7 +91,7 @@ extension SettingsManager {
     }
 
     /// Preferred subtitles language code (e.g., "en", "de", "ja").
-    /// When set, subtitles in this language will be auto-loaded when video starts (MPV only).
+    /// When set, subtitles in this language will be auto-loaded when video starts (player only).
     /// nil means no subtitles (disabled by default).
     var preferredSubtitlesLanguage: String? {
         get {
@@ -158,7 +131,7 @@ extension SettingsManager {
     // MARK: - Volume Settings
 
     /// The persisted player volume level (0.0 - 1.0).
-    /// Only used when volumeMode is .mpv.
+    /// Only used when volumeMode is .inApp.
     /// This is a local-only setting (not synced to iCloud).
     var playerVolume: Float {
         get {

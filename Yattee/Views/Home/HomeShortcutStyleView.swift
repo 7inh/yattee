@@ -6,7 +6,6 @@
 //  non-interactive preview of every shortcut type in the selected style.
 //
 
-#if !os(tvOS)
 import SwiftUI
 
 struct HomeShortcutStyleView: View {
@@ -56,9 +55,7 @@ struct HomeShortcutStyleView: View {
                         Text(style.displayName).tag(style)
                     }
                 }
-                #if os(iOS)
                 .pickerStyle(.segmented)
-                #endif
             } header: {
                 Text(String(localized: "home.settings.shortcuts.layout"))
             }
@@ -69,9 +66,7 @@ struct HomeShortcutStyleView: View {
                         Text(color.displayName).tag(color)
                     }
                 }
-                #if os(iOS)
                 .pickerStyle(.segmented)
-                #endif
             } header: {
                 Text(String(localized: "home.settings.shortcuts.color"))
             }
@@ -107,14 +102,9 @@ struct HomeShortcutStyleView: View {
                 Text(String(localized: "home.settings.shortcuts.style.preview"))
             }
         }
-        #if os(macOS)
-        .listStyle(.inset)
-        #endif
         .opaqueSettingsFormBackground()
         .navigationTitle(String(localized: "home.settings.shortcuts.style"))
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .onChange(of: style) { onSave?() }
         .onChange(of: color) { onSave?() }
         .onChange(of: palette) { onSave?() }
@@ -195,10 +185,8 @@ struct HomeShortcutStyleView: View {
                     axis: .vertical
                 )
                 .lineLimit(3 ... 6)
-                #if os(iOS)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
-                #endif
                 .font(.body.monospaced())
             }
         } header: {
@@ -214,10 +202,8 @@ struct HomeShortcutStyleView: View {
                 .labelsHidden()
 
             TextField("#RRGGBB", text: hexBinding(at: index))
-                #if os(iOS)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
-                #endif
                 .font(.body.monospaced())
 
             Spacer(minLength: 0)
@@ -349,4 +335,3 @@ struct HomeShortcutStyleView: View {
         .appEnvironment(.preview)
     }
 }
-#endif

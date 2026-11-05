@@ -7,12 +7,7 @@
 
 import Foundation
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
-#if canImport(AppKit)
-import AppKit
-#endif
 
 // MARK: - Description Text Utilities
 
@@ -108,11 +103,7 @@ enum DescriptionText {
 /// fails or the destination isn't a URL the app can handle.
 @MainActor
 private func openInSystemBrowser(_ url: URL) {
-    #if os(iOS)
     UIApplication.shared.open(url)
-    #elseif os(macOS)
-    NSWorkspace.shared.open(url)
-    #endif
     // tvOS has no system browser and no way to tap description links in the
     // first place — this path is unreachable there.
 }

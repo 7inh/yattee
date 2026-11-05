@@ -6,9 +6,7 @@
 //
 
 import Foundation
-#if os(iOS)
 import BackgroundTasks
-#endif
 
 /// Manages background refresh scheduling and execution across platforms.
 @MainActor
@@ -17,9 +15,6 @@ final class BackgroundRefreshManager {
 
     static let backgroundTaskIdentifier = AppIdentifiers.backgroundFeedRefresh
 
-    #if os(macOS)
-    private var activityScheduler: NSBackgroundActivityScheduler?
-    #endif
 
     // MARK: - Dependencies
 
@@ -38,17 +33,12 @@ final class BackgroundRefreshManager {
     // MARK: - Registration (call at app launch)
 
     func registerBackgroundTasks() {
-        #if os(iOS)
         guard !ProcessInfo.processInfo.isMacCatalystApp else { return }
         registerIOSBackgroundTask()
-        #elseif os(macOS)
-        registerMacOSBackgroundActivity()
-        #endif
     }
 
     // MARK: - iOS Implementation
 
-    #if os(iOS)
     private func registerIOSBackgroundTask() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.backgroundTaskIdentifier,
@@ -104,66 +94,18 @@ final class BackgroundRefreshManager {
             LoggingService.shared.info("iOS background task completed", category: .notifications)
         }
     }
-    #endif
 
     // MARK: - macOS Implementation
 
-    #if os(macOS)
-    private func registerMacOSBackgroundActivity() {
-        let scheduler = NSBackgroundActivityScheduler(identifier: Self.backgroundTaskIdentifier)
-        scheduler.repeats = true
-        #if DEBUG
-        scheduler.interval = 60  // 1 minute for testing
-        scheduler.tolerance = 30
-        #else
-        scheduler.interval = 15 * 60  // 15 minutes
-        scheduler.tolerance = 5 * 60  // 5 minute tolerance
-        #endif
-        scheduler.qualityOfService = .utility
-
-        scheduler.schedule { [weak self] completion in
-            guard let self else {
-                completion(.finished)
-                return
-            }
-
-            Task { @MainActor in
-                LoggingService.shared.info("macOS background activity started", category: .notifications)
-                await self.backgroundRefresher.performBackgroundRefresh()
-                completion(.finished)
-                LoggingService.shared.info("macOS background activity completed", category: .notifications)
-            }
-        }
-
-        self.activityScheduler = scheduler
-        LoggingService.shared.info("Registered macOS background activity", category: .notifications)
-    }
-
-    func invalidateMacOSScheduler() {
-        activityScheduler?.invalidate()
-        activityScheduler = nil
-        LoggingService.shared.debug("Invalidated macOS background scheduler", category: .notifications)
-    }
-    #endif
 
     // MARK: - Enable/Disable
 
     func handleNotificationsEnabledChanged(_ enabled: Bool) {
-        #if os(iOS)
         guard !ProcessInfo.processInfo.isMacCatalystApp else { return }
         if enabled {
             scheduleIOSBackgroundRefresh()
         } else {
             cancelIOSBackgroundRefresh()
         }
-        #elseif os(macOS)
-        if enabled {
-            if activityScheduler == nil {
-                registerMacOSBackgroundActivity()
-            }
-        } else {
-            invalidateMacOSScheduler()
-        }
-        #endif
     }
 }

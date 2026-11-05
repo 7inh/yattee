@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-#if os(iOS) || os(macOS)
 
 struct RelatedPanelPage: View {
     let context: PanelPageContext
@@ -80,5 +79,3 @@ struct RelatedPanelPage: View {
         .padding(.vertical, 32)
     }
 }
-
-#endif

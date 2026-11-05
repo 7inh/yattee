@@ -25,7 +25,7 @@ enum LocalFolderURLResolver {
         cache[sourceID] = url
 
         // Acquire (and hold) a security-scoped access token for this URL so that
-        // background readers — particularly MPV/libavformat — can open files inside
+        // background readers — particularly player — can open files inside
         // it long after the directory enumeration that resolved the bookmark has
         // returned. Without this, iOS revokes the scope as soon as the matching
         // `defer { stopAccessing... }` fires, and subsequent file opens fail with
@@ -218,14 +218,7 @@ actor LocalFileClient {
             }
         }
 
-        #if os(macOS)
-        let options: URL.BookmarkCreationOptions = [
-            .withSecurityScope,
-            .securityScopeAllowOnlyReadAccess
-        ]
-        #else
         let options: URL.BookmarkCreationOptions = []
-        #endif
 
         do {
             return try url.bookmarkData(
@@ -244,11 +237,7 @@ actor LocalFileClient {
     func resolveBookmark(_ bookmarkData: Data) throws -> URL {
         var isStale = false
 
-        #if os(macOS)
-        let options: URL.BookmarkResolutionOptions = [.withSecurityScope]
-        #else
         let options: URL.BookmarkResolutionOptions = []
-        #endif
 
         let url: URL
         do {

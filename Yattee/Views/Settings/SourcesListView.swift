@@ -17,9 +17,6 @@ struct SourcesListView: View {
     @State private var pendingDeleteInstance: Instance?
     @State private var pendingDeleteSource: MediaSource?
 
-    #if os(tvOS)
-    @FocusState private var firstSourceFocused: Bool
-    #endif
 
     private var instancesManager: InstancesManager? {
         appEnvironment?.instancesManager
@@ -40,51 +37,10 @@ struct SourcesListView: View {
 
     var body: some View {
         Group {
-            #if os(tvOS)
-            TVSidebarDetailContainer(
-                systemImage: "server.rack",
-                title: String(localized: "sources.title")
-            ) {
-                VStack(spacing: 0) {
-                    HStack(spacing: 24) {
-                        Button {
-                            showingAddSheet = true
-                        } label: {
-                            Label(String(localized: "sources.addSource"), systemImage: "plus")
-                        }
-                        .accessibilityIdentifier("sources.addButton")
-                        Spacer()
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                    .focusSection()
-
-                    sourcesInner
-                        .focusSection()
-                }
-            }
-            #elseif os(macOS)
-            VStack(spacing: 0) {
-                // macOS 15 does not surface a detail-pane NavigationStack's
-                // toolbar items to the window title bar, so the toolbar
-                // "Add Source" button is invisible there. Show an inline
-                // header button as a fallback on older macOS. On macOS 26+
-                // the toolbar button works, so this header is omitted.
-                macOSLegacyAddHeader
-                sourcesInner
-            }
-            #else
             sourcesInner
-            #endif
         }
-        #if !os(tvOS)
         .navigationTitle(String(localized: "sources.title"))
-        #endif
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
-        #if os(iOS) || os(macOS)
         .toolbar {
             if showAddButtonInToolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -97,25 +53,12 @@ struct SourcesListView: View {
                 }
             }
         }
-        #endif
-        #if os(tvOS)
-        .navigationDestination(isPresented: $showingAddSheet) {
-            TVSidebarDetailContainer(systemImage: "plus.circle", title: String(localized: "sources.newSource")) { AddSourceView() }
-        }
-        #else
         .sheet(isPresented: $showingAddSheet) {
             AddSourceView()
         }
-        #endif
-        #if os(tvOS)
-        .navigationDestination(item: $sourceToEdit) { source in
-            TVSidebarDetailContainer(systemImage: "pencil.circle", title: String(localized: "sources.editSource")) { EditSourceView(source: source) }
-        }
-        #else
         .sheet(item: $sourceToEdit) { source in
             EditSourceView(source: source)
         }
-        #endif
         .confirmationDialog(
             deleteConfirmationMessage,
             isPresented: $showingDeleteConfirmation,
@@ -135,51 +78,16 @@ struct SourcesListView: View {
                 Text(accounts)
             }
         }
-        #if !os(tvOS)
         .presentationCompactAdaptation(.sheet)
-        #endif
     }
 
     /// Whether the "Add Source" button should be placed in the window/navigation
     /// toolbar. On macOS this only works reliably from macOS 26 onward (see
     /// `macOSLegacyAddHeader`); iOS always uses the toolbar.
     private var showAddButtonInToolbar: Bool {
-        #if os(iOS)
         return true
-        #elseif os(macOS)
-        if #available(macOS 26, *) {
-            return true
-        } else {
-            return false
-        }
-        #else
-        return false
-        #endif
     }
 
-    #if os(macOS)
-    // Inline fallback "Add Source" button for macOS versions where the
-    // detail-pane toolbar item is not shown (pre-macOS 26). Only needed when
-    // there are existing sources — the empty state already offers its own
-    // add button.
-    @ViewBuilder
-    private var macOSLegacyAddHeader: some View {
-        if !showAddButtonInToolbar, !isEmpty {
-            HStack {
-                Spacer()
-                Button {
-                    showingAddSheet = true
-                } label: {
-                    Label(String(localized: "sources.addSource"), systemImage: "plus")
-                }
-                .accessibilityIdentifier("sources.addButton")
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-        }
-    }
-    #endif
 
     @ViewBuilder
     private var sourcesInner: some View {
@@ -220,29 +128,12 @@ struct SourcesListView: View {
                     }
                 }
             )
-            #if os(tvOS)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    firstSourceFocused = true
-                }
-            }
-            #endif
     }
 
     // MARK: - Section Header
 
     @ViewBuilder
     private func sectionHeader(_ title: String) -> some View {
-        #if os(macOS)
-        Text(title)
-            .font(.subheadline)
-            .textCase(.uppercase)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-        #else
         Text(title)
             .fontWeight(.semibold)
             .foregroundStyle(.secondary)
@@ -250,34 +141,19 @@ struct SourcesListView: View {
             .padding(.horizontal, listStyle == .inset ? 32 : 16)
             .padding(.top, 16)
             .padding(.bottom, 8)
-        #endif
     }
 
     // MARK: - Section Card
 
     @ViewBuilder
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        #if os(macOS)
-        VStack(spacing: 0) {
-            Divider()
-            LazyVStack(spacing: 0) {
-                content()
-            }
-            Divider()
-        }
-        .padding(.bottom, 12)
-        #else
         if listStyle == .inset {
             LazyVStack(spacing: 0) {
                 content()
             }
-            #if os(tvOS)
-            .padding(.horizontal, 16)
-            #else
             .background(ListBackgroundStyle.card.color)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 16)
-            #endif
             .padding(.bottom, 16)
         } else {
             LazyVStack(spacing: 0) {
@@ -285,7 +161,6 @@ struct SourcesListView: View {
             }
             .padding(.bottom, 16)
         }
-        #endif
     }
 
     // MARK: - Remote Servers Section
@@ -308,7 +183,6 @@ struct SourcesListView: View {
 
     @ViewBuilder
     private func instanceRowView(_ instance: Instance, isLast: Bool, isFirst: Bool = false) -> some View {
-        #if os(tvOS)
         SourceListRow(isLast: isLast, listStyle: listStyle) {
             Button {
                 sourceToEdit = .remoteServer(instance)
@@ -316,20 +190,6 @@ struct SourcesListView: View {
                 instanceRow(instance)
             }
             .foregroundStyle(.primary)
-        }
-        .modifier(FirstRowFocusModifier(isFirst: isFirst, focus: $firstSourceFocused))
-        #else
-        SourceListRow(isLast: isLast, listStyle: listStyle) {
-            Button {
-                sourceToEdit = .remoteServer(instance)
-            } label: {
-                instanceRow(instance)
-            }
-            #if os(macOS)
-            .buttonStyle(.plain)
-            #else
-            .foregroundStyle(.primary)
-            #endif
         }
         .swipeActions {
             SwipeAction(symbolImage: "pencil", tint: .white, background: .orange) { reset in
@@ -356,24 +216,13 @@ struct SourcesListView: View {
                 Label(String(localized: "common.delete"), systemImage: "trash")
             }
         }
-        #endif
     }
 
     private func instanceRow(_ instance: Instance) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
         return HStack(spacing: rowSpacing) {
             Image(systemName: instance.type.systemImage)
                 .font(iconFont)
@@ -400,11 +249,9 @@ struct SourcesListView: View {
 
             Spacer()
 
-            #if !os(macOS)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-            #endif
         }
         .contentShape(Rectangle())
     }
@@ -466,9 +313,7 @@ struct SourcesListView: View {
         var sources: [MediaSource] = []
         sources.append(contentsOf: manager.webdavSources)
         sources.append(contentsOf: manager.smbSources)
-        #if !os(tvOS)
         sources.append(contentsOf: manager.localFolderSources)
-        #endif
         return sources.sorted { $0.dateAdded < $1.dateAdded }
     }
 
@@ -476,7 +321,6 @@ struct SourcesListView: View {
     private func fileSourceRowView(_ source: MediaSource, isLast: Bool, isFirst: Bool = false) -> some View {
         let needsPassword = mediaSourcesManager?.needsPassword(for: source) ?? false
 
-        #if os(tvOS)
         SourceListRow(isLast: isLast, listStyle: listStyle) {
             Button {
                 sourceToEdit = .fileSource(source)
@@ -484,20 +328,6 @@ struct SourcesListView: View {
                 mediaSourceRow(source, needsPassword: needsPassword)
             }
             .foregroundStyle(.primary)
-        }
-        .modifier(FirstRowFocusModifier(isFirst: isFirst, focus: $firstSourceFocused))
-        #else
-        SourceListRow(isLast: isLast, listStyle: listStyle) {
-            Button {
-                sourceToEdit = .fileSource(source)
-            } label: {
-                mediaSourceRow(source, needsPassword: needsPassword)
-            }
-            #if os(macOS)
-            .buttonStyle(.plain)
-            #else
-            .foregroundStyle(.primary)
-            #endif
         }
         .swipeActions {
             SwipeAction(symbolImage: "pencil", tint: .white, background: .orange) { reset in
@@ -524,24 +354,13 @@ struct SourcesListView: View {
                 Label(String(localized: "common.delete"), systemImage: "trash")
             }
         }
-        #endif
     }
 
     private func mediaSourceRow(_ source: MediaSource, needsPassword: Bool) -> some View {
-        #if os(tvOS)
-        let rowSpacing: CGFloat = 24
-        #else
         let rowSpacing: CGFloat = 12
-        #endif
-        #if os(macOS)
-        let iconFont: Font = .title3
-        let iconFrameWidth: CGFloat = 24
-        let titleFont: Font = .body
-        #else
         let iconFont: Font = .title2
         let iconFrameWidth: CGFloat = 32
         let titleFont: Font = .headline
-        #endif
         return HStack(spacing: rowSpacing) {
             Image(systemName: source.type.systemImage)
                 .font(iconFont)
@@ -572,11 +391,9 @@ struct SourcesListView: View {
 
             Spacer()
 
-            #if !os(macOS)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-            #endif
         }
         .contentShape(Rectangle())
     }
@@ -622,20 +439,6 @@ struct SourcesListView: View {
     }
 }
 
-#if os(tvOS)
-private struct FirstRowFocusModifier: ViewModifier {
-    let isFirst: Bool
-    var focus: FocusState<Bool>.Binding
-
-    func body(content: Content) -> some View {
-        if isFirst {
-            content.focused(focus)
-        } else {
-            content
-        }
-    }
-}
-#endif
 
 // MARK: - Preview
 

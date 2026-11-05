@@ -7,12 +7,7 @@
 
 import Foundation
 import UserNotifications
-#if canImport(UIKit)
 import UIKit
-#endif
-#if canImport(AppKit)
-import AppKit
-#endif
 
 /// Manages local notifications for new video alerts.
 @MainActor
@@ -66,18 +61,11 @@ final class NotificationManager: NSObject {
 
     /// Opens system settings for notification permissions.
     func openNotificationSettings() {
-        #if os(iOS)
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
-        #elseif os(macOS)
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-            NSWorkspace.shared.open(url)
-        }
-        #endif
     }
 
-    #if !os(tvOS)
     // MARK: - Notification Scheduling
 
     /// Sends a single combined notification for new videos.
@@ -234,7 +222,6 @@ final class NotificationManager: NSObject {
 
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
-    #endif
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -249,7 +236,6 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound])
     }
 
-    #if !os(tvOS)
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -268,5 +254,4 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         // The feed has to be visible: collapse the player that would cover it.
         coordinator.navigateToSubscriptions(collapsePlayer: true)
     }
-    #endif
 }
