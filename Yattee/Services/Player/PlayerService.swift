@@ -329,23 +329,12 @@ final class PlayerService {
                 state.videoDetailsState = .loaded
                 lockDurationIfNeeded(for: video, stream: providedStream)
 
-                // Load local storyboard if this is a downloaded video
-                if let downloadManager,
-                   let download = downloadManager.download(for: video.id),
-                   let storyboard = download.storyboard,
-                   let storyboardPath = download.localStoryboardPath {
-                    let storyboardDir = downloadManager.downloadsDirectory().appendingPathComponent(storyboardPath)
-                    let localStoryboard = Storyboard.localStoryboard(from: storyboard, localDirectory: storyboardDir)
-                    Task { await StoryboardService.shared.clearCache() }
-                    state.storyboards = [localStoryboard]
-                    LoggingService.shared.logPlayer("Loaded local storyboard for \(video.id.id)")
-                }
             } else {
                 // Mark that we're loading video details from API
                 state.videoDetailsState = .loading
 
                 // Fetch full video details (includes description), streams, captions, and storyboards in one API call
-                let (fullVideo, streams, captions, storyboards) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
+                let (fullVideo, streams, captions, _) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
 
                 // Check for cancellation after network fetch
                 try Task.checkCancellation()
@@ -353,11 +342,6 @@ final class PlayerService {
 
                 self.availableStreams = streams.filter(\.isAVPlayerAudioPlayable)
                 self.availableCaptions = captions
-
-                // Update storyboards and clear cached sprite sheets
-                Task { await StoryboardService.shared.clearCache() }
-                state.storyboards = storyboards
-                LoggingService.shared.logPlayer("Loaded \(storyboards.count) storyboards, preferred: \(state.preferredStoryboard?.width ?? 0)x\(state.preferredStoryboard?.height ?? 0)")
 
                 // Select best stream for preferred backend
                 let selection = selectStreamAndBackend(from: streams)
@@ -783,7 +767,6 @@ final class PlayerService {
             pause()
         }
 
-        currentBackend?.handleScenePhase(phase, isPiPActive: isPiPActive)
     }
 
     /// Plays the next video in queue, respecting the current queue mode.
@@ -1413,7 +1396,7 @@ final class PlayerService {
         defer { isLoadingOnlineStreams = false }
 
         do {
-            let (_, streams, captions, storyboards) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
+            let (_, streams, captions, _) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
 
             // Bail if the user moved on to another video while we were fetching
             guard state.currentVideo?.id == video.id else { return }
@@ -1423,14 +1406,7 @@ final class PlayerService {
             availableStreams = combined
             availableCaptions = captions
 
-            // Queue items carry a pre-resolved stream, so play() skipped the
-            // full fetch that populates storyboards — fill them in here.
-            // Don't clobber a local storyboard loaded for downloaded playback.
-            if state.storyboards.isEmpty, !storyboards.isEmpty {
-                Task { await StoryboardService.shared.clearCache() }
-                state.storyboards = storyboards
-                LoggingService.shared.logPlayer("Loaded \(storyboards.count) storyboards (deferred), preferred: \(state.preferredStoryboard?.width ?? 0)x\(state.preferredStoryboard?.height ?? 0)")
-            }
+
 
             // The freshly fetched streams have new (signed) URLs that won't
             // match `state.currentStream`/`state.currentAudioStream` from the
@@ -2571,27 +2547,9 @@ extension PlayerService: PlayerBackendDelegate {
             return
         }
 
-        // Auto-play immediately if player is not visible (no point showing countdown)
-        // UI (ExpandedPlayerSheet) will handle countdown when player is visible
-        let autoPlayEnabled = settingsManager?.queueAutoPlayNext ?? true
-        let hasNextInQueue = !state.queue.isEmpty
-
-        if autoPlayEnabled && hasNextInQueue {
-            let isSheetCollapsed = navigationCoordinator?.isPlayerExpanded != true
-            let isInBackground = currentScenePhase == .background
-            let isPiPActive = state.pipState == .active
-
-            if isSheetCollapsed || isInBackground || isPiPActive {
-                Task {
-                    await playNext()
-                }
-            } else {
-                // UI will handle countdown - allow sleep while waiting
-                // (preventSleep will be called again when next video starts)
-                sleepPreventionService.allowSleep()
-            }
+        if (settingsManager?.queueAutoPlayNext ?? true), !state.queue.isEmpty {
+            Task { await playNext() }
         } else {
-            // No auto-play will happen - allow sleep
             sleepPreventionService.allowSleep()
         }
     }
@@ -2613,10 +2571,9 @@ extension PlayerService: PlayerBackendDelegate {
 
         let isSheetCollapsed = navigationCoordinator?.isPlayerExpanded != true
         let isInBackground = currentScenePhase == .background
-        let isPiPActive = state.pipState == .active
 
         // Skip immediately if player is NOT visible to user (no point showing error screen)
-        if isSheetCollapsed || isInBackground || isPiPActive {
+        if isSheetCollapsed || isInBackground {
             // Show toast notification
             toastManager?.showInfo(String(localized: "player.error.skippingToNext.title"))
 

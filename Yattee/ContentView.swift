@@ -56,25 +56,6 @@ struct AdaptiveTabView: View {
     let appEnvironment: AppEnvironment
 
 
-    /// Whether to show the black overlay that covers scaled content when player is expanded
-    private var shouldShowExpandedOverlay: Bool {
-        let nav = appEnvironment.navigationCoordinator
-        // Show overlay only when:
-        // - Player window is actually visible (not just isPlayerExpanded intent)
-        // - Expand animation has completed (not animating)
-        // - Dismiss gesture is not active (so user can see scaled content during drag)
-        return nav.isPlayerWindowVisible && !nav.isPlayerSheetAnimating && !nav.isPlayerDismissGestureActive
-    }
-
-    /// Whether to show loading spinner while waiting for player window to appear
-    private var shouldShowExpandPendingSpinner: Bool {
-        let nav = appEnvironment.navigationCoordinator
-        // Show spinner when expand is requested but window isn't visible yet
-        // (a gesture dismiss hides the window before un-expanding — not pending)
-        return nav.isPlayerExpanded && !nav.isPlayerWindowVisible && !nav.isPlayerSheetAnimating
-            && !nav.isPlayerCollapsing && !nav.isPlayerMorphingToMini
-    }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             if !usesSidebar {
@@ -92,34 +73,17 @@ struct AdaptiveTabView: View {
                 miniPlayerOverlay
             }
 
-            // Black overlay when player is fully expanded
-            // Hides scaled content behind player sheet, removed during dismiss gesture for parallax effect
-            if shouldShowExpandedOverlay {
-                Color.black
-                    .ignoresSafeArea()
-                    .transaction { $0.animation = nil }
-            }
-
-            // Loading spinner when expand is pending but window not yet visible
-            // This handles the case when scene is transitioning (e.g., Control Center)
-            if shouldShowExpandPendingSpinner {
-                ZStack {
-                    Color.black.opacity(0.7)
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.2)
-                }
-                .ignoresSafeArea()
-                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
-            }
         }
-        .onChange(of: appEnvironment.navigationCoordinator.playerExpandTrigger) { _, _ in
-            presentExpandedPlayer()
-        }
-        .onChange(of: appEnvironment.navigationCoordinator.isPlayerExpanded) { _, isExpanded in
-            if !isExpanded {
-                ExpandedPlayerWindowManager.shared.hide()
-            }
+        .sheet(isPresented: Binding(
+            get: { appEnvironment.navigationCoordinator.isPlayerExpanded },
+            set: { appEnvironment.navigationCoordinator.isPlayerExpanded = $0 }
+        )) {
+            ExpandedPlayerSheet()
+                .appEnvironment(appEnvironment)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .onAppear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = true }
+                .onDisappear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = false }
         }
     }
 
@@ -157,11 +121,7 @@ struct AdaptiveTabView: View {
         }
     }
 
-    private func presentExpandedPlayer() {
-        let shouldAnimate = !appEnvironment.navigationCoordinator.skipNextPlayerExpandAnimation
-        appEnvironment.navigationCoordinator.skipNextPlayerExpandAnimation = false
-        ExpandedPlayerWindowManager.shared.show(with: appEnvironment, animated: shouldAnimate)
-    }
+
 }
 
 

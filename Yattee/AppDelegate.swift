@@ -83,7 +83,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         supportedInterfaceOrientationsFor window: UIWindow?
     ) -> UIInterfaceOrientationMask {
-        return OrientationManager.shared.supportedOrientations
+        return .allButUpsideDown
     }
 
     func application(

@@ -99,7 +99,7 @@ final class BackgroundDiagnostics {
 
         if let playerService {
             let state = playerService.state
-            lines.append("player: state=\(describe(state.playbackState)) pip=\(state.pipState)"
+            lines.append("player: state=\(describe(state.playbackState))"
                 + " backend=\(playerService.currentBackendType) video=\(state.currentVideo?.id.videoID ?? "none")"
                 + " time=\(Int(state.currentTime))/\(Int(state.duration))"
                 + " publishesTime=\(state.publishesTimeUpdates)")

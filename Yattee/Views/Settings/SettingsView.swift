@@ -99,12 +99,6 @@ struct SettingsView: View {
                         }
 
                         NavigationLink {
-                            PlayerControlsSettingsView()
-                        } label: {
-                            Label(String(localized: "settings.playerControls.title"), systemImage: "slider.horizontal.below.rectangle")
-                        }
-
-                        NavigationLink {
                             NotificationSettingsView()
                         } label: {
                             Label(String(localized: "settings.notifications.title"), systemImage: "bell.badge")

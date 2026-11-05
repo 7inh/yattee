@@ -198,7 +198,6 @@ struct YatteeApp: App {
 
             // Notify rotation manager - stops monitoring in background to prevent
             // fullscreen entry while app is not visible
-            DeviceRotationManager.shared.handleScenePhase(newPhase)
 
             // Handle pending notification navigation and warm cache when becoming active
             if newPhase == .active {
@@ -705,7 +704,7 @@ struct YatteeApp: App {
             // Always expand player after handoff (unless PiP is active)
             // We add a small delay to ensure ContentView has set up its .onChange observers
             // (during app launch via Handoff, the trigger can fire before the view is ready)
-            let isPiPActive = appEnvironment.playerService.state.pipState == .active
+            let isPiPActive = false
             LoggingService.shared.debug("[Handoff] isPiPActive: \(isPiPActive), isPlayerExpanded: \(appEnvironment.navigationCoordinator.isPlayerExpanded)", category: .general)
             if !isPiPActive {
                 // Small delay to ensure view hierarchy is ready to observe trigger changes

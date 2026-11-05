@@ -2,11 +2,12 @@
 //  OnTheGoPanel.swift
 //  Yattee
 //
-//  Large playback controls presented in a native sheet below the iPhone video.
+//  The full audio player, with album artwork and transport controls.
 //
 
 import Foundation
 import SwiftUI
+import NukeUI
 
 
 private let onTheGoAccent = Color.red
@@ -22,6 +23,7 @@ struct OnTheGoPanel: View {
     @GestureState private var scrubTime: TimeInterval? = nil
     @State private var pendingSeekTime: TimeInterval?
     @State private var transportFeedbackTrigger = false
+    @State private var showingDetails = false
 
     private enum Layout {
         static let smallSpacing: CGFloat = 8
@@ -63,6 +65,9 @@ struct OnTheGoPanel: View {
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
+            .sheet(isPresented: $showingDetails) {
+                detailsSheet
+            }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
             }
@@ -76,6 +81,8 @@ struct OnTheGoPanel: View {
                     // Share extra height across all four gaps. Compact detents
                     // keep the gaps small; shorter sheets and large text scroll.
                     Spacer(minLength: Layout.smallSpacing)
+                    artwork
+                        .padding(.vertical, 16)
                     videoInfo
                     Spacer(minLength: Layout.smallSpacing)
                     seekControls
@@ -84,7 +91,23 @@ struct OnTheGoPanel: View {
                     transportControls
                     Spacer(minLength: Layout.smallSpacing)
                     accessoryBar
+                    AirPlayButton(tintColor: .label)
+                        .frame(width: 44, height: 44)
+                        .frame(maxWidth: .infinity)
+                    if case .failed(let error) = state.playbackState {
+                        Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
+                        Button("Retry") { Task { await playerService.replayCurrentVideo() } }
+                    }
+                    if let segment = state.currentSegment {
+                        SponsorBlockOverlay(segment: segment) {
+                            await playerService.seek(to: segment.endTime)
+                        } onDismiss: {
+                            state.currentSegment = nil
+                        }
+                    }
                 }
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, Layout.mediumSpacing)
                 .padding(.vertical, Layout.smallSpacing)
                 .frame(minHeight: geometry.size.height, alignment: .top)
@@ -100,6 +123,14 @@ struct OnTheGoPanel: View {
             Text(String(localized: "player.onTheGo.title"))
                 .font(.headline.weight(.semibold))
             Spacer()
+            Button {
+                showingDetails = true
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title2)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Details")
             closeButton
                 .accessibilityLabel(String(localized: "player.onTheGo.close"))
         }
@@ -115,6 +146,58 @@ struct OnTheGoPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var artworkURLs: [URL] {
+        guard let video = state.currentVideo else { return [] }
+        let localURL: URL? = if let manager = appEnvironment?.downloadManager,
+                               let path = manager.download(for: video.id)?.localThumbnailPath {
+            manager.downloadsDirectory().appendingPathComponent(path)
+        } else { nil }
+        return [localURL, appEnvironment?.deArrowBrandingProvider.thumbnailURL(for: video)].compactMap { $0 }
+            + video.thumbnailURLsByQuality
+    }
+
+    private var artwork: some View {
+        Rectangle().fill(.quaternary)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+        FallbackLazyImage(urls: artworkURLs) { imageState in
+            if let image = imageState.image {
+                image.resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle().fill(.quaternary)
+                    .overlay { Image(systemName: "music.note").font(.system(size: 64)).foregroundStyle(.secondary) }
+            }
+        }
+        }
+        .frame(maxWidth: 300)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    private var detailsSheet: some View {
+        NavigationStack {
+            ScrollView {
+                if let video = state.currentVideo {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(video.title).font(.title2.bold())
+                        Button(video.author.name) {
+                            showingDetails = false
+                            appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+                        }
+                        Text(DescriptionText.attributed(video.description ?? "", linkColor: .red))
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                }
+            }
+            .navigationTitle("Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { sheetCloseToolbarItem { showingDetails = false } }
+        }
     }
 
     private var videoInfo: some View {
@@ -373,7 +456,7 @@ struct OnTheGoPanel: View {
                appEnvironment?.downloadManager.isDownloaded(video.id) != true,
                appEnvironment?.downloadManager.isDownloading(video.id) != true {
                 Button {
-                    presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, captions: playerService.availableCaptions, dislikeCount: state.dislikeCount))
+                    presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, dislikeCount: state.dislikeCount))
                 } label: {
                     accessoryLabel("arrow.down", caption: String(localized: "video.context.download"))
                 }

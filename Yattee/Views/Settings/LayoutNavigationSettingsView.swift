@@ -65,14 +65,13 @@ private struct CustomizationSection: View {
     @Bindable var settings: SettingsManager
 
     @Environment(\.appEnvironment) private var appEnvironment
-    @State private var hasHinge = HingeLayoutObserver.forceTabletop
     /// Style picked but not yet confirmed: switching rebuilds the navigation
     /// Settings lives in, so the user agrees to leaving it first.
     @State private var pendingNavigationStyle: NavigationStyle?
 
     /// iPad and foldable iPhones (inner screen): where the sidebar layout can appear.
     private var canUseSidebar: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad || hasHinge
+        UIDevice.current.userInterfaceIdiom == .pad
     }
 
     var body: some View {
@@ -126,7 +125,6 @@ private struct CustomizationSection: View {
             }
 
         }
-        .observeHinge(hasHinge: $hasHinge)
     }
 
     /// Lands on Home before the layout swap, so neither layout remaps the
@@ -212,24 +210,6 @@ private struct VideoActionsSection: View {
 
     var body: some View {
         SettingsFormSection("settings.videoActions.header") {
-            Picker(
-                String(localized: "settings.behavior.thumbnailTapAction"),
-                selection: $settings.thumbnailTapAction
-            ) {
-                ForEach(VideoTapAction.allCases, id: \.self) { action in
-                    Text(action.displayName).tag(action)
-                }
-            }
-
-            Picker(
-                String(localized: "settings.behavior.textAreaTapAction"),
-                selection: $settings.textAreaTapAction
-            ) {
-                ForEach(VideoTapAction.allCases, id: \.self) { action in
-                    Text(action.displayName).tag(action)
-                }
-            }
-
             NavigationLink {
                 SwipeActionsSettingsView()
             } label: {

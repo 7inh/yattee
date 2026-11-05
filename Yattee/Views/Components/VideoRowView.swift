@@ -47,11 +47,11 @@ struct VideoRowView: View {
     }
     
     private var thumbnailTapAction: VideoTapAction {
-        appEnvironment?.settingsManager.thumbnailTapAction ?? .playVideo
+        .playVideo
     }
     
     private var textAreaTapAction: VideoTapAction {
-        appEnvironment?.settingsManager.textAreaTapAction ?? .openInfo
+        .playVideo
     }
 
     private var accessibilityLabelText: String {

@@ -82,7 +82,6 @@ enum PlayerBackendType: String, CaseIterable, Codable, Sendable {
     var displayName: String { "AVFoundation" }
     var supportedFormats: Set<StreamFormat> { [.audioAAC, .audioMP3, .hls] }
     var supportsAirPlay: Bool { true }
-    var supportsPiP: Bool { false }
 }
 
 // MARK: - Backend Delegate
@@ -151,23 +150,6 @@ protocol PlayerBackend: AnyObject {
     /// Defer ready callbacks until the resume position is reached.
     func prepareForInitialSeek()
 
-    // MARK: - Background Playback
-
-    /// Handle scene phase changes for background playback.
-    /// PlayerService decides whether audio continues in the background.
-    /// - Parameters:
-    ///   - phase: The new scene phase
-    ///   - isPiPActive: Whether Picture-in-Picture is currently active
-    func handleScenePhase(_ phase: ScenePhase, isPiPActive: Bool)
-}
-
-// MARK: - Default Implementations
-
-extension PlayerBackend {
-    /// Default implementation does nothing.
-    func handleScenePhase(_ phase: ScenePhase, isPiPActive: Bool) {
-        // No-op by default
-    }
 }
 
 // MARK: - Backend Errors

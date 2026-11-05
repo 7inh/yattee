@@ -47,6 +47,7 @@ final class NowPlayingService {
         duration: TimeInterval,
         isPlaying: Bool
     ) {
+        if currentVideo?.id != video.id { artworkImage = nil }
         currentVideo = video
 
         // Use DeArrow title if available, otherwise use original title
@@ -168,6 +169,7 @@ final class NowPlayingService {
     ///   - url: Remote URL to fetch artwork from (used as fallback if localPath fails)
     ///   - localPath: Local file path for offline artwork (tried first if provided)
     func loadArtwork(from url: URL?, localPath: URL? = nil) async {
+        let videoID = currentVideo?.id
         // 1. Try local path first (for offline playback of downloaded videos)
         if let localPath {
             do {
@@ -198,6 +200,7 @@ final class NowPlayingService {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
 
+            guard currentVideo?.id == videoID else { return }
             artworkImage = UIImage(data: data)
 
             updateNowPlayingWithCurrentArtwork()
@@ -294,34 +297,7 @@ final class NowPlayingService {
         duration: SystemControlsSeekDuration? = nil
     ) {
 
-        // Remove existing targets to prevent duplicate handlers
-        disableAllRemoteCommands()
-
-        // If explicit values provided, use them directly (bypasses debounce)
-        if let mode, let duration {
-            configureRemoteCommandsWithSettings(mode: mode, duration: duration)
-            return
-        }
-
-        // Read settings from active preset's cached global settings
-        if let layoutService = playerControlsLayoutService {
-            Task {
-                let layout = await layoutService.activeLayout()
-                await MainActor.run {
-                    self.configureRemoteCommandsWithSettings(
-                        mode: layout.globalSettings.systemControlsMode,
-                        duration: layout.globalSettings.systemControlsSeekDuration
-                    )
-                }
-            }
-            // Return early - async task will call configureRemoteCommandsWithSettings
-            return
-        }
-        // Fallback to cached defaults if no layout service
-        let mode = GlobalLayoutSettings.cached.systemControlsMode
-        let duration = GlobalLayoutSettings.cached.systemControlsSeekDuration
-
-        configureRemoteCommandsWithSettings(mode: mode, duration: duration)
+        configureRemoteCommandsWithSettings(mode: .seek, duration: .tenSeconds)
     }
 
     /// Configures remote commands with the specified settings.
@@ -370,7 +346,7 @@ final class NowPlayingService {
         }
 
         // Configure skip commands based on mode
-        let seekEnabled = mode == .seek
+        let seekEnabled = true
         commandCenter.skipForwardCommand.isEnabled = seekEnabled
         commandCenter.skipBackwardCommand.isEnabled = seekEnabled
 

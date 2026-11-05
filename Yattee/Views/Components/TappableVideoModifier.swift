@@ -41,15 +41,7 @@ struct TappableVideoModifier: ViewModifier {
 
     /// Whether queue feature is enabled and something is playing or queued,
     /// so "Play Next" / "Add to Queue" are meaningful alternatives to replacing playback.
-    private var shouldShowQueueSheet: Bool {
-        guard let env = appEnvironment else { return false }
-        let queueEnabled = env.settingsManager.queueEnabled
-        let state = env.playerService.state
-        // A video that played to the end no longer counts: replacing it loses nothing.
-        let hasUnfinishedVideo = state.currentVideo != nil && state.playbackState != .ended
-        let hasActivePlayback = hasUnfinishedVideo || !state.queue.isEmpty
-        return queueEnabled && hasActivePlayback
-    }
+
 
     func body(content: Content) -> some View {
         Button {
@@ -116,8 +108,6 @@ struct TappableVideoModifier: ViewModifier {
            appEnvironment?.mediaSourcesManager.needsPassword(for: source) == true {
             sourceNeedingPassword = source
             showingPasswordAlert = true
-        } else if shouldShowQueueSheet {
-            presentAppSheet(.queueAction(video, queueSource: queueSource, queueContext: queueContext))
         } else {
             playVideoAndQueueRest()
         }
@@ -131,11 +121,7 @@ struct TappableVideoModifier: ViewModifier {
         sourceNeedingPassword = nil
         
         // Now check if we should show queue sheet or play directly
-        if shouldShowQueueSheet {
-            presentAppSheet(.queueAction(video, queueSource: queueSource, queueContext: queueContext))
-        } else {
-            playVideoAndQueueRest()
-        }
+        playVideoAndQueueRest()
     }
     
     /// Plays the tapped video and queues all subsequent videos from the list.

@@ -31,11 +31,11 @@ struct VideoCardView: View {
     private var metadataFont: Font { isCompact ? .caption2 : .caption }
     
     private var thumbnailTapAction: VideoTapAction {
-        appEnvironment?.settingsManager.thumbnailTapAction ?? .playVideo
+        .playVideo
     }
     
     private var textAreaTapAction: VideoTapAction {
-        appEnvironment?.settingsManager.textAreaTapAction ?? .openInfo
+        .playVideo
     }
 
     var body: some View {

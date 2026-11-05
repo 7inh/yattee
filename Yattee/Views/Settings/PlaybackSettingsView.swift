@@ -9,63 +9,19 @@ import SwiftUI
 
 struct PlaybackSettingsView: View {
     @Environment(\.appEnvironment) private var appEnvironment
-    @State private var hasHinge = HingeLayoutObserver.forceTabletop
 
     var body: some View {
         SettingsFormContainer {
             if let settings = appEnvironment?.settingsManager {
-                QualitySection(settings: settings)
                 AudioSection(settings: settings)
-                SubtitlesSection(settings: settings)
                 BehaviorSection(settings: settings)
                 QueueSection(settings: settings)
-                OrientationSection(settings: settings)
-                if hasHinge {
-                    FoldableSection(settings: settings)
-                }
             }
         }
         // Observed on the always-present form: an observer on the hidden
         // section itself would have no view to attach to and never fire.
-        .observeHinge(hasHinge: $hasHinge)
         .navigationTitle(String(localized: "settings.playback.title"))
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Quality Section
-
-private struct QualitySection: View {
-    @Bindable var settings: SettingsManager
-
-    var body: some View {
-        SettingsFormSection(
-            "settings.playback.video.header",
-            footer: "settings.playback.quality.allowSoftwareDecoded.footer"
-        ) {
-            PlatformMenuPicker(
-                String(localized: "settings.playback.quality.preferred"),
-                selection: $settings.preferredQuality
-            ) {
-                ForEach(VideoQuality.allCases, id: \.self) { quality in
-                    Text(quality.displayName).tag(quality)
-                }
-            }
-
-            Picker(
-                String(localized: "settings.playback.quality.cellular"),
-                selection: $settings.cellularQuality
-            ) {
-                ForEach(VideoQuality.allCases, id: \.self) { quality in
-                    Text(quality.displayName).tag(quality)
-                }
-            }
-
-            Toggle(
-                String(localized: "settings.playback.quality.allowSoftwareDecoded"),
-                isOn: $settings.allowSoftwareDecodedFormats
-            )
-        }
     }
 }
 
@@ -186,52 +142,6 @@ private struct AudioSection: View {
 
 // Volume and System Controls settings are in Player Controls settings
 
-// MARK: - Subtitles Section
-
-private struct SubtitlesSection: View {
-    @Bindable var settings: SettingsManager
-
-    // Same language codes as audio
-    private static let languageCodes = AudioSection.languageCodes
-
-    // Generate sorted list of (code, localizedName) tuples
-    private var sortedLanguages: [(code: String, name: String)] {
-        Self.languageCodes
-            .map { code in
-                let name = Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()
-                return (code: code, name: name)
-            }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    var body: some View {
-        SettingsFormSection("settings.playback.subtitles.header") {
-            Picker(
-                String(localized: "settings.playback.subtitles.preferredLanguage"),
-                selection: Binding(
-                    get: { settings.preferredSubtitlesLanguage ?? "" },
-                    set: { settings.preferredSubtitlesLanguage = $0.isEmpty ? nil : $0 }
-                )
-            ) {
-                Text(String(localized: "settings.playback.subtitles.off"))
-                    .tag("")
-
-                Divider()
-
-                ForEach(sortedLanguages, id: \.code) { language in
-                    Text(language.name).tag(language.code)
-                }
-            }
-
-            NavigationLink {
-                SubtitlesSettingsView()
-            } label: {
-                Label(String(localized: "settings.playback.subtitles.appearance"), systemImage: "textformat.size")
-            }
-        }
-    }
-}
-
 // MARK: - Behavior Section
 
 private struct BehaviorSection: View {
@@ -289,51 +199,6 @@ private struct QueueSection: View {
                 }
             }
             .disabled(!settings.queueEnabled)
-        }
-    }
-}
-
-// MARK: - Foldable Section (iOS)
-
-/// iPhone Duo only: options for the tabletop (laptop-like) player layout.
-private struct FoldableSection: View {
-    @Bindable var settings: SettingsManager
-
-    var body: some View {
-        SettingsFormSection(
-            "settings.playback.foldable.header",
-            footer: "settings.playback.foldable.tabletopReflection.footer"
-        ) {
-            Toggle(
-                String(localized: "settings.playback.foldable.tabletopReflection"),
-                isOn: $settings.tabletopReflection
-            )
-        }
-    }
-}
-
-// MARK: - Orientation Section (iOS)
-
-private struct OrientationSection: View {
-    @Bindable var settings: SettingsManager
-
-    private var isPhone: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
-    }
-
-    var body: some View {
-        SettingsFormSection("settings.playback.orientation.header") {
-            Toggle(
-                String(localized: "settings.playback.orientation.rotateToMatchAspectRatio"),
-                isOn: $settings.rotateToMatchAspectRatio
-            )
-
-            if isPhone {
-                Toggle(
-                    String(localized: "settings.playback.orientation.preferPortraitBrowsing"),
-                    isOn: $settings.preferPortraitBrowsing
-                )
-            }
         }
     }
 }

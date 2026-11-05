@@ -278,7 +278,7 @@ final class PerformanceMonitor: @unchecked Sendable {
             var player = "player \(state.playbackState)"
             if state.currentVideo != nil {
                 player += state.currentStream?.isAudioOnly == true ? " audio-only" : " video"
-                player += " pip=\(state.pipState)"
+                player += ""
                 player += " expanded=\(appEnvironment.navigationCoordinator.isPlayerExpanded)"
                 player += " publishesTime=\(state.publishesTimeUpdates)"
             }
