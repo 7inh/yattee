@@ -346,8 +346,8 @@ struct OnTheGoPanel: View {
     private var playPauseLabel: some View {
         if #available(iOS 26, *) {
             playPauseSymbol
-                .font(.system(size: 30, weight: .semibold))
-                .frame(width: 68, height: 68)
+                .font(.system(size: 36, weight: .bold))
+                .frame(width: 64, height: 64)
         } else {
             playPauseSymbol
                 .font(.system(size: 38, weight: .semibold))
