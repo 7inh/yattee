@@ -393,19 +393,9 @@ struct OnTheGoPanel: View {
 
     // MARK: - Accessories
 
-    @ViewBuilder
     private var accessoryBar: some View {
-        if #available(iOS 26, *) {
-            GlassEffectContainer {
-                accessoryControls
-                    .padding(.horizontal, Layout.smallSpacing)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-            }
-        } else {
-            accessoryControls
-                .padding(.horizontal, Layout.smallSpacing)
-                .background(Color(.secondarySystemBackground), in: Capsule())
-        }
+        accessoryControls
+            .padding(.horizontal, Layout.smallSpacing)
     }
 
     private var accessoryControls: some View {
@@ -416,7 +406,7 @@ struct OnTheGoPanel: View {
                     playerService.currentBackend?.rate = Float(rate.rawValue)
                 }
             } label: {
-                accessoryLabel("gauge.with.needle", caption: state.rate.compactDisplayText, isActive: state.rate != .x1)
+                accessoryLabel("gauge.with.needle", caption: state.rate.compactDisplayText, isActive: state.rate != .x1, showsCaptionInsteadOfIcon: state.rate != .x1)
             }
             .frame(maxWidth: .infinity)
             .menuIndicator(.hidden)
@@ -505,22 +495,21 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private func accessoryLabel(_ image: String, caption: String, isActive: Bool = false, iconColor: Color = .primary) -> some View {
-        VStack(spacing: Layout.smallSpacing) {
-            Image(systemName: image)
-                .symbolVariant(.none)
-                .font(.system(size: 25, weight: .regular))
-                .foregroundStyle(isActive ? onTheGoAccent : iconColor)
-                .frame(height: 28)
-
-            Text(verbatim: caption)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(isActive ? onTheGoAccent : .secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+    private func accessoryLabel(_ image: String, caption: String, isActive: Bool = false, iconColor: Color = .primary, showsCaptionInsteadOfIcon: Bool = false) -> some View {
+        Group {
+            if showsCaptionInsteadOfIcon {
+                Text(verbatim: caption)
+                    .font(.system(size: 19, weight: .semibold).monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            } else {
+                Image(systemName: image)
+                    .symbolVariant(.none)
+                    .font(.system(size: 25, weight: .regular))
+            }
         }
-        .padding(.vertical, Layout.smallSpacing)
-        .frame(maxWidth: .infinity, minHeight: 64)
+        .foregroundStyle(isActive ? onTheGoAccent : iconColor)
+        .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
     }
 }
