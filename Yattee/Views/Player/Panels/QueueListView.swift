@@ -6,6 +6,7 @@
 //  management sheet, with playback actions reusable by the tvOS queue panel.
 //
 
+import Foundation
 import SwiftUI
 
 // MARK: - Playback Actions
@@ -159,7 +160,6 @@ struct QueueListView: View {
                         ForEach(Array(history.enumerated()), id: \.element.id) { index, historyItem in
                             QueueItemRow(
                                 queuedVideo: historyItem,
-                                index: nil,  // History items don't show numbers
                                 isCurrentlyPlaying: false,
                                 onRemove: { },
                                 onTap: {
@@ -169,13 +169,7 @@ struct QueueListView: View {
                             )
                         }
                     } header: {
-                        HStack {
-                            Text(String(localized: "queue.section.previously"))
-                            Spacer()
-                            Text(String(localized: "queue.section.count \(history.count)"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        sectionHeader("queue.section.previously", count: history.count)
                     }
                 }
 
@@ -190,13 +184,12 @@ struct QueueListView: View {
                         )
                         QueueItemRow(
                             queuedVideo: nowPlayingItem,
-                            index: nil,  // Now playing shows waveform, not a number
                             isCurrentlyPlaying: true,
                             onRemove: { },
                             onTap: { }
                         )
                     } header: {
-                        Text(String(localized: "queue.section.nowPlaying"))
+                        sectionHeader("queue.section.nowPlaying")
                     }
                     .id("now-playing")
                 }
@@ -207,7 +200,6 @@ struct QueueListView: View {
                         ForEach(Array(queue.enumerated()), id: \.element.id) { index, queuedVideo in
                             QueueItemRow(
                                 queuedVideo: queuedVideo,
-                                index: index + 1, // +1 because "Now Playing" is shown as position 1
                                 isCurrentlyPlaying: false,
                                 onRemove: {
                                     withAnimation {
@@ -248,13 +240,7 @@ struct QueueListView: View {
                             .listRowBackground(Color.clear)
                         }
                     } header: {
-                        HStack {
-                            Text(String(localized: "queue.section.upNext"))
-                            Spacer()
-                            Text(String(localized: "queue.section.count \(queue.count)"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        sectionHeader("queue.section.upNext", count: queue.count)
                     }
                     .id("up-next")
                 }
@@ -264,6 +250,8 @@ struct QueueListView: View {
             }, else: { view in
                 view.listStyle(.insetGrouped)
             })
+            .listSectionSpacing(12)
+            .environment(\.defaultMinListRowHeight, 48)
             .onAppear {
                 // Scroll past history to the now playing section, or to the
                 // queue when that is hidden (no animation for instant positioning)
@@ -276,5 +264,19 @@ struct QueueListView: View {
                 }
             }
         }
+    }
+
+    private func sectionHeader(_ title: LocalizedStringResource, count: Int? = nil) -> some View {
+        HStack {
+            Text(String(localized: title))
+            Spacer()
+            if let count {
+                Text(String(localized: "queue.section.count \(count)"))
+                    .fontWeight(.regular)
+            }
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .textCase(nil)
     }
 }

@@ -2,71 +2,58 @@
 //  QueueItemRow.swift
 //  Yattee
 //
-//  A row displaying a queued video with drag handle and remove action.
+//  Compact queue row with playback status and swipe-to-remove action.
 //
 
+import Foundation
 import SwiftUI
 
 struct QueueItemRow: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
     let queuedVideo: QueuedVideo
-    /// Position in queue (nil hides the number, used for history items)
-    let index: Int?
     let isCurrentlyPlaying: Bool
     let onRemove: () -> Void
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Index number or playing indicator
-                Group {
-                    if isCurrentlyPlaying {
-                        Image(systemName: "waveform")
-                            .font(.caption)
-                            .foregroundStyle(.tint)
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
-                    } else if let index {
-                        Text("\(index)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        // No index - show empty space (for history items)
-                        Color.clear
-                    }
-                }
-                .frame(width: 24)
-
-                // Thumbnail
+            HStack(spacing: 10) {
                 DeArrowVideoThumbnail(
                     video: queuedVideo.video,
-                    cornerRadius: 6,
-                    duration: queuedVideo.video.formattedDuration
+                    cornerRadius: 6
                 )
-                .frame(width: 80, height: 45)
-                .opacity(isCurrentlyPlaying ? 0.6 : 1.0)
+                .frame(width: 64, height: 36)
+                .accessibilityHidden(true)
 
-                // Video info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(queuedVideo.video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .lineLimit(2)
-                        .foregroundStyle(isCurrentlyPlaying ? .secondary : .primary)
+                        .lineLimit(1)
+                        .foregroundStyle(isCurrentlyPlaying ? Color.red : Color.primary)
 
-                    Text(queuedVideo.video.author.name)
+                    Text(verbatim: "\(queuedVideo.video.author.name) · \(queuedVideo.video.formattedDuration)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
+                if isCurrentlyPlaying {
+                    Image(systemName: "waveform")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                        .accessibilityLabel(String(localized: "queue.section.nowPlaying"))
+                }
             }
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onRemove()
@@ -74,6 +61,5 @@ struct QueueItemRow: View {
                 Label(String(localized: "queue.item.remove"), systemImage: "trash")
             }
         }
-        .opacity(isCurrentlyPlaying ? 0.8 : 1.0)
     }
 }

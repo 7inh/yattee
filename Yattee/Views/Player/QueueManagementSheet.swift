@@ -5,6 +5,7 @@
 //  Sheet for managing the player queue with reorder and remove capabilities.
 //
 
+import Foundation
 import SwiftUI
 
 struct QueueManagementSheet: View {
@@ -51,7 +52,9 @@ struct QueueManagementSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     queueModeMenu
                 }
-                sheetCloseToolbarItem { performDismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    closeButton
+                }
             }
         }
         .presentationDragIndicator(.visible)
@@ -59,6 +62,21 @@ struct QueueManagementSheet: View {
     }
 
     // MARK: - Views
+
+    @ViewBuilder
+    private var closeButton: some View {
+        let button = Button(role: .cancel, action: performDismiss) {
+            Label(String(localized: "common.close"), systemImage: "xmark")
+                .labelStyle(.iconOnly)
+        }
+        if #available(iOS 26, *) {
+            button
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+        } else {
+            button
+        }
+    }
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
