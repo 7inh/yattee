@@ -82,7 +82,6 @@ struct ManageChannelsView: View {
         }
     }
 
-
     // Grid layout configuration
     @State private var viewWidth: CGFloat = 0
     private var gridConfig: GridLayoutConfiguration {
@@ -92,14 +91,9 @@ struct ManageChannelsView: View {
     private var dataManager: DataManager? { appEnvironment?.dataManager }
     private var subscriptionService: SubscriptionService? { appEnvironment?.subscriptionService }
     private var toastManager: ToastManager? { appEnvironment?.toastManager }
-    private var yatteeServer: Instance? {
-        appEnvironment?.instancesManager.enabledYatteeServerInstances.first
-    }
-    private var yatteeServerURL: URL? { yatteeServer?.url }
-    private var yatteeServerAuthHeader: String? {
-        guard let server = yatteeServer else { return nil }
-        return appEnvironment?.basicAuthCredentialsManager.basicAuthHeader(for: server)
-    }
+    private var yatteeServer: Instance? { nil }
+    private var yatteeServerURL: URL? { nil }
+    private var yatteeServerAuthHeader: String? { nil }
 
     /// Channels filtered by search query and sorted by selected order.
     private var filteredChannels: [Channel] {
@@ -219,7 +213,6 @@ struct ManageChannelsView: View {
             channelsView
         }
     }
-
 
     @ViewBuilder
     private var channelsView: some View {
@@ -402,48 +395,7 @@ struct ManageChannelsView: View {
     /// Fetches subscriber counts for channels that don't have them cached.
     /// Uses Yattee Server's cached metadata endpoint (no YouTube API calls).
     private func fetchMissingSubscriberCounts() async {
-        guard let appEnvironment,
-              let yatteeServer = appEnvironment.instancesManager.enabledYatteeServerInstances.first else {
-            return
-        }
-
-        // Find channels missing subscriber counts
-        let channelsNeedingCounts = channels.filter { $0.subscriberCount == nil }
-        guard !channelsNeedingCounts.isEmpty else { return }
-
-        let channelIDs = channelsNeedingCounts.compactMap { $0.id.channelID }
-        guard !channelIDs.isEmpty else { return }
-
-        do {
-            let httpClient = HTTPClient()
-            if let authHeader = appEnvironment.basicAuthCredentialsManager.basicAuthHeader(for: yatteeServer) {
-                await httpClient.setDefaultHeaders(["Authorization": authHeader])
-            }
-            let api = YatteeServerAPI(httpClient: httpClient)
-            let response = try await api.channelsMetadata(channelIDs: channelIDs, instance: yatteeServer)
-
-            // Update subscriptions in SwiftData
-            for metadata in response.channels {
-                if let count = metadata.subscriberCount {
-                    appEnvironment.dataManager.updateSubscriberCount(
-                        for: metadata.channelId,
-                        count: count,
-                        isVerified: metadata.isVerifiedBool
-                    )
-                }
-            }
-
-            // Refresh channels from the service to pick up updated counts
-            if let syncChannels = subscriptionService?.fetchSubscriptionsSync() {
-                channels = syncChannels
-            }
-        } catch {
-            // Silently fail - subscriber counts are optional enhancement
-            LoggingService.shared.debug(
-                "Failed to fetch subscriber counts: \(error.localizedDescription)",
-                category: .general
-            )
-        }
+        return
     }
 
     private func unsubscribe(from channel: Channel) {

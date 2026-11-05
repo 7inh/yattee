@@ -744,35 +744,6 @@ struct DataTests {
             #expect(entry.toVideo().isLive)
         }
 
-        @Test("Piped live sentinel duration never reaches storage")
-        @MainActor
-        func liveStreamNegativeDurationSentinel() async throws {
-            let manager = try DataManager(inMemory: true)
-
-            // Piped encodes "live" as duration == -1 and passes it straight into Video
-            let live = Video(
-                id: .global("liveStream2"),
-                title: "Piped Live",
-                description: nil,
-                author: Author(id: "ch1", name: "Channel"),
-                duration: -1,
-                publishedAt: nil,
-                publishedText: nil,
-                viewCount: nil,
-                likeCount: nil,
-                thumbnails: [],
-                isLive: true,
-                isUpcoming: false,
-                scheduledStartTime: nil
-            )
-
-            manager.updateWatchProgressLocal(for: live, seconds: 120, duration: 120)
-
-            let entry = try #require(manager.watchEntry(for: "liveStream2"))
-            #expect(entry.duration == 0)
-            #expect(entry.remainingTime == "0:00")
-        }
-
         @Test("Entry heals once a former live stream becomes a VOD")
         @MainActor
         func liveEntryBecomesVOD() async throws {

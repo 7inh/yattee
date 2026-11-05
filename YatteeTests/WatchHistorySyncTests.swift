@@ -370,18 +370,6 @@ struct WatchHistorySyncTests {
         #expect(await harness.transport.callCount == 0)
     }
 
-    @Test("A backend without a history endpoint is never posted to")
-    func anAccountWithoutHistorySupportIsNeverPosted() async throws {
-        let harness = WatchHistorySyncHarness(type: .piped)
-        defer { harness.tearDown() }
-
-        harness.service.beginSession(video: makeVideo("aaa"))
-        harness.service.recordProgress(videoID: "aaa")
-        try await harness.transport.settle()
-
-        #expect(await harness.transport.callCount == 0)
-    }
-
     @Test("A context that is only falling back to local is not mirrored either")
     func anUnavailableContextIsNeverPosted() async throws {
         let harness = WatchHistorySyncHarness()

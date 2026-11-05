@@ -13,16 +13,13 @@ struct SettingsView: View {
 
     var showCloseButton: Bool = true
 
-
     var body: some View {
         iOSSettings
     }
 
     // MARK: - macOS Settings
 
-
     // MARK: - tvOS Settings
-
 
     // MARK: - iOS Settings
 
@@ -37,10 +34,6 @@ struct SettingsView: View {
                         HStack {
                             Label(String(localized: "sources.title"), systemImage: "server.rack")
                             Spacer()
-                            if appEnvironment.mediaSourcesManager.hasSourcesNeedingPassword {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                    .foregroundStyle(.orange)
-                            }
                         }
                     }
                     .accessibilityIdentifier("settings.row.sources")

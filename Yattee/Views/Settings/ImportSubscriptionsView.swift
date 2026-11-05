@@ -442,7 +442,7 @@ struct ImportSubscriptionsView: View {
 #Preview("Piped") {
     NavigationStack {
         ImportSubscriptionsView(
-            instance: Instance(type: .piped, url: URL(string: "https://piped.example.com")!)
+            instance: Instance(type: .invidious, url: URL(string: "https://piped.example.com")!)
         )
         .appEnvironment(.preview)
     }

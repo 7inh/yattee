@@ -15,7 +15,6 @@ struct DownloadSettingsView: View {
             if let downloadSettings = appEnvironment?.downloadSettings,
                let downloadManager = appEnvironment?.downloadManager {
                 StorageSection(downloadManager: downloadManager)
-                QualitySection(downloadSettings: downloadSettings)
                 ConcurrencySection(downloadSettings: downloadSettings)
                 CellularSection(
                     downloadSettings: downloadSettings,
@@ -54,38 +53,6 @@ private struct StorageSection: View {
                     Text(formatBytes(storageUsed))
                         .foregroundStyle(.secondary)
                 }
-            }
-        }
-    }
-}
-
-// MARK: - Quality Section
-
-private struct QualitySection: View {
-    @Bindable var downloadSettings: DownloadSettings
-
-    var body: some View {
-        SettingsFormSection("settings.downloads.quality.header") {
-            Picker(
-                String(localized: "settings.downloads.preferredQuality"),
-                selection: $downloadSettings.preferredDownloadQuality
-            ) {
-                ForEach(DownloadQuality.allCases, id: \.self) { quality in
-                    Text(quality.displayName).tag(quality)
-                }
-            }
-
-            if downloadSettings.preferredDownloadQuality != .ask {
-                Toggle(
-                    String(localized: "settings.downloads.includeSubtitles"),
-                    isOn: $downloadSettings.includeSubtitlesInAutoDownload
-                )
-            }
-        } footer: {
-            if downloadSettings.preferredDownloadQuality == .ask {
-                Text(String(localized: "settings.downloads.quality.ask.footer"))
-            } else {
-                Text(String(localized: "settings.downloads.quality.auto.footer"))
             }
         }
     }

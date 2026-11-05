@@ -113,7 +113,6 @@ struct SubscriptionsView: View {
         }
     }
 
-
     /// The feed error worth showing, if any — the banner takes over only for
     /// the errors it is already the answer to.
     private var displayedFeedError: FeedLoadState.FeedLoadError? {
@@ -162,14 +161,9 @@ struct SubscriptionsView: View {
     private var dataManager: DataManager? { appEnvironment?.dataManager }
     private var subscriptionService: SubscriptionService? { appEnvironment?.subscriptionService }
     private var accentColor: Color { appEnvironment?.settingsManager.resolvedAccentColor ?? .accentColor }
-    private var yatteeServer: Instance? {
-        appEnvironment?.instancesManager.enabledYatteeServerInstances.first
-    }
-    private var yatteeServerURL: URL? { yatteeServer?.url }
-    private var yatteeServerAuthHeader: String? {
-        guard let server = yatteeServer else { return nil }
-        return appEnvironment?.basicAuthCredentialsManager.basicAuthHeader(for: server)
-    }
+    private var yatteeServer: Instance? { nil }
+    private var yatteeServerURL: URL? { nil }
+    private var yatteeServerAuthHeader: String? { nil }
 
     /// Generates a unique ID based on instances configuration.
     private var instanceConfigurationID: String {
@@ -177,7 +171,6 @@ struct SubscriptionsView: View {
             return "none"
         }
         return instances
-            .filter { $0.type == .yatteeServer }
             .map { "\($0.id):\($0.isEnabled)" }
             .joined(separator: "|")
     }
@@ -270,8 +263,8 @@ struct SubscriptionsView: View {
     /// Converts feed error to localized message.
     private func errorMessage(for error: FeedLoadState.FeedLoadError) -> String {
         switch error {
-        case .yatteeServerRequired:
-            return String(localized: "subscriptions.error.yatteeServerRequired")
+        case .invidiousRequired:
+            return String(localized: "Add an Invidious instance in Settings to load subscriptions.")
         case .notAuthenticated:
             return String(localized: "subscriptions.error.notAuthenticated")
         case .networkError(let message):
@@ -466,7 +459,7 @@ struct SubscriptionsView: View {
                     await feedCache.loadFromDiskIfNeeded()
 
                     let hasYatteeServer = appEnvironment?.instancesManager.instances.contains {
-                        $0.type == .yatteeServer && $0.isEnabled
+                        $0.isEnabled
                     } ?? false
 
                     let cacheValid = feedCache.isCacheValid(using: appEnvironment?.settingsManager)
@@ -476,7 +469,7 @@ struct SubscriptionsView: View {
                     )
 
                     if hasYatteeServer {
-                        LoggingService.shared.info("Yattee Server detected, forcing feed refresh", category: .general)
+                        LoggingService.shared.info("Invidious instance changed, refreshing subscriptions", category: .general)
                         await loadFeed(forceRefresh: true)
                     } else if !cacheValid && !feedCache.isLoading {
                         LoggingService.shared.info("Cache invalid and not loading, refreshing feed", category: .general)
@@ -578,8 +571,8 @@ struct SubscriptionsView: View {
         if let feedError = displayedFeedError, feedCache.videos.isEmpty {
             // Show specific error states
             switch feedError {
-            case .yatteeServerRequired:
-                yatteeServerRequiredView
+            case .invidiousRequired:
+                invidiousRequiredView
             case .notAuthenticated:
                 notAuthenticatedView
             case .networkError(let message):
@@ -664,8 +657,8 @@ struct SubscriptionsView: View {
                 if let feedError = displayedFeedError, feedCache.videos.isEmpty {
                     // Show specific error states
                     switch feedError {
-                    case .yatteeServerRequired:
-                        yatteeServerRequiredView
+                    case .invidiousRequired:
+                        invidiousRequiredView
                     case .notAuthenticated:
                         notAuthenticatedView
                     case .networkError(let message):
@@ -786,7 +779,6 @@ struct SubscriptionsView: View {
 
     // MARK: - tvOS Channels Sidebar
 
-
     // MARK: - Channels Sidebar (macOS / iPad)
 
     private static let sidebarAllChannelsTag = "__all__"
@@ -845,7 +837,6 @@ struct SubscriptionsView: View {
             }
         }
     }
-
 
     private var isSidebarVisible: Bool {
         return channelSidebarFits && showSidebar && subscriptionsLoaded && subscriptions.count > 1
@@ -1197,11 +1188,11 @@ struct SubscriptionsView: View {
     }
 
     /// Empty state shown when Yattee Server is required but not configured.
-    private var yatteeServerRequiredView: some View {
+    private var invidiousRequiredView: some View {
         ContentUnavailableView {
-            Label(String(localized: "subscriptions.yatteeServerRequired.title"), systemImage: "server.rack")
+            Label(String(localized: "Invidious instance required"), systemImage: "server.rack")
         } description: {
-            Text(String(localized: "subscriptions.yatteeServerRequired.description"))
+            Text(String(localized: "Add an Invidious instance in Settings to load subscriptions."))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 40)

@@ -12,109 +12,12 @@ extension DataManager {
     // MARK: - Media Source Cleanup
 
     /// Removes all watch history entries for videos from a specific media source.
-    func removeHistoryForMediaSource(sourceID: UUID) {
-        let prefix = sourceID.uuidString + ":"
-        let descriptor = FetchDescriptor<WatchEntry>()
-
-        do {
-            let allEntries = try modelContext.fetch(descriptor)
-            let toDelete = allEntries.filter { $0.videoID.hasPrefix(prefix) }
-            guard !toDelete.isEmpty else { return }
-
-            // Capture IDs and scopes before deleting
-            let deleteInfo: [(videoID: String, scope: SourceScope)] = toDelete.map { entry in
-                (entry.videoID, SourceScope.from(
-                    sourceRawValue: entry.sourceRawValue,
-                    globalProvider: entry.globalProvider,
-                    instanceURLString: entry.instanceURLString,
-                    externalExtractor: entry.externalExtractor
-                ))
-            }
-
-            toDelete.forEach { modelContext.delete($0) }
-            save()
-
-            // Queue CloudKit deletions
-            for info in deleteInfo {
-                cloudKitSync?.queueWatchEntryDelete(videoID: info.videoID, scope: info.scope)
-            }
-
-            NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
-            LoggingService.shared.debug("Removed \(toDelete.count) history entries for media source \(sourceID)", category: .general)
-        } catch {
-            LoggingService.shared.logCloudKitError("Failed to remove history for media source", error: error)
-        }
-    }
 
     /// Removes all bookmarks for videos from a specific media source.
-    func removeBookmarksForMediaSource(sourceID: UUID) {
-        let prefix = sourceID.uuidString + ":"
-        let descriptor = FetchDescriptor<Bookmark>()
-
-        do {
-            let allBookmarks = try modelContext.fetch(descriptor)
-            let toDelete = allBookmarks.filter { $0.videoID.hasPrefix(prefix) }
-            guard !toDelete.isEmpty else { return }
-
-            // Capture IDs and scopes before deleting
-            let deleteInfo: [(videoID: String, scope: SourceScope)] = toDelete.map { bookmark in
-                (bookmark.videoID, SourceScope.from(
-                    sourceRawValue: bookmark.sourceRawValue,
-                    globalProvider: bookmark.globalProvider,
-                    instanceURLString: bookmark.instanceURLString,
-                    externalExtractor: bookmark.externalExtractor
-                ))
-            }
-
-            toDelete.forEach { modelContext.delete($0) }
-            save()
-
-            // Queue CloudKit deletions
-            for info in deleteInfo {
-                cloudKitSync?.queueBookmarkDelete(videoID: info.videoID, scope: info.scope)
-            }
-
-            NotificationCenter.default.post(name: .bookmarksDidChange, object: nil)
-            LoggingService.shared.debug("Removed \(toDelete.count) bookmarks for media source \(sourceID)", category: .general)
-        } catch {
-            LoggingService.shared.logCloudKitError("Failed to remove bookmarks for media source", error: error)
-        }
-    }
 
     /// Removes all playlist items for videos from a specific media source.
-    func removePlaylistItemsForMediaSource(sourceID: UUID) {
-        let prefix = sourceID.uuidString + ":"
-        let descriptor = FetchDescriptor<LocalPlaylistItem>()
-
-        do {
-            let allItems = try modelContext.fetch(descriptor)
-            let toDelete = allItems.filter { $0.videoID.hasPrefix(prefix) }
-            guard !toDelete.isEmpty else { return }
-
-            // Capture IDs before deleting
-            let itemIDs = toDelete.map { $0.id }
-
-            toDelete.forEach { modelContext.delete($0) }
-            save()
-
-            // Queue CloudKit deletions
-            for itemID in itemIDs {
-                cloudKitSync?.queuePlaylistItemDelete(itemID: itemID)
-            }
-
-            NotificationCenter.default.post(name: .playlistsDidChange, object: nil)
-            LoggingService.shared.debug("Removed \(toDelete.count) playlist items for media source \(sourceID)", category: .general)
-        } catch {
-            LoggingService.shared.logCloudKitError("Failed to remove playlist items for media source", error: error)
-        }
-    }
 
     /// Removes all data associated with a media source (history, bookmarks, playlist items).
-    func removeAllDataForMediaSource(sourceID: UUID) {
-        removeHistoryForMediaSource(sourceID: sourceID)
-        removeBookmarksForMediaSource(sourceID: sourceID)
-        removePlaylistItemsForMediaSource(sourceID: sourceID)
-    }
 
     // MARK: - Deduplication
 

@@ -52,8 +52,6 @@ final class HandoffManager {
         case bookmarks
         case playlists
         case channels  // Subscribed channels list
-        case externalVideo
-        case externalChannel
         case instanceBrowse
     }
 
@@ -184,19 +182,6 @@ final class HandoffManager {
             userInfo[UserInfoKey.searchQuery] = query
             activity.title = "Search: \(query)"
 
-        case .externalVideo(let url):
-            userInfo[UserInfoKey.destinationType] = DestinationType.externalVideo.rawValue
-            userInfo[UserInfoKey.externalURL] = url.absoluteString
-            if let time = playerState?.currentTime, time > 0 {
-                userInfo[UserInfoKey.playbackTime] = time
-            }
-            activity.title = "External Video"
-
-        case .externalChannel(let url):
-            userInfo[UserInfoKey.destinationType] = DestinationType.externalChannel.rawValue
-            userInfo[UserInfoKey.externalURL] = url.absoluteString
-            activity.title = "External Channel"
-
         case .subscriptionsFeed:
             userInfo[UserInfoKey.destinationType] = DestinationType.subscriptions.rawValue
             activity.title = "Subscriptions"
@@ -232,8 +217,8 @@ final class HandoffManager {
             activity.title = instance.displayName
 
         // Don't create handoff activities for these local-only destinations
-        case .settings, .mediaSources, .mediaSource, .mediaBrowser,
-             .importSubscriptions, .importPlaylists, .downloadsStorage, .directMedia, .openedLinks:
+        case .settings, .mediaSources,
+             .importSubscriptions, .importPlaylists, .downloadsStorage, .openedLinks:
             return false
         }
 
@@ -335,16 +320,6 @@ final class HandoffManager {
         case .search:
             guard let query = userInfo[UserInfoKey.searchQuery] as? String else { return nil }
             return (.search(query), nil)
-
-        case .externalVideo:
-            guard let urlString = userInfo[UserInfoKey.externalURL] as? String,
-                  let url = URL(string: urlString) else { return nil }
-            return (.externalVideo(url), playbackTime)
-
-        case .externalChannel:
-            guard let urlString = userInfo[UserInfoKey.externalURL] as? String,
-                  let url = URL(string: urlString) else { return nil }
-            return (.externalChannel(url), nil)
 
         case .subscriptions:
             return (.subscriptionsFeed, nil)

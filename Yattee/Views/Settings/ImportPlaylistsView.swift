@@ -580,7 +580,7 @@ struct ImportPlaylistsView: View {
 #Preview("Piped") {
     NavigationStack {
         ImportPlaylistsView(
-            instance: Instance(type: .piped, url: URL(string: "https://piped.example.com")!)
+            instance: Instance(type: .invidious, url: URL(string: "https://piped.example.com")!)
         )
         .appEnvironment(.preview)
     }

@@ -7,6 +7,5 @@
 
 #ifndef Yattee_Bridging_Header_h
 #define Yattee_Bridging_Header_h
-#import "SMBBridge.h"
 #import "ObjCExceptionHandler.h"
 #endif /* Yattee_Bridging_Header_h */

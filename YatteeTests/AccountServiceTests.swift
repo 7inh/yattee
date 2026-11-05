@@ -352,9 +352,7 @@ private func makeSnapshot(
     let videos = videoIDs.map(makeVideo)
     let entries = videos.enumerated().map { offset, video in
         RemotePlaylistEntry(
-            id: kind == .invidious
-                ? .invidious(playlistID: playlistID, indexID: "TOKEN-\(video.id.videoID)")
-                : .piped(playlistID: playlistID, position: offset),
+            id: .invidious(playlistID: playlistID, indexID: "TOKEN-\(video.id.videoID)"),
             video: video,
             position: offset,
             displayRow: offset
@@ -373,35 +371,6 @@ private func makeSnapshot(
 @MainActor
 struct AccountServiceTests {
     // MARK: - Capability gating
-
-    @Test("A backend without playlist support is refused before anything is sent")
-    func unsupportedBackendIsRefused() async throws {
-        let harness = AccountServiceHarness(type: .peertube)
-        defer { harness.tearDown() }
-
-        await #expect(throws: AccountServiceError.notSupported) {
-            _ = try await harness.service.userPlaylists(for: harness.account)
-        }
-
-        #expect(await harness.transport.callCount == 0)
-    }
-
-    @Test("A backend without playlist privacy never receives one")
-    func privacyIsDroppedWhereUnsupported() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-
-        _ = try await harness.service.createPlaylist(
-            title: "Watch later",
-            description: nil,
-            privacy: .private,
-            for: harness.account
-        )
-
-        #expect(await harness.transport.calls == [
-            .create(title: "Watch later", privacy: nil, credential: "secret-original")
-        ])
-    }
 
     @Test("A backend with playlist privacy receives the one that was asked for")
     func privacyIsPassedWhereSupported() async throws {
@@ -456,36 +425,6 @@ struct AccountServiceTests {
 
         #expect(await harness.transport.calls == [
             .create(title: "Watch later", privacy: .private, credential: "secret-original")
-        ])
-    }
-
-    @Test("An edit sends the description only after rechecking the credential")
-    func editRechecksBetweenRenameAndDescription() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        await harness.transport.holdCalls()
-
-        let edit = Task { [service = harness.service!, account = harness.account] in
-            try await service.updatePlaylist(
-                id: "pl",
-                title: "Renamed",
-                description: "New description",
-                privacy: nil,
-                for: account
-            )
-        }
-
-        try await harness.transport.waitForCalls(1)
-        harness.credential = "secret-somebody-else"
-        await harness.transport.release()
-
-        await #expect(throws: AccountServiceError.notAuthenticated) {
-            try await edit.value
-        }
-
-        // The rename landed under the old login; the description never went.
-        #expect(await harness.transport.calls == [
-            .rename(id: "pl", title: "Renamed", privacy: nil, credential: "secret-original")
         ])
     }
 
@@ -625,68 +564,7 @@ struct AccountServiceTests {
         ])
     }
 
-    @Test("Piped removes by position once the position still holds the same video")
-    func pipedRemovesAfterVerifying() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        let snapshot = makeSnapshot(playlistID: "pl", videoIDs: ["aaa", "bbb"], kind: .piped)
-        await harness.transport.setSnapshot(snapshot)
-
-        try await harness.service.removeEntry(
-            snapshot.entries[1],
-            fromPlaylist: "pl",
-            for: harness.account
-        )
-
-        #expect(await harness.transport.calls == [
-            .snapshot(id: "pl", credential: "secret-original"),
-            .remove(entryID: .piped(playlistID: "pl", position: 1), credential: "secret-original")
-        ])
-    }
-
-    @Test("Piped removes nothing when the position now holds a different video")
-    func pipedRefusesToRemoveAMovedRow() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        let stale = makeSnapshot(playlistID: "pl", videoIDs: ["aaa", "bbb"], kind: .piped)
-        // The row above was removed elsewhere, so position 1 is now a different
-        // video entirely — removing by that position would delete the wrong one.
-        await harness.transport.setSnapshot(makeSnapshot(playlistID: "pl", videoIDs: ["bbb", "ccc"], kind: .piped))
-
-        await #expect(throws: AccountServiceError.entryMismatch) {
-            try await harness.service.removeEntry(stale.entries[1], fromPlaylist: "pl", for: harness.account)
-        }
-
-        #expect(await harness.transport.calls == [.snapshot(id: "pl", credential: "secret-original")])
-    }
-
     // MARK: - Credential recheck before a write
-
-    @Test("A credential replaced during the Piped verify step sends no removal")
-    func pipedRemovalStopsWhenTheCredentialChangesMidVerify() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        let snapshot = makeSnapshot(playlistID: "pl", videoIDs: ["aaa", "bbb"], kind: .piped)
-        await harness.transport.setSnapshot(snapshot)
-        await harness.transport.holdCalls()
-
-        let removal = Task { [service = harness.service!, account = harness.account] in
-            try await service.removeEntry(snapshot.entries[1], fromPlaylist: "pl", for: account)
-        }
-
-        // The verify fetch is out. Somebody signs out and back in as another
-        // user before it answers.
-        try await harness.transport.waitForCalls(1)
-        harness.credential = "secret-somebody-else"
-        await harness.transport.release()
-
-        await #expect(throws: AccountServiceError.notAuthenticated) {
-            try await removal.value
-        }
-
-        // The verify happened; the removal never did.
-        #expect(await harness.transport.calls == [.snapshot(id: "pl", credential: "secret-original")])
-    }
 
     @Test("A mutation whose credential changed since it was resolved is not sent")
     func mutationStopsWhenTheCredentialChangesBeforeTransport() async throws {
@@ -733,24 +611,6 @@ struct AccountServiceTests {
     }
 
     // MARK: - Watch history
-
-    @Test("A backend without a history endpoint is refused before anything is sent")
-    func historyIsRefusedWhereUnsupported() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-
-        await #expect(throws: AccountServiceError.notSupported) {
-            _ = try await harness.service.watchHistory(page: 1, maxResults: 60, for: harness.account)
-        }
-        await #expect(throws: AccountServiceError.notSupported) {
-            try await harness.service.markWatched(videoID: "aaa", for: harness.account)
-        }
-        await #expect(throws: AccountServiceError.notSupported) {
-            try await harness.service.removeFromWatchHistory(videoID: "aaa", for: harness.account)
-        }
-
-        #expect(await harness.historyTransport.callCount == 0)
-    }
 
     @Test("History without a credential is refused before anything is sent")
     func historyIsRefusedWithoutACredential() async throws {
@@ -1008,74 +868,4 @@ struct RemotePlaylistsCacheTests {
         #expect(cache.playlists(for: harness.account.id)?.count == 1)
     }
 
-    @Test("A second removal waits for the first one's refetch before it preflights")
-    func removalsOnOnePlaylistAreSerialized() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        let cache = harness.makeCache()
-        let snapshot = makeSnapshot(playlistID: "pl", videoIDs: ["aaa", "bbb"], kind: .piped)
-        await harness.transport.setSnapshot(snapshot)
-        await harness.transport.holdCalls()
-
-        let first = Task { [account = harness.account] in
-            try await cache.removeEntry(snapshot.entries[0], fromPlaylist: "pl", for: account)
-        }
-        try await harness.transport.waitForCalls(1)
-
-        // Tapped while the first removal's preflight is still out. Its own
-        // preflight must not be sent yet: it would describe the playlist as it
-        // was *before* the first removal, and a Piped position taken from that
-        // names whatever shifts into the slot.
-        let second = Task { [account = harness.account] in
-            try await cache.removeEntry(snapshot.entries[1], fromPlaylist: "pl", for: account)
-        }
-
-        // Long enough for a second preflight to have been sent, had one been.
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(await harness.transport.callCount == 1)
-
-        await harness.transport.release()
-        try await first.value
-        try await second.value
-
-        // Three calls each, in order, and never interleaved: preflight, remove,
-        // and the refetch that reconciles it.
-        #expect(await harness.transport.calls == [
-            .snapshot(id: "pl", credential: "secret-original"),
-            .remove(entryID: .piped(playlistID: "pl", position: 0), credential: "secret-original"),
-            .snapshot(id: "pl", credential: "secret-original"),
-            .snapshot(id: "pl", credential: "secret-original"),
-            .remove(entryID: .piped(playlistID: "pl", position: 1), credential: "secret-original"),
-            .snapshot(id: "pl", credential: "secret-original")
-        ])
-    }
-
-    @Test("Removals from different playlists do not wait for each other")
-    func removalsOnDifferentPlaylistsInterleave() async throws {
-        let harness = AccountServiceHarness(type: .piped)
-        defer { harness.tearDown() }
-        let cache = harness.makeCache()
-        let one = makeSnapshot(playlistID: "one", videoIDs: ["aaa"], kind: .piped)
-        let two = makeSnapshot(playlistID: "two", videoIDs: ["aaa"], kind: .piped)
-        await harness.transport.setSnapshot(one)
-        await harness.transport.holdCalls()
-
-        let first = Task { [account = harness.account] in
-            try await cache.removeEntry(one.entries[0], fromPlaylist: "one", for: account)
-        }
-        try await harness.transport.waitForCalls(1)
-
-        let second = Task { [account = harness.account] in
-            try await cache.removeEntry(two.entries[0], fromPlaylist: "two", for: account)
-        }
-
-        // Both preflights are out at once: the queue is per playlist, not one
-        // for the whole account.
-        try await harness.transport.waitForCalls(2)
-        #expect(await harness.transport.callCount == 2)
-
-        await harness.transport.release()
-        try await first.value
-        try await second.value
-    }
 }

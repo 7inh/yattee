@@ -47,7 +47,6 @@ final class SidebarManager {
     private var remoteChannelAvatars: [String: URL] = [:]
 
     /// Media source items for the Media Sources section.
-    private(set) var mediaSourceItems: [SidebarItem] = []
 
     /// Instance items for the Sources section.
     private(set) var instanceItems: [SidebarItem] = []
@@ -58,14 +57,13 @@ final class SidebarManager {
 
     /// Whether there are no source items at all.
     var hasNoSources: Bool {
-        instanceItems.isEmpty && mediaSourceItems.isEmpty
+        instanceItems.isEmpty
     }
 
     // MARK: - Dependencies
 
     private weak var dataManager: DataManager?
     private weak var settingsManager: SettingsManager?
-    private weak var mediaSourcesManager: MediaSourcesManager?
     private weak var instancesManager: InstancesManager?
     private weak var accountsManager: AccountsManager?
     private weak var subscriptionService: SubscriptionService?
@@ -83,9 +81,9 @@ final class SidebarManager {
     /// one stays empty until the context is switched again.
     private var attemptedChannelFetches: Set<UUID> = []
     private var attemptedPlaylistFetches: Set<UUID> = []
-    
+
     // MARK: - Cached Data (to avoid repeated DB queries during layout)
-    
+
     private var cachedSubscriptions: [Subscription] = []
     private var cachedPlaylists: [LocalPlaylist] = []
 
@@ -99,7 +97,6 @@ final class SidebarManager {
     func configure(
         dataManager: DataManager,
         settingsManager: SettingsManager,
-        mediaSourcesManager: MediaSourcesManager? = nil,
         instancesManager: InstancesManager? = nil,
         accountsManager: AccountsManager? = nil,
         subscriptionService: SubscriptionService? = nil,
@@ -108,7 +105,6 @@ final class SidebarManager {
     ) {
         self.dataManager = dataManager
         self.settingsManager = settingsManager
-        self.mediaSourcesManager = mediaSourcesManager
         self.instancesManager = instancesManager
         self.accountsManager = accountsManager
         self.subscriptionService = subscriptionService
@@ -281,7 +277,6 @@ final class SidebarManager {
 
         // Get raw data
         let instances = instancesManager?.enabledInstances ?? []
-        let mediaSources = mediaSourcesManager?.enabledSources ?? []
 
         // Build combined list with sort keys
         struct SourceEntry {
@@ -300,19 +295,11 @@ final class SidebarManager {
             let typeOrder: Int
             switch instance.type {
             case .invidious: typeOrder = 0
-            case .piped: typeOrder = 1
-            case .peertube: typeOrder = 2
-            case .yatteeServer: typeOrder = 3
             }
             entries.append(SourceEntry(item: item, name: instance.displayName, date: instance.dateAdded, typeOrder: typeOrder))
         }
 
         // Add media sources (type order 100 to come after instances when sorting by type)
-        for source in mediaSources {
-            let item = SidebarItem.from(mediaSource: source)
-            // All media sources use same typeOrder (100) to sort alphabetically together
-            entries.append(SourceEntry(item: item, name: source.name, date: source.dateAdded, typeOrder: 100))
-        }
 
         // Sort combined list
         switch sortOrder {
@@ -340,7 +327,6 @@ final class SidebarManager {
 
         // Also update legacy separate lists for backwards compatibility
         instanceItems = sortedSourceItems.filter { $0.isInstance }
-        mediaSourceItems = sortedSourceItems.filter { $0.isMediaSource }
     }
 
     // MARK: - Notification Observers
@@ -357,13 +343,6 @@ final class SidebarManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.loadPlaylists()
-            }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .mediaSourcesDidChange)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.loadSources()
             }
             .store(in: &cancellables)
 
@@ -397,9 +376,7 @@ final class SidebarManager {
     // MARK: - Channel Data Access
 
     /// Yattee Server URL for avatar fallback
-    private var yatteeServerURL: URL? {
-        instancesManager?.enabledYatteeServerInstances.first?.url
-    }
+    private var yatteeServerURL: URL? { nil }
 
     /// Returns avatar URL for a channel sidebar item.
     /// Uses AvatarURLBuilder for Yattee Server fallback when direct URL is unavailable.

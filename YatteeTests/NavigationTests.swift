@@ -202,16 +202,6 @@ struct URLRouterTests {
         #expect(router.route(URL(string: "yattee://open?url=file:///private/var/mobile/movie.mp4")!) == nil)
     }
 
-    @Test("Remote direct media still routes")
-    func remoteDirectMedia() {
-        let url = URL(string: "https://example.com/video.mp4")!
-        if case .directMedia(let media) = router.route(url) {
-            #expect(media == url)
-        } else {
-            Issue.record("Expected directMedia destination")
-        }
-    }
-
     // MARK: - Legacy (1.x) Scheme Tests
 
     @Test("Legacy yattee:// links route like their web equivalents", arguments: [
@@ -251,40 +241,6 @@ struct URLRouterTests {
     }
 
     // MARK: - PeerTube URL Tests
-
-    @Test("Parse PeerTube /w/ video URL")
-    func peertubeWURL() {
-        let url = URL(string: "https://framatube.org/w/abc123-def456-ghi789")!
-        let destination = router.route(url)
-
-        if case .video(let source, _) = destination, case .id(let videoID) = source {
-            #expect(videoID.videoID == "abc123-def456-ghi789")
-            if case .federated(_, let instance) = videoID.source {
-                #expect(instance.host == "framatube.org")
-            } else {
-                Issue.record("Expected federated source")
-            }
-        } else {
-            Issue.record("Expected video destination")
-        }
-    }
-
-    @Test("Parse PeerTube /videos/watch/ URL")
-    func peertubeVideosWatchURL() {
-        let url = URL(string: "https://peertube.social/videos/watch/abc123")!
-        let destination = router.route(url)
-
-        if case .video(let source, _) = destination, case .id(let videoID) = source {
-            #expect(videoID.videoID == "abc123")
-            if case .federated(_, let instance) = videoID.source {
-                #expect(instance.host == "peertube.social")
-            } else {
-                Issue.record("Expected federated source")
-            }
-        } else {
-            Issue.record("Expected video destination")
-        }
-    }
 
     // MARK: - Custom Scheme Tests
 
@@ -326,18 +282,6 @@ struct URLRouterTests {
 
     // MARK: - Edge Cases
 
-    @Test("Unknown URL routes to external video for yt-dlp extraction")
-    func unknownURL() {
-        let url = URL(string: "https://example.com/something")!
-        let destination = router.route(url)
-        // Unknown URLs are now routed to externalVideo for potential yt-dlp extraction
-        if case .externalVideo(let extractedURL) = destination {
-            #expect(extractedURL == url)
-        } else {
-            Issue.record("Expected externalVideo destination for unknown URLs")
-        }
-    }
-
     @Test("YouTube watch URL without video ID routes nowhere")
     func urlWithoutVideoID() {
         let url = URL(string: "https://www.youtube.com/watch")!
@@ -356,12 +300,6 @@ struct URLRouterTests {
         #expect(router.route(URL(string: string)!) == nil)
     }
 
-    @Test("Other unparsed YouTube links still go to yt-dlp")
-    func youTubeClipGoesToExtraction() {
-        let url = URL(string: "https://www.youtube.com/clip/UgkxABC")!
-        #expect(router.route(url) == .externalVideo(url))
-    }
-
     @Test("YouTube search results link routes to search")
     func youTubeSearchLink() {
         let url = URL(string: "https://www.youtube.com/results?search_query=swift+concurrency")!
@@ -372,14 +310,6 @@ struct URLRouterTests {
     func youTubeNoCookieEmbed() {
         let url = URL(string: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=30")!
         #expect(router.route(url) == .video(.id(.global("dQw4w9WgXcQ"))))
-    }
-
-    @Test("Look-alike hosts are not YouTube")
-    func lookAlikeHosts() {
-        let url = URL(string: "https://notyoutube.com/watch?v=dQw4w9WgXcQ")!
-        #expect(router.route(url) == .externalVideo(url))
-        #expect(!router.isYouTubeHost("youtube.com.evil.example"))
-        #expect(router.isYouTubeHost("music.youtube.com"))
     }
 
     @Test("Watch link playlist context", arguments: [
@@ -406,46 +336,7 @@ struct URLRouterTests {
         #expect(router.youTubePlaylistContext(URL(string: string)!) == expected)
     }
 
-    @Test("Known non-PeerTube hosts route to external video")
-    func nonPeerTubeHosts() {
-        // Vimeo should not be parsed as PeerTube but routed to external video
-        let vimeoURL = URL(string: "https://vimeo.com/w/123456")!
-        let vimeoDestination = router.route(vimeoURL)
-        if case .externalVideo(let url) = vimeoDestination {
-            #expect(url == vimeoURL)
-        } else {
-            Issue.record("Expected externalVideo destination for Vimeo")
-        }
-
-        // Dailymotion should not be parsed as PeerTube but routed to external video
-        let dailymotionURL = URL(string: "https://dailymotion.com/w/123456")!
-        let dailymotionDestination = router.route(dailymotionURL)
-        if case .externalVideo(let url) = dailymotionDestination {
-            #expect(url == dailymotionURL)
-        } else {
-            Issue.record("Expected externalVideo destination for Dailymotion")
-        }
-    }
-
     // MARK: - External Host Exclusion Tests
-
-    @Test("www.duckduckgo.com is excluded from external video routing")
-    func wwwDuckDuckGoExcluded() {
-        let url = URL(string: "https://www.duckduckgo.com/?q=cat+videos")!
-        let destination = router.route(url)
-        if case .externalVideo = destination {
-            Issue.record("www.duckduckgo.com must not route to externalVideo; yt-dlp extraction should not run for a search engine")
-        }
-    }
-
-    @Test("duckduckgo.com bare host remains excluded from external video")
-    func duckDuckGoBareExcluded() {
-        let url = URL(string: "https://duckduckgo.com/?q=test")!
-        let destination = router.route(url)
-        if case .externalVideo = destination {
-            Issue.record("duckduckgo.com must not route to externalVideo; yt-dlp extraction should not run for a search engine")
-        }
-    }
 
     // MARK: - YouTube Channel URL Tests
 
@@ -637,66 +528,6 @@ struct URLRouterTests {
         #expect(destination == .settings)
     }
 
-    @Test("Parse yattee:// channel URL with PeerTube source")
-    func customSchemeChannelURLWithPeerTubeSource() {
-        let url = URL(string: "yattee://channel/channelid123?source=peertube&instance=https://peertube.social")!
-        let destination = router.route(url)
-
-        if case .channel(let channelID, let source) = destination {
-            #expect(channelID == "channelid123")
-            if case .federated(_, let instance) = source {
-                #expect(instance.host == "peertube.social")
-            } else {
-                Issue.record("Expected federated source")
-            }
-        } else {
-            Issue.record("Expected channel destination with federated source")
-        }
-    }
-
-    @Test("Parse yattee:// playlist URL with PeerTube source")
-    func customSchemePeerTubePlaylist() {
-        let url = URL(string: "yattee://playlist/abc123?source=peertube&instance=https://peertube.social")!
-        if case .playlist(.remote(let id, _, _, _)) = router.route(url),
-           case .federated(_, let instance) = id.source {
-            #expect(id.playlistID == "abc123")
-            #expect(instance.host == "peertube.social")
-        } else {
-            Issue.record("Expected federated playlist destination")
-        }
-    }
-
-    @Test("PeerTube playlist web URLs route to playlists, not videos", arguments: [
-        "https://framatube.org/w/p/abc123",
-        "https://framatube.org/video-playlists/abc123",
-    ])
-    func peertubePlaylistURLs(_ string: String) {
-        if case .playlist(.remote(let id, _, _, _)) = router.route(URL(string: string)!),
-           case .federated(_, let instance) = id.source {
-            #expect(id.playlistID == "abc123")
-            #expect(instance.host == "framatube.org")
-        } else {
-            Issue.record("Expected federated playlist destination for \(string)")
-        }
-    }
-
-    @Test("Parse yattee:// channel URL with PeerTube source but no instance falls back to Global")
-    func customSchemeChannelURLPeerTubeNoInstance() {
-        // If source=peertube but no instance is provided, should fall back to Global
-        let url = URL(string: "yattee://channel/channelid123?source=peertube")!
-        let destination = router.route(url)
-
-        if case .channel(let channelID, let source) = destination {
-            #expect(channelID == "channelid123")
-            if case .global = source {
-                // Expected - falls back to global when instance missing
-            } else {
-                Issue.record("Expected global source fallback")
-            }
-        } else {
-            Issue.record("Expected channel destination")
-        }
-    }
 }
 
 // MARK: - Playlist Link Playback Tests

@@ -64,10 +64,6 @@ struct LegacyInstance: Sendable {
         switch app.lowercased() {
         case "invidious":
             return .invidious
-        case "piped":
-            return .piped
-        case "peertube":
-            return .peertube
         default:
             return nil
         }

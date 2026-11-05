@@ -26,9 +26,7 @@ final class LegacyDataMigrationService {
     private let instancesManager: InstancesManager
     private let basicAuthCredentialsManager: BasicAuthCredentialsManager
     private let invidiousCredentialsManager: InvidiousCredentialsManager
-    private let pipedCredentialsManager: PipedCredentialsManager
     private let invidiousAPI: InvidiousAPI
-    private let pipedAPI: PipedAPI
 
     // MARK: - State
 
@@ -41,16 +39,12 @@ final class LegacyDataMigrationService {
         instancesManager: InstancesManager,
         basicAuthCredentialsManager: BasicAuthCredentialsManager,
         invidiousCredentialsManager: InvidiousCredentialsManager,
-        pipedCredentialsManager: PipedCredentialsManager,
-        invidiousAPI: InvidiousAPI,
-        pipedAPI: PipedAPI
+        invidiousAPI: InvidiousAPI
     ) {
         self.instancesManager = instancesManager
         self.basicAuthCredentialsManager = basicAuthCredentialsManager
         self.invidiousCredentialsManager = invidiousCredentialsManager
-        self.pipedCredentialsManager = pipedCredentialsManager
         self.invidiousAPI = invidiousAPI
-        self.pipedAPI = pipedAPI
     }
 
     // MARK: - Detection
@@ -117,7 +111,7 @@ final class LegacyDataMigrationService {
 
             guard let instance = matchedInstance,
                   let instanceType = instance.instanceType,
-                  instanceType == .invidious || instanceType == .piped,
+                  instanceType == .invidious,
                   let url = instance.url ?? URL(string: account.apiURL)
             else {
                 return nil
@@ -159,7 +153,7 @@ final class LegacyDataMigrationService {
 
         return legacyInstances.compactMap { instance in
             guard let instanceType = instance.instanceType,
-                  instanceType == .invidious || instanceType == .piped,
+                  instanceType == .invidious,
                   let url = instance.url
             else {
                 return nil
@@ -229,12 +223,6 @@ final class LegacyDataMigrationService {
                 instancesManager.setUsesBasicAuth(true, for: instance)
             }
             invidiousCredentialsManager.setCredential(credential, for: instance)
-            instancesManager.setUsesAccountLogin(true, for: instance)
-
-        case .piped:
-            credential = try await pipedAPI.login(username: username, password: password, instance: instance)
-            addInstanceIfNeeded(instance)
-            pipedCredentialsManager.setCredential(credential, for: instance)
             instancesManager.setUsesAccountLogin(true, for: instance)
 
         default:
@@ -317,8 +305,6 @@ final class LegacyDataMigrationService {
         switch instanceType {
         case .invidious:
             return invidiousCredentialsManager.isLoggedIn(for: existingInstance)
-        case .piped:
-            return pipedCredentialsManager.isLoggedIn(for: existingInstance)
         default:
             return false
         }

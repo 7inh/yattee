@@ -27,9 +27,7 @@ protocol SubscriptionProviderFactory {
 @MainActor
 struct DefaultSubscriptionProviderFactory: SubscriptionProviderFactory {
     let invidiousAPI: InvidiousAPI
-    let pipedAPI: PipedAPI
     let invidiousCredentialsManager: InvidiousCredentialsManager
-    let pipedCredentialsManager: PipedCredentialsManager
     let settingsManager: SettingsManager
 
     func provider(
@@ -43,14 +41,6 @@ struct DefaultSubscriptionProviderFactory: SubscriptionProviderFactory {
                 account: account,
                 invidiousAPI: invidiousAPI,
                 credentialsManager: invidiousCredentialsManager,
-                accountsManager: accountsManager,
-                settingsManager: settingsManager
-            )
-        case .piped:
-            return PipedSubscriptionProvider(
-                account: account,
-                pipedAPI: pipedAPI,
-                credentialsManager: pipedCredentialsManager,
                 accountsManager: accountsManager,
                 settingsManager: settingsManager
             )

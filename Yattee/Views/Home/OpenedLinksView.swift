@@ -44,11 +44,6 @@ struct OpenedLinksView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingDownloadSheet) {
-                BatchDownloadQualitySheet(videoCount: viewModel.videoLinks.count) { quality, includeSubtitles in
-                    Task { await download(quality: quality, includeSubtitles: includeSubtitles) }
-                }
-            }
             .onAppear {
                 guard let appEnvironment else { return }
                 viewModel.start(appEnvironment: appEnvironment)
@@ -209,24 +204,13 @@ struct OpenedLinksView: View {
     }
 
     private func startDownload() {
-        guard let appEnvironment, !viewModel.videoLinks.isEmpty else { return }
-        let settings = appEnvironment.downloadSettings
-        if settings.preferredDownloadQuality == .ask {
-            showingDownloadSheet = true
-        } else {
-            Task {
-                await download(
-                    quality: settings.preferredDownloadQuality,
-                    includeSubtitles: settings.includeSubtitlesInAutoDownload
-                )
-            }
-        }
+        Task { await download() }
     }
 
-    private func download(quality: DownloadQuality, includeSubtitles: Bool) async {
+    private func download() async {
         guard let appEnvironment else { return }
         let (succeeded, failed) = await LinkVideoResolver(appEnvironment: appEnvironment)
-            .downloadLinks(viewModel.videoLinks, quality: quality, includeSubtitles: includeSubtitles)
+            .downloadLinks(viewModel.videoLinks)
 
         if failed == 0 {
             appEnvironment.toastManager.showSuccess(

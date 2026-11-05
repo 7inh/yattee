@@ -10,16 +10,10 @@ import Foundation
 /// The type of backend instance.
 enum InstanceType: String, Codable, CaseIterable, Sendable {
     case invidious
-    case piped
-    case peertube
-    case yatteeServer
 
     var displayName: String {
         switch self {
         case .invidious: return String(localized: "instances.type.invidious")
-        case .piped: return String(localized: "instances.type.piped")
-        case .peertube: return String(localized: "instances.type.peertube")
-        case .yatteeServer: return String(localized: "instances.type.yatteeServer")
         }
     }
 
@@ -29,20 +23,15 @@ enum InstanceType: String, Codable, CaseIterable, Sendable {
 
     var contentSource: ContentSource {
         switch self {
-        case .invidious, .piped, .yatteeServer:
+        case .invidious:
             return .global(provider: ContentSource.youtubeProvider)
-        case .peertube:
-            // For PeerTube, this should be called with the specific instance URL
-            fatalError("Use contentSource(for:) for PeerTube instances")
         }
     }
 
     func contentSource(for url: URL) -> ContentSource {
         switch self {
-        case .invidious, .piped, .yatteeServer:
+        case .invidious:
             return .global(provider: ContentSource.youtubeProvider)
-        case .peertube:
-            return .federated(provider: ContentSource.peertubeProvider, instance: url)
         }
     }
 }
@@ -181,8 +170,6 @@ struct Instance: Identifiable, Codable, Hashable, Sendable {
     var watchPageBaseURL: URL? {
         switch type {
         case .invidious: return frontendURL ?? url
-        case .piped: return frontendURL
-        case .peertube, .yatteeServer: return nil
         }
     }
 
@@ -192,18 +179,13 @@ struct Instance: Identifiable, Codable, Hashable, Sendable {
 
     /// Whether this instance provides YouTube content.
     var isYouTubeInstance: Bool {
-        type == .invidious || type == .piped || type == .yatteeServer
+        type == .invidious
     }
 
     /// Whether this instance is a PeerTube instance.
-    var isPeerTubeInstance: Bool {
-        type == .peertube
-    }
 
     /// Whether this instance is a Yattee Server instance.
-    var isYatteeServerInstance: Bool {
-        type == .yatteeServer
-    }
+
 }
 
 // MARK: - Instance Capabilities
@@ -211,7 +193,7 @@ struct Instance: Identifiable, Codable, Hashable, Sendable {
 extension Instance {
     /// Whether this instance supports advanced search filters (sort, date, duration, features).
     var supportsSearchFilters: Bool {
-        type == .invidious || type == .yatteeServer
+        type == .invidious
     }
 
     /// Whether this instance supports user authentication/login.
@@ -231,17 +213,17 @@ extension Instance {
 
     /// Whether this instance supports search suggestions/autocomplete.
     var supportsSuggestions: Bool {
-        type == .invidious || type == .piped || type == .yatteeServer
+        type == .invidious
     }
 
     /// Whether this instance supports the popular videos endpoint.
     var supportsPopular: Bool {
-        type == .invidious || type == .yatteeServer
+        type == .invidious
     }
 
     /// Whether this instance supports proxying video streams through itself.
     var supportsVideoProxying: Bool {
-        type == .invidious || type == .piped || type == .yatteeServer
+        type == .invidious
     }
 
     /// Whether this instance can sit behind an HTTP Basic Auth reverse proxy.
@@ -257,7 +239,7 @@ extension InstanceType {
     /// See `Instance.supportsHTTPBasicAuthProxy`. Type-only variant for flows
     /// (e.g., AddRemoteServer detection) that don't yet have an `Instance`.
     var supportsHTTPBasicAuthProxy: Bool {
-        self != .piped
+        true
     }
 }
 
@@ -266,22 +248,7 @@ extension InstanceType {
 extension Instance {
     /// Validates the instance URL format.
     static func validateURL(_ urlString: String) -> URL? {
-        guard var components = URLComponents(string: urlString) else {
-            return nil
-        }
-
-        // Default to HTTPS if no scheme provided, but preserve explicit HTTP
-        // (needed for local/private network servers like yt-dlp server)
-        if components.scheme == nil {
-            components.scheme = "https"
-        }
-
-        // Remove trailing slash from path
-        if components.path.hasSuffix("/") {
-            components.path = String(components.path.dropLast())
-        }
-
-        return components.url
+        normalizeSourceURL(urlString)
     }
 
     /// Checks if a string is an IPv4 or IPv6 address.
@@ -306,10 +273,9 @@ extension Instance {
     /// - Explicit schemes are preserved
     static func inferScheme(for urlString: String) -> String {
         // Already has a scheme
-        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") || urlString.hasPrefix("smb://") {
+        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
             if urlString.hasPrefix("http://") { return "http" }
             if urlString.hasPrefix("https://") { return "https" }
-            if urlString.hasPrefix("smb://") { return "smb" }
         }
 
         // Extract host part (before any path or port)
@@ -334,28 +300,12 @@ extension Instance {
     /// - Parameter urlString: The raw URL input from user
     /// - Returns: A normalized URL or nil if invalid
     static func normalizeSourceURL(_ urlString: String) -> URL? {
-        var input = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Handle SMB URLs specially
-        if input.lowercased().hasPrefix("smb://") {
-            return URL(string: input)
-        }
-
-        // Add scheme if missing
-        if !input.lowercased().hasPrefix("http://") && !input.lowercased().hasPrefix("https://") {
-            let scheme = inferScheme(for: input)
-            input = "\(scheme)://\(input)"
-        }
-
-        guard var components = URLComponents(string: input) else {
-            return nil
-        }
-
-        // Remove trailing slash from path
-        if components.path.hasSuffix("/") {
-            components.path = String(components.path.dropLast())
-        }
-
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = trimmed.contains("://") ? trimmed : "\(inferScheme(for: trimmed))://\(trimmed)"
+        guard var components = URLComponents(string: input),
+              ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
+              let host = components.host, !host.isEmpty else { return nil }
+        if components.path.hasSuffix("/") { components.path.removeLast() }
         return components.url
     }
 }

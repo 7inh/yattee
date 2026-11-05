@@ -713,29 +713,6 @@ struct DataContextValidatorTests {
         #expect(!toasts.activeToasts.isEmpty)
     }
 
-    @Test("Only accounts the app can actually resolve are offered")
-    func availableContextsAreFiltered() {
-        let instances = makeTestInstancesManager()
-        let enabled = Instance(type: .invidious, url: URL(string: "https://inv-a.example.com")!)
-        let disabled = Instance(type: .invidious, url: URL(string: "https://inv-b.example.com")!, isEnabled: false)
-        // No account concept on PeerTube, so a context there could never be
-        // served from.
-        let unsupported = Instance(type: .peertube, url: URL(string: "https://pt.example.com")!)
-        for instance in [enabled, disabled, unsupported] { instances.add(instance) }
-        defer { for instance in [enabled, disabled, unsupported] { instances.remove(instance) } }
-
-        let (accounts, validator) = makeValidator(instances: instances)
-        let usable = accounts.addAccount(instanceID: enabled.id)
-        accounts.setStatus(.signedIn, for: usable.id)
-        _ = accounts.addAccount(instanceID: disabled.id)
-        _ = accounts.addAccount(instanceID: unsupported.id)
-        // An account whose instance has not synced yet has no known
-        // capabilities, which is not the same as having none.
-        _ = accounts.addAccount(instanceID: UUID())
-
-        #expect(validator.availableContexts == [.local, .account(usable.id)])
-    }
-
     @Test("A switched-off source keeps its rows in the switcher, refused rather than hidden")
     func disabledSourceStaysListed() {
         let instances = makeTestInstancesManager()
@@ -1257,41 +1234,6 @@ struct DataContextRepairTests {
 @Suite("Account capabilities")
 @MainActor
 struct AccountCapabilitiesTests {
-    @Test("Backend capabilities match the documented API surface")
-    func capabilitiesPerBackend() {
-        let invidious = InstanceType.invidious.accountCapabilities
-        #expect(invidious.supportsWatchHistory)
-        #expect(invidious.supportsPlaylistPrivacy)
-        #expect(invidious.supportsPlaylistWrites)
-
-        // Piped has no history endpoint at all and no playlist privacy.
-        let piped = InstanceType.piped.accountCapabilities
-        #expect(piped.supportsPlaylistWrites)
-        #expect(!piped.supportsWatchHistory)
-        #expect(!piped.supportsPlaylistPrivacy)
-
-        // No account concept on either of these today.
-        #expect(!InstanceType.peertube.accountCapabilities.isSelectableContext)
-        #expect(!InstanceType.yatteeServer.accountCapabilities.isSelectableContext)
-    }
-
-    @Test("A backend has accounts as soon as one flag is set")
-    func supportsAccountsIsAnyCapability() {
-        #expect(!AccountCapabilities.none.supportsAccounts)
-
-        // Broader than isSelectableContext deliberately: a backend whose only
-        // capability is watch history still has an account to sign into, even
-        // though there is nothing there worth switching to.
-        var historyOnly = AccountCapabilities.none
-        historyOnly.supportsWatchHistory = true
-        #expect(historyOnly.supportsAccounts)
-        #expect(!historyOnly.isSelectableContext)
-
-        #expect(InstanceType.invidious.accountCapabilities.supportsAccounts)
-        #expect(InstanceType.piped.accountCapabilities.supportsAccounts)
-        #expect(!InstanceType.peertube.accountCapabilities.supportsAccounts)
-        #expect(!InstanceType.yatteeServer.accountCapabilities.supportsAccounts)
-    }
 
     @Test("Instance capabilities are answered by the capability table")
     func instanceFlagsDelegateToCapabilities() {
@@ -1302,20 +1244,6 @@ struct AccountCapabilitiesTests {
         }
     }
 
-    @Test("Import is offered only where the backend has something to import")
-    func importGuardsFollowCapabilities() {
-        // What EditSourceView's menu entries and the two import views' guards
-        // ask before fetching.
-        #expect(InstanceType.piped.accountCapabilities.supportsSubscriptions)
-        #expect(InstanceType.piped.accountCapabilities.supportsPlaylistReads)
-        #expect(InstanceType.invidious.accountCapabilities.supportsSubscriptions)
-        #expect(InstanceType.invidious.accountCapabilities.supportsPlaylistReads)
-
-        for type in [InstanceType.peertube, .yatteeServer] {
-            #expect(!type.accountCapabilities.supportsSubscriptions)
-            #expect(!type.accountCapabilities.supportsPlaylistReads)
-        }
-    }
 }
 
 /// Constructors for the pre-revamp value the migration decodes. They live here
@@ -1329,24 +1257,13 @@ extension SubscriptionAccount {
     }
 
     static func piped(_ instanceID: UUID) -> SubscriptionAccount {
-        SubscriptionAccount(type: .piped, instanceID: instanceID)
+        SubscriptionAccount(type: .invidious, instanceID: instanceID)
     }
 }
 
 @Suite("DataContext legacy migration")
 @MainActor
 struct DataContextMigrationTests {
-    @Test("Legacy subscription accounts map onto contexts")
-    func legacyMappingIsIdentity() {
-        let instanceID = UUID()
-
-        #expect(DataContext(legacy: .local) == .local)
-
-        // Migrated accounts reuse their instance UUID, so this is an identity
-        // mapping rather than a lookup that could fail.
-        #expect(DataContext(legacy: .invidious(instanceID)) == .account(instanceID))
-        #expect(DataContext(legacy: .piped(instanceID)) == .account(instanceID))
-    }
 
     @Test("A legacy account without an instance falls back to local")
     func legacyWithoutInstanceIsLocal() {

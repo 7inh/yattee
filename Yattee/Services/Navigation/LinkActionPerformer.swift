@@ -114,14 +114,6 @@ struct LinkActionPerformer {
         case .failure(let failure): return failure.result
         }
 
-        let downloadSettings = appEnvironment.downloadSettings
-        // The quality picker is already a confirmation: nothing is saved until
-        // the user picks
-        guard downloadSettings.preferredDownloadQuality != .ask else {
-            appEnvironment.navigationCoordinator.presenter.present(.downloadOptions(video, streams: streams, captions: captions))
-            return .success(values(for: video).merging(["status": "picking"]) { $1 })
-        }
-
         let confirmed = await confirm(
             title: String(localized: "linkAction.confirm.download.title", defaultValue: "Download Video?"),
             subject: video.title,
@@ -132,14 +124,7 @@ struct LinkActionPerformer {
         guard confirmed else { return .cancelled }
 
         do {
-            try await LinkVideoResolver(appEnvironment: appEnvironment).enqueueDownload(
-                video: video,
-                streams: streams,
-                captions: captions,
-                storyboards: storyboards,
-                quality: downloadSettings.preferredDownloadQuality,
-                includeSubtitles: downloadSettings.includeSubtitlesInAutoDownload
-            )
+            try await LinkVideoResolver(appEnvironment: appEnvironment).enqueueDownload(video: video, streams: streams)
         } catch {
             return .failure(code: "downloadFailed", message: error.localizedDescription)
         }
@@ -426,7 +411,7 @@ struct LinkActionPerformer {
         } catch let error as LinkResolveError {
             switch error {
             case .noInstanceAvailable: return .failure(.noSource)
-            case .noYatteeServer, .notAVideo, .unsupportedYouTubeLink: return .failure(.notAVideo(error.localizedDescription))
+            case .notAVideo, .unsupportedYouTubeLink: return .failure(.notAVideo(error.localizedDescription))
             }
         } catch {
             return .failure(.loadFailed(error.localizedDescription))

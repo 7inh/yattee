@@ -7,10 +7,15 @@
 
 import Foundation
 
-
 import UIKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard identifier == DownloadManager.sessionIdentifier else { completionHandler(); return }
+        AppEnvironment.shared.downloadManager.backgroundCompletion = completionHandler
+    }
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -95,13 +100,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         NotificationCenter.default.post(name: .continueUserActivity, object: userActivity)
         return true
     }
-    
+
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
         LoggingService.shared.debug("[Memory] Received memory warning - draining backend pool", category: .general)
         NotificationCenter.default.post(name: .memoryWarning, object: nil)
     }
 }
-
 
 // MARK: - Notification Name
 

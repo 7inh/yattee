@@ -88,19 +88,19 @@ final class CloudKitSyncEngine: @unchecked Sendable {
     private var recordMapper: CloudKitRecordMapper
     private var conflictResolver: CloudKitConflictResolver
     private var syncEngine: CKSyncEngine?
-    
+
     /// Whether sync is currently in progress.
     var isSyncing = false
-    
+
     /// Whether currently receiving changes from CloudKit.
     var isReceivingChanges = false
-    
+
     /// Last successful sync timestamp.
     var lastSyncDate: Date?
-    
+
     /// Current sync error, if any.
     var syncError: Error?
-    
+
     /// Pending changes queued before the sync engine is ready; flushed into
     /// the engine state as soon as it is created.
     private var pendingChangesBuffer: [CKSyncEngine.PendingRecordZoneChange] = []
@@ -127,18 +127,18 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
     /// Foreground polling interval in seconds (3 minutes).
     private let foregroundPollInterval: TimeInterval = 180
-    
+
     /// Retry tracking: recordName -> retry count
     private var retryCount: [String: Int] = [:]
-    
+
     /// Maximum number of retry attempts for conflict resolution.
     private let maxRetryAttempts = 5
 
     // MARK: - Account Identity Tracking
-    
+
     /// UserDefaults key for storing the current iCloud account's record ID.
     private let accountRecordIDKey = "cloudKitAccountRecordID"
-    
+
     /// UserDefaults key for CloudKit sync state.
     private let syncStateKey = "cloudKitSyncState"
 
@@ -165,7 +165,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
     /// the same session (manual refresh, account change) start from the tokens
     /// that full fetch produced.
     private var storeLossHandled = false
-    
+
     /// Legacy UserDefaults key for pending save record names (pre state-driven
     /// engine). Only read once for migration, then removed.
     private let pendingSaveRecordNamesKey = "cloudKitPendingSaveRecordNames"
@@ -186,10 +186,10 @@ final class CloudKitSyncEngine: @unchecked Sendable {
     private let maxDeferralRetries = 5
 
     // MARK: - UI-Friendly State
-    
+
     /// Current account status (cached, refreshed periodically)
     private(set) var accountStatus: CKAccountStatus = .couldNotDetermine
-    
+
     /// Initial upload progress (nil when not doing initial upload)
     private(set) var uploadProgress: UploadProgress?
 
@@ -212,14 +212,14 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
     /// Pending changes count (mirrors the sync engine state so the UI can observe it).
     private(set) var pendingChangesCount = 0
-    
+
     /// User-friendly sync status text
     var syncStatusText: String {
         // Show "Receiving changes..." when downloading from other devices
         if isReceivingChanges {
             return "Receiving changes..."
         }
-        
+
         switch syncStatus {
         case .syncing:
             return "Syncing..."
@@ -231,7 +231,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             return "Error"
         }
     }
-    
+
     /// User-friendly account status text
     var accountStatusText: String {
         switch accountStatus {
@@ -249,13 +249,13 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             return "Unknown iCloud Status"
         }
     }
-    
+
     // MARK: - Dependencies
-    
+
     private weak var dataManager: DataManager?
     private weak var settingsManager: SettingsManager?
     private weak var instancesManager: InstancesManager?
-    
+
     /// Player controls layout service for importing/removing presets from CloudKit.
     /// Set after initialization to use shared instance instead of creating new ones.
     weak var playerControlsLayoutService: PlayerControlsLayoutService?
@@ -292,7 +292,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
     }
 
     // MARK: - Initialization
-    
+
     init(
         dataManager: DataManager? = nil,
         settingsManager: SettingsManager? = nil,
@@ -301,7 +301,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         self.dataManager = dataManager
         self.settingsManager = settingsManager
         self.instancesManager = instancesManager
-        
+
         // Initialize CloudKit. CKContainer(identifier:) fatally traps when the
         // entitlement is missing (re-signed/sideloaded builds), so it must not
         // be constructed at all in that case.
@@ -318,12 +318,12 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             self.database = nil
             self.zoneManager = nil
         }
-        
+
         // Initialize with temporary zone (will be updated in setupSyncEngine)
         let tempZone = RecordType.createZone()
         self.recordMapper = CloudKitRecordMapper(zone: tempZone)
         self.conflictResolver = CloudKitConflictResolver()
-        
+
         // Make this instance accessible for push notification forwarding
         CloudKitSyncEngine.current = self
 
@@ -415,17 +415,17 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                 LoggingService.shared.logCloudKitError("iCloud not available", error: error)
                 return
             }
-            
+
             // Check for account change before setting up sync
             let accountChanged = await checkAndHandleAccountChange()
-            
+
             // Create zone
             try await zoneManager.createZoneIfNeeded()
-            
+
             // Reinitialize mapper with actual zone
             let zone = await zoneManager.getZone()
             self.recordMapper = CloudKitRecordMapper(zone: zone)
-            
+
             // Records written by a newer app version fail to parse and are only
             // re-delivered on a full fetch, so a schema upgrade must invalidate the
             // persisted state once to pick them up.
@@ -502,7 +502,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             syncError = error
         }
     }
-    
+
     /// Checks if the iCloud account has changed and handles it by clearing sync state.
     /// - Returns: `true` if account changed and sync state was cleared, `false` otherwise.
     private func checkAndHandleAccountChange() async -> Bool {
@@ -521,10 +521,10 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                 }
             }
             let currentRecordName = currentUserRecordID.recordName
-            
+
             // Get the stored account ID (if any)
             let storedRecordName = UserDefaults.standard.string(forKey: accountRecordIDKey)
-            
+
             if let storedID = storedRecordName {
                 if storedID != currentRecordName {
                     // Account changed! Clear sync state to prevent conflicts
@@ -532,7 +532,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                         "iCloud account changed detected: \(storedID.prefix(8))... -> \(currentRecordName.prefix(8))... - clearing sync state"
                     )
                     clearSyncStateForAccountChange()
-                    
+
                     // Store new account ID
                     UserDefaults.standard.set(currentRecordName, forKey: accountRecordIDKey)
                     return true
@@ -552,7 +552,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             return false
         }
     }
-    
+
     /// Clears sync state when account changes to ensure fresh sync with new account.
     private func clearSyncStateForAccountChange() {
         // Clear CKSyncEngine state
@@ -582,7 +582,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         LoggingService.shared.logCloudKit("Cleared sync state for account change")
     }
-    
+
     /// Clears persisted sync state after an app update that raised the record
     /// schema version. Records from newer schema versions are rejected by the
     /// mapper and are not re-delivered by an incremental fetch, so the first
@@ -619,7 +619,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         guard let data = UserDefaults.standard.data(forKey: syncStateKey) else {
             return nil
         }
-        
+
         do {
             let decoder = PropertyListDecoder()
             return try decoder.decode(CKSyncEngine.State.Serialization.self, from: data)
@@ -628,7 +628,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             return nil
         }
     }
-    
+
     /// Saves sync state to disk.
     private func saveSyncState(_ serialization: CKSyncEngine.State.Serialization) {
         do {
@@ -639,41 +639,41 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             LoggingService.shared.logCloudKitError("Failed to save sync state", error: error)
         }
     }
-    
+
     // MARK: - Public API
-    
+
     /// Whether CloudKit sync is enabled in settings.
     var isSyncEnabled: Bool {
         settingsManager?.iCloudSyncEnabled ?? false
     }
-    
+
     // MARK: - Category Sync Helpers
-    
+
     /// Whether subscription sync is enabled (master toggle + category toggle).
     private var canSyncSubscriptions: Bool {
         isSyncEnabled && (settingsManager?.syncSubscriptions ?? true)
     }
-    
+
     /// Whether playback history sync is enabled (master toggle + category toggle).
     private var canSyncPlaybackHistory: Bool {
         isSyncEnabled && (settingsManager?.syncPlaybackHistory ?? true)
     }
-    
+
     /// Whether bookmark sync is enabled (master toggle + category toggle).
     private var canSyncBookmarks: Bool {
         isSyncEnabled && (settingsManager?.syncBookmarks ?? true)
     }
-    
+
     /// Whether playlist sync is enabled (master toggle + category toggle).
     private var canSyncPlaylists: Bool {
         isSyncEnabled && (settingsManager?.syncPlaylists ?? true)
     }
-    
+
     /// Whether search history sync is enabled (master toggle + category toggle).
     private var canSyncSearchHistory: Bool {
         isSyncEnabled && (settingsManager?.syncSearchHistory ?? true)
     }
-    
+
     /// Whether controls presets sync is enabled (master toggle + settings category toggle).
     private var canSyncControlsPresets: Bool {
         isSyncEnabled && (settingsManager?.syncSettings ?? true)
@@ -684,7 +684,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
     var canSyncAccounts: Bool {
         isSyncEnabled && (settingsManager?.syncInstances ?? true)
     }
-    
+
     /// Fails the build's own tests, and a developer's run, if the engine is
     /// about to be re-entered from inside one of its delegate callbacks.
     ///
@@ -712,10 +712,10 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             LoggingService.shared.logCloudKit("Sync skipped: sync disabled or engine not ready")
             return
         }
-        
+
         isSyncing = true
         syncError = nil
-        
+
         do {
             // Fetch remote changes first
             LoggingService.shared.logCloudKit("Fetching remote changes...")
@@ -733,18 +733,18 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             settingsManager?.updateLastSyncTime()
 
             LoggingService.shared.logCloudKit("Sync completed successfully")
-            
+
         } catch {
             // Always log for debugging
             LoggingService.shared.logCloudKitError("Sync failed", error: error)
-            
+
             // Only show user-actionable errors in UI (filter out auto-resolved conflicts)
             if shouldShowError(error) {
                 syncError = error
             } else {
                 syncError = nil
             }
-            
+
             handleSyncError(error)
         }
 
@@ -769,7 +769,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued subscription delete: \(channelID)")
     }
-    
+
     /// Upload all existing local subscriptions to CloudKit (for initial sync).
     /// Call this when enabling iCloud sync for the first time.
     func uploadAllLocalSubscriptions() async {
@@ -793,17 +793,17 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Subscriptions"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of local subscriptions...")
-        
+
         // Get all local subscriptions
         let subscriptions = dataManager.subscriptions()
-        
+
         guard !subscriptions.isEmpty else {
             LoggingService.shared.logCloudKit("No local subscriptions to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += subscriptions.count
 
@@ -817,14 +817,14 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(subscriptions.count) existing subscriptions for initial upload")
         return true
     }
-    
+
     // MARK: - WatchEntry Sync Operations
 
     /// Whether a watch entry is eligible for iCloud sync.
     /// Local-folder media plays from a per-device path, so syncing its watch progress
     /// to other devices (where the file is not reachable) is wasted noise.
     private func shouldSyncWatchEntry(sourceRawValue: String, externalExtractor: String?) -> Bool {
-        !(sourceRawValue == "extracted" && externalExtractor == MediaFile.localFolderProvider)
+        !(sourceRawValue == "extracted" && externalExtractor == "localfolder")
     }
 
     private func shouldSyncWatchEntry(_ watchEntry: WatchEntry) -> Bool {
@@ -852,7 +852,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued watch entry delete: \(videoID)")
     }
-    
+
     /// Upload all existing local watch history to CloudKit (for initial sync).
     /// Call this when enabling iCloud sync for the first time.
     func uploadAllLocalWatchHistory() async {
@@ -872,9 +872,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Watch History"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of local watch history...")
-        
+
         // Get all local watch history (limit to reasonable amount)
         let watchHistory = dataManager.watchHistory(limit: 5000)
             .filter { shouldSyncWatchEntry($0) }
@@ -883,7 +883,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             LoggingService.shared.logCloudKit("No local watch history to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += watchHistory.count
 
@@ -895,9 +895,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(watchHistory.count) existing watch entries for initial upload")
         return true
     }
-    
+
     // MARK: - Bookmark Sync Operations
-    
+
     /// Queue a bookmark for sync (debounced).
     func queueBookmarkSave(_ bookmark: Bookmark) {
         guard canSyncBookmarks else { return }
@@ -915,7 +915,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued bookmark delete: \(videoID)")
     }
-    
+
     /// Upload all existing local bookmarks to CloudKit (for initial sync).
     /// Call this when enabling iCloud sync for the first time.
     func uploadAllLocalBookmarks() async {
@@ -935,17 +935,17 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Bookmarks"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of local bookmarks...")
-        
+
         // Get all local bookmarks
         let bookmarks = dataManager.bookmarks()
-        
+
         guard !bookmarks.isEmpty else {
             LoggingService.shared.logCloudKit("No local bookmarks to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += bookmarks.count
 
@@ -957,9 +957,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(bookmarks.count) existing bookmarks for initial upload")
         return true
     }
-    
+
     // MARK: - Playlist Sync Operations
-    
+
     /// Queue a playlist for sync (debounced).
     func queuePlaylistSave(_ playlist: LocalPlaylist) {
         guard canSyncPlaylists else { return }
@@ -994,7 +994,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued playlist item delete: \(itemID)")
     }
-    
+
     /// Upload all existing local playlists to CloudKit (for initial sync).
     func uploadAllLocalPlaylists() async {
         guard enqueueAllLocalPlaylists() else { return }
@@ -1012,15 +1012,15 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Playlists"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of local playlists...")
-        
+
         let playlists = dataManager.playlists()
         guard !playlists.isEmpty else {
             LoggingService.shared.logCloudKit("No local playlists to upload")
             return false
         }
-        
+
         // Register all playlists and their items with the sync engine
         var changes: [CKSyncEngine.PendingRecordZoneChange] = []
         for playlist in playlists {
@@ -1036,13 +1036,13 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         // Track total operations (playlists + items)
         let totalItems = playlists.reduce(0) { $0 + ($1.items?.count ?? 0) }
         uploadProgress?.totalOperations += playlists.count + totalItems
-        
+
         LoggingService.shared.logCloudKit("Queued \(playlists.count) existing playlists for initial upload")
         return true
     }
-    
+
     // MARK: - SearchHistory Sync Operations
-    
+
     /// Queue a search history entry for sync (debounced).
     func queueSearchHistorySave(_ searchHistory: SearchHistory) {
         guard canSyncSearchHistory else { return }
@@ -1060,7 +1060,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued search history delete: \(id)")
     }
-    
+
     /// Upload all existing local search history to CloudKit (for initial sync).
     func uploadAllLocalSearchHistory() async {
         guard enqueueAllLocalSearchHistory() else { return }
@@ -1078,15 +1078,15 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Search History"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of search history...")
-        
+
         let searchHistory = dataManager.allSearchHistory()
         guard !searchHistory.isEmpty else {
             LoggingService.shared.logCloudKit("No local search history to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += searchHistory.count
 
@@ -1098,9 +1098,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(searchHistory.count) search history entries for initial upload")
         return true
     }
-    
+
     // MARK: - RecentChannel Sync Operations
-    
+
     /// Queue a recent channel for sync (debounced).
     func queueRecentChannelSave(_ recentChannel: RecentChannel) {
         guard canSyncSearchHistory else { return }
@@ -1118,7 +1118,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued recent channel delete: \(channelID)")
     }
-    
+
     /// Upload all existing recent channels to CloudKit (for initial sync).
     func uploadAllRecentChannels() async {
         guard enqueueAllRecentChannels() else { return }
@@ -1136,15 +1136,15 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Recent Channels"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of recent channels...")
-        
+
         let recentChannels = dataManager.allRecentChannels()
         guard !recentChannels.isEmpty else {
             LoggingService.shared.logCloudKit("No recent channels to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += recentChannels.count
 
@@ -1156,9 +1156,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(recentChannels.count) recent channels for initial upload")
         return true
     }
-    
+
     // MARK: - RecentPlaylist Sync Operations
-    
+
     /// Queue a recent playlist for sync (debounced).
     func queueRecentPlaylistSave(_ recentPlaylist: RecentPlaylist) {
         guard canSyncSearchHistory else { return }
@@ -1176,7 +1176,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued recent playlist delete: \(playlistID)")
     }
-    
+
     /// Upload all existing recent playlists to CloudKit (for initial sync).
     func uploadAllRecentPlaylists() async {
         guard enqueueAllRecentPlaylists() else { return }
@@ -1194,15 +1194,15 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Recent Playlists"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of recent playlists...")
-        
+
         let recentPlaylists = dataManager.allRecentPlaylists()
         guard !recentPlaylists.isEmpty else {
             LoggingService.shared.logCloudKit("No recent playlists to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += recentPlaylists.count
 
@@ -1214,9 +1214,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(recentPlaylists.count) recent playlists for initial upload")
         return true
     }
-    
+
     // MARK: - ChannelNotificationSettings Sync Operations
-    
+
     /// Queue channel notification settings for sync (debounced).
     func queueChannelNotificationSettingsSave(_ settings: ChannelNotificationSettings) {
         guard canSyncSubscriptions else { return }
@@ -1237,15 +1237,15 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Notification Settings"
-        
+
         LoggingService.shared.logCloudKit("Starting initial bulk upload of channel notification settings...")
-        
+
         let allSettings = dataManager.allChannelNotificationSettings()
         guard !allSettings.isEmpty else {
             LoggingService.shared.logCloudKit("No channel notification settings to upload")
             return false
         }
-        
+
         // Track total operations
         uploadProgress?.totalOperations += allSettings.count
 
@@ -1257,9 +1257,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(allSettings.count) channel notification settings for initial upload")
         return true
     }
-    
+
     // MARK: - ControlsPreset Sync Operations
-    
+
     /// Upload all local controls presets to CloudKit (for initial sync when enabling category).
     func uploadAllLocalControlsPresets() async {
         guard await enqueueAllLocalControlsPresets() else { return }
@@ -1277,7 +1277,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         // Update progress
         uploadProgress?.currentCategory = "Controls Presets"
-        
+
         LoggingService.shared.logCloudKit("Starting upload of local controls presets...")
 
         let layoutService = playerControlsLayoutService ?? PlayerControlsLayoutService()
@@ -1299,7 +1299,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Queued \(presets.count) controls presets for upload")
         return true
     }
-    
+
     /// Queue a controls preset for sync (debounced).
     func queueControlsPresetSave(_ preset: LayoutPreset) {
         guard canSyncControlsPresets else { return }
@@ -1320,7 +1320,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         addPendingChanges([.deleteRecord(recordID)])
         LoggingService.shared.logCloudKit("Queued controls preset delete: \(id)")
     }
-    
+
     /// Registers pending changes with the sync engine state (or buffers them
     /// until the engine is ready) and schedules a debounced send. The engine
     /// state is persisted via `.stateUpdate` events, so registered changes
@@ -1380,7 +1380,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             }
         }
     }
-    
+
     /// Immediately sync all pending changes without debounce.
     /// Call this when the app is about to enter background to prevent data loss.
     func flushPendingChanges() async {
@@ -1688,7 +1688,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         // Clear sync state
         UserDefaults.standard.removeObject(forKey: syncStateKey)
         clearDeferredItems()
-        
+
         // Recreate zone
         try await zoneManager.createZoneIfNeeded()
 
@@ -1703,9 +1703,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
 
         LoggingService.shared.logCloudKit("Sync reset completed")
     }
-    
+
     // MARK: - Account Status
-    
+
     /// Refreshes the cached iCloud account status
     func refreshAccountStatus() async {
         guard let container else { return }
@@ -1716,9 +1716,9 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             accountStatus = .couldNotDetermine
         }
     }
-    
+
     // MARK: - Error Filtering
-    
+
     /// Determines if an error should be shown to the user in the UI.
     /// Filters out expected conflict errors that are automatically resolved.
     private func shouldShowError(_ error: Error) -> Bool {
@@ -1727,7 +1727,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             // Non-CloudKit errors should always be shown
             return true
         }
-        
+
         switch ckError.code {
         case .serverRecordChanged:
             // This is a conflict - handled automatically by conflict resolver
@@ -1737,14 +1737,14 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                 return false // Conflict error - don't show in UI
             }
             return true // Other serverRecordChanged errors - show them
-            
+
         case .partialFailure:
             // Check if ALL sub-errors are conflicts
             // If any sub-error is NOT a conflict, show the error
             if let partialErrors = ckError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
                 let hasNonConflictError = partialErrors.values.contains { subError in
                     guard let subCKError = subError as? CKError else { return true }
-                    
+
                     // Check if this sub-error is a conflict
                     if subCKError.code == .serverRecordChanged {
                         let message = subCKError.localizedDescription.lowercased()
@@ -1754,18 +1754,18 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                     }
                     return true // This is NOT a conflict
                 }
-                
+
                 // Only show if there's at least one non-conflict error
                 return hasNonConflictError
             }
             return true // Can't parse partial errors - show it to be safe
-            
+
         default:
             // All other errors should be shown
             return true
         }
     }
-    
+
     // MARK: - Initial Upload Coordination
 
     /// Re-registers every account record for upload.
@@ -1853,34 +1853,34 @@ final class CloudKitSyncEngine: @unchecked Sendable {
             isComplete: true,
             totalOperations: uploadProgress?.totalOperations ?? 0
         )
-        
+
         // Clear after 3 seconds
         Task {
             try? await Task.sleep(for: .seconds(3))
             uploadProgress = nil
         }
     }
-    
+
     // MARK: - Error Handling
-    
+
     private func handleSyncError(_ error: Error) {
         guard let ckError = error as? CKError else {
             return
         }
-        
+
         switch ckError.code {
         case .networkUnavailable, .networkFailure:
             LoggingService.shared.logCloudKit("Network unavailable, will retry when connection returns")
             scheduleRetry(delay: 30)
-            
+
         case .quotaExceeded:
             LoggingService.shared.logCloudKitError("CloudKit quota exceeded", error: error)
             syncError = CloudKitError.quotaExceeded
-            
+
         case .notAuthenticated:
             LoggingService.shared.logCloudKitError("User not signed into iCloud", error: error)
             syncError = CloudKitError.notAuthenticated
-            
+
         case .zoneNotFound:
             // Through the engine's state: this can be reached from inside a
             // delegate callback (`sync()` is called from several), where asking
@@ -1898,7 +1898,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                         case .serverRecordChanged:
                             // Record already exists - this is OK, we'll fetch it on next sync
                             LoggingService.shared.logCloudKit("Record already exists in CloudKit, will merge on next fetch: \(id)")
-                            
+
                         default:
                             LoggingService.shared.logCloudKitError("Failed to sync record: \(id)", error: itemError)
                         }
@@ -1907,12 +1907,12 @@ final class CloudKitSyncEngine: @unchecked Sendable {
                     }
                 }
             }
-            
+
         default:
             LoggingService.shared.logCloudKitError("CloudKit error: \(ckError.code.rawValue)", error: error)
         }
     }
-    
+
     private func scheduleRetry(delay: TimeInterval) {
         // Detached, not a plain `Task`: an unstructured task copies the task
         // locals of whatever created it, and this can be created from inside a
@@ -2033,7 +2033,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             }
         }
     }
-    
+
     nonisolated func nextRecordZoneChangeBatch(
         _ context: CKSyncEngine.SendChangesContext,
         syncEngine: CKSyncEngine
@@ -2432,7 +2432,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             return server
         }
     }
-    
+
     /// Handle fetched database-level changes (zone creations/deletions).
     ///
     /// A remote deletion of our zone — a reset from another device, an iCloud
@@ -2655,7 +2655,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             LoggingService.shared.logCloudKit("Updated lastSyncDate after receiving \(changes.modifications.count) modifications, \(changes.deletions.count) deletions")
         }
     }
-    
+
     /// Apply a remote record change to local SwiftData.
     /// Returns the result indicating success, deferral (for playlist items without parent), or failure.
     @discardableResult
@@ -2681,7 +2681,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             case RecordType.subscription:
                 guard canSyncSubscriptions else { return .success }
                 let subscription = try recordMapper.toSubscription(from: record)
-                
+
                 // Check if exists locally (same source scope only)
                 if let existing = localSubscription(matching: record.recordID.recordName, channelID: subscription.channelID, in: dataManager) {
                     let localWasNewer = existing.lastUpdatedAt > subscription.lastUpdatedAt
@@ -2690,7 +2690,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(subscription: existing)
                     let resolved = await conflictResolver.resolveSubscriptionConflict(local: localRecord, server: record)
                     let resolvedSubscription = try recordMapper.toSubscription(from: resolved)
-                    
+
                     // Update existing subscription with resolved data
                     existing.name = resolvedSubscription.name
                     existing.channelDescription = resolvedSubscription.channelDescription
@@ -2700,12 +2700,12 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     existing.isVerified = resolvedSubscription.isVerified
                     existing.lastUpdatedAt = resolvedSubscription.lastUpdatedAt
                     existing.providerName = resolvedSubscription.providerName
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates after conflict resolution
                     NotificationCenter.default.post(name: .subscriptionsDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged subscription from iCloud (conflict resolved): \(subscription.channelID)")
 
                     // Push the merge result back when local data won - the
@@ -2725,10 +2725,10 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                         object: nil,
                         userInfo: [SubscriptionChange.userInfoKey: change]
                     )
-                    
+
                     LoggingService.shared.logCloudKit("Added subscription from iCloud: \(subscription.channelID)")
                 }
-                
+
             case RecordType.watchEntry:
                 guard canSyncPlaybackHistory else { return .success }
                 let watchEntry = try recordMapper.toWatchEntry(from: record)
@@ -2746,26 +2746,26 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(watchEntry: existing)
                     let resolved = await conflictResolver.resolveWatchEntryConflict(local: localRecord, server: record)
                     let resolvedEntry = try recordMapper.toWatchEntry(from: resolved)
-                    
+
                     // Update existing watch entry with resolved data
                     existing.watchedSeconds = resolvedEntry.watchedSeconds
                     existing.isFinished = resolvedEntry.isFinished
                     existing.finishedAt = resolvedEntry.finishedAt
                     existing.isLive = resolvedEntry.isLive
                     existing.updatedAt = resolvedEntry.updatedAt
-                    
+
                     // Update metadata if newer
                     existing.title = resolvedEntry.title
                     existing.authorName = resolvedEntry.authorName
                     existing.authorID = resolvedEntry.authorID
                     existing.duration = resolvedEntry.duration
                     existing.thumbnailURLString = resolvedEntry.thumbnailURLString
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates after conflict resolution
                     NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged watch entry from iCloud (conflict resolved): \(watchEntry.videoID)")
 
                     // Push the merge result back when local data won - the
@@ -2776,17 +2776,17 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 } else {
                     // New watch entry from iCloud
                     dataManager.insertWatchEntry(watchEntry)
-                    
+
                     // Post notification to update UI
                     NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Added watch entry from iCloud: \(watchEntry.videoID)")
                 }
-                
+
             case RecordType.bookmark:
                 guard canSyncBookmarks else { return .success }
                 let bookmark = try recordMapper.toBookmark(from: record)
-                
+
                 // Check if exists locally (same source scope only)
                 if let existing = localBookmark(matching: record.recordID.recordName, videoID: bookmark.videoID, in: dataManager) {
                     let localWasNewer = existing.createdAt > bookmark.createdAt
@@ -2797,7 +2797,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(bookmark: existing)
                     let resolved = await conflictResolver.resolveBookmarkConflict(local: localRecord, server: record)
                     let resolvedBookmark = try recordMapper.toBookmark(from: resolved)
-                    
+
                     // Update existing bookmark with resolved data
                     existing.title = resolvedBookmark.title
                     existing.authorName = resolvedBookmark.authorName
@@ -2814,12 +2814,12 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     existing.tagsModifiedAt = resolvedBookmark.tagsModifiedAt
                     existing.sortOrder = resolvedBookmark.sortOrder
                     existing.createdAt = resolvedBookmark.createdAt
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates after conflict resolution
                     NotificationCenter.default.post(name: .bookmarksDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged bookmark from iCloud (conflict resolved): \(bookmark.videoID)")
 
                     // Push the merge result back when local data won - the
@@ -2830,13 +2830,13 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 } else {
                     // New bookmark from iCloud
                     dataManager.insertBookmark(bookmark)
-                    
+
                     // Post notification to update UI
                     NotificationCenter.default.post(name: .bookmarksDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Added bookmark from iCloud: \(bookmark.videoID)")
                 }
-                
+
             case RecordType.localPlaylist:
                 guard canSyncPlaylists else { return .success }
                 let playlist = try recordMapper.toLocalPlaylist(from: record)
@@ -2895,11 +2895,11 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
 
                     LoggingService.shared.logCloudKit("Added playlist from iCloud: \(playlist.title)")
                 }
-                
+
             case RecordType.localPlaylistItem:
                 guard canSyncPlaylists else { return .success }
                 let (item, playlistID) = try recordMapper.toLocalPlaylistItem(from: record)
-                
+
                 // Check if exists locally
                 if let existing = dataManager.playlistItem(forID: item.id) {
                     let localWasNewer = existing.addedAt > item.addedAt
@@ -2908,7 +2908,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(playlistItem: existing)
                     let resolved = await conflictResolver.resolveLocalPlaylistItemConflict(local: localRecord, server: record)
                     let (resolvedItem, _) = try recordMapper.toLocalPlaylistItem(from: resolved)
-                    
+
                     // Update existing item with resolved data
                     existing.title = resolvedItem.title
                     existing.authorName = resolvedItem.authorName
@@ -2917,9 +2917,9 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     existing.thumbnailURLString = resolvedItem.thumbnailURLString
                     existing.isLive = resolvedItem.isLive
                     existing.sortOrder = resolvedItem.sortOrder
-                    
+
                     dataManager.save()
-                    
+
                     LoggingService.shared.logCloudKit("Merged playlist item from iCloud (conflict resolved): \(item.videoID)")
 
                     // Push the merge result back when local data won - the
@@ -2933,10 +2933,10 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                        let parentPlaylist = dataManager.playlist(forID: playlistID) {
                         item.playlist = parentPlaylist
                         dataManager.insertPlaylistItem(item)
-                        
+
                         // Post notification to update UI
                         NotificationCenter.default.post(name: .playlistsDidChange, object: nil)
-                        
+
                         LoggingService.shared.logCloudKit("Added playlist item from iCloud: \(item.videoID)")
                     } else if let playlistID = playlistID {
                         // Parent playlist not found yet - defer this item
@@ -2948,11 +2948,11 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                         return .failed
                     }
                 }
-                
+
             case RecordType.searchHistory:
                 guard canSyncSearchHistory else { return .success }
                 let searchHistory = try recordMapper.toSearchHistory(from: record)
-                
+
                 // Check if exists locally
                 if let existing = dataManager.searchHistoryEntry(forID: searchHistory.id) {
                     let localWasNewer = existing.searchedAt > searchHistory.searchedAt
@@ -2961,16 +2961,16 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(searchHistory: existing)
                     let resolved = await conflictResolver.resolveSearchHistoryConflict(local: localRecord, server: record)
                     let resolvedHistory = try recordMapper.toSearchHistory(from: resolved)
-                    
+
                     // Update existing search history with resolved data
                     existing.query = resolvedHistory.query
                     existing.searchedAt = resolvedHistory.searchedAt
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates
                     NotificationCenter.default.post(name: .searchHistoryDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged search history from iCloud (conflict resolved): \(searchHistory.query)")
 
                     // Push the merge result back when local data won - the
@@ -2981,17 +2981,17 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 } else {
                     // New search history from iCloud
                     dataManager.insertSearchHistory(searchHistory)
-                    
+
                     // Post notification to update UI
                     NotificationCenter.default.post(name: .searchHistoryDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Added search history from iCloud: \(searchHistory.query)")
                 }
-                
+
             case RecordType.recentChannel:
                 guard canSyncSearchHistory else { return .success }
                 let recentChannel = try recordMapper.toRecentChannel(from: record)
-                
+
                 // Check if exists locally (same source scope only)
                 if let existing = localRecentChannel(matching: record.recordID.recordName, channelID: recentChannel.channelID, in: dataManager) {
                     let localWasNewer = existing.visitedAt > recentChannel.visitedAt
@@ -3000,7 +3000,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(recentChannel: existing)
                     let resolved = await conflictResolver.resolveRecentChannelConflict(local: localRecord, server: record)
                     let resolvedChannel = try recordMapper.toRecentChannel(from: resolved)
-                    
+
                     // Update existing recent channel with resolved data
                     existing.name = resolvedChannel.name
                     existing.thumbnailURLString = resolvedChannel.thumbnailURLString
@@ -3009,12 +3009,12 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     existing.subscriberCount = resolvedChannel.subscriberCount
                     existing.isVerified = resolvedChannel.isVerified
                     existing.visitedAt = resolvedChannel.visitedAt
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates
                     NotificationCenter.default.post(name: .recentChannelsDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged recent channel from iCloud (conflict resolved): \(recentChannel.channelID)")
 
                     // Push the merge result back when local data won - the
@@ -3025,17 +3025,17 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 } else {
                     // New recent channel from iCloud
                     dataManager.insertRecentChannel(recentChannel)
-                    
+
                     // Post notification to update UI
                     NotificationCenter.default.post(name: .recentChannelsDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Added recent channel from iCloud: \(recentChannel.channelID)")
                 }
-                
+
             case RecordType.recentPlaylist:
                 guard canSyncSearchHistory else { return .success }
                 let recentPlaylist = try recordMapper.toRecentPlaylist(from: record)
-                
+
                 // Check if exists locally (same source scope only)
                 if let existing = localRecentPlaylist(matching: record.recordID.recordName, playlistID: recentPlaylist.playlistID, in: dataManager) {
                     let localWasNewer = existing.visitedAt > recentPlaylist.visitedAt
@@ -3044,7 +3044,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     let localRecord = recordMapper.toCKRecord(recentPlaylist: existing)
                     let resolved = await conflictResolver.resolveRecentPlaylistConflict(local: localRecord, server: record)
                     let resolvedPlaylist = try recordMapper.toRecentPlaylist(from: resolved)
-                    
+
                     // Update existing recent playlist with resolved data
                     existing.title = resolvedPlaylist.title
                     existing.authorName = resolvedPlaylist.authorName
@@ -3053,12 +3053,12 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     existing.sourceRawValue = resolvedPlaylist.sourceRawValue
                     existing.instanceURLString = resolvedPlaylist.instanceURLString
                     existing.visitedAt = resolvedPlaylist.visitedAt
-                    
+
                     dataManager.save()
-                    
+
                     // Post notification for UI updates
                     NotificationCenter.default.post(name: .recentPlaylistsDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Merged recent playlist from iCloud (conflict resolved): \(recentPlaylist.playlistID)")
 
                     // Push the merge result back when local data won - the
@@ -3069,13 +3069,13 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 } else {
                     // New recent playlist from iCloud
                     dataManager.insertRecentPlaylist(recentPlaylist)
-                    
+
                     // Post notification to update UI
                     NotificationCenter.default.post(name: .recentPlaylistsDidChange, object: nil)
-                    
+
                     LoggingService.shared.logCloudKit("Added recent playlist from iCloud: \(recentPlaylist.playlistID)")
                 }
-                
+
             case RecordType.channelNotificationSettings:
                 guard canSyncSubscriptions else { return .success }
                 let settings = try recordMapper.toChannelNotificationSettings(from: record)
@@ -3092,7 +3092,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 }
 
                 LoggingService.shared.logCloudKit("Applied channel notification settings from iCloud: \(settings.channelID)")
-                
+
             case RecordType.controlsPreset:
                 guard canSyncControlsPresets else { return .success }
                 let preset = try recordMapper.toLayoutPreset(from: record)
@@ -3135,7 +3135,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         }
         return .success
     }
-    
+
     /// Apply a remote deletion to local SwiftData.
     /// Entities are matched on the full scoped record name, so a deletion in
     /// one source scope cannot remove same-ID entities from other scopes, and
@@ -3239,7 +3239,7 @@ struct UploadProgress: Equatable {
     var currentCategory: String
     var isComplete: Bool
     var totalOperations: Int
-    
+
     var displayText: String {
         if isComplete {
             return "Initial sync complete"
@@ -3254,7 +3254,7 @@ enum SyncStatus: Equatable {
     case upToDate
     case pending(count: Int)
     case error(Error)
-    
+
     static func == (lhs: SyncStatus, rhs: SyncStatus) -> Bool {
         switch (lhs, rhs) {
         case (.syncing, .syncing), (.upToDate, .upToDate):

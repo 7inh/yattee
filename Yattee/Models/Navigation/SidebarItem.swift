@@ -30,7 +30,6 @@ enum SidebarItem: Hashable, Identifiable {
     case remotePlaylist(id: PlaylistID, title: String, accountID: UUID)
 
     // MARK: - Dynamic Media Source Items
-    case mediaSource(id: UUID, name: String, type: MediaSourceType)
 
     // MARK: - Dynamic Instance Items
     case instance(id: UUID, name: String, type: InstanceType)
@@ -68,8 +67,6 @@ enum SidebarItem: Hashable, Identifiable {
             return "playlist-\(id.uuidString)"
         case .remotePlaylist(let id, _, let accountID):
             return "remote-playlist-\(accountID.uuidString)-\(id.id)"
-        case .mediaSource(let id, _, _):
-            return "mediasource-\(id.uuidString)"
         case .instance(let id, _, _):
             return "instance-\(id.uuidString)"
         case .bookmarks:
@@ -113,8 +110,6 @@ enum SidebarItem: Hashable, Identifiable {
             return title
         case .remotePlaylist(_, let title, _):
             return title
-        case .mediaSource(_, let name, _):
-            return name
         case .instance(_, let name, _):
             return name
         case .bookmarks:
@@ -154,8 +149,6 @@ enum SidebarItem: Hashable, Identifiable {
             return "person.circle"
         case .playlist, .remotePlaylist:
             return "list.bullet.rectangle"
-        case .mediaSource(_, _, let type):
-            return type.systemImage
         case .instance(_, _, let type):
             return type.systemImage
         case .bookmarks:
@@ -191,8 +184,6 @@ enum SidebarItem: Hashable, Identifiable {
         case .remotePlaylist(let id, let title, let accountID):
             // No instance here: the detail view resolves it from the account.
             return .playlist(.remote(id, instance: nil, title: title, accountID: accountID))
-        case .mediaSource(let id, _, _):
-            return .mediaSource(id)
         case .instance:
             // Instances are root views in the sidebar, not push destinations
             return nil
@@ -224,10 +215,6 @@ enum SidebarItem: Hashable, Identifiable {
     }
 
     /// Whether this is a dynamic media source item.
-    var isMediaSource: Bool {
-        if case .mediaSource = self { return true }
-        return false
-    }
 
     /// Whether this is a dynamic instance item.
     var isInstance: Bool {
@@ -268,9 +255,6 @@ extension SidebarItem {
     }
 
     /// Creates a SidebarItem from a MediaSource.
-    static func from(mediaSource: MediaSource) -> SidebarItem {
-        .mediaSource(id: mediaSource.id, name: mediaSource.name, type: mediaSource.type)
-    }
 
     /// Creates a SidebarItem from an Instance.
     static func from(instance: Instance) -> SidebarItem {

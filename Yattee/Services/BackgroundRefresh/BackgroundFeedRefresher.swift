@@ -62,7 +62,6 @@ final class BackgroundFeedRefresher {
 
             switch instance.type {
             case .invidious: await performInvidiousAccountRefresh()
-            case .piped: await performPipedAccountRefresh()
             default:
                 LoggingService.shared.debug(
                     "Background refresh not supported for this account type",
@@ -77,109 +76,24 @@ final class BackgroundFeedRefresher {
     /// Performs background refresh for local (Yattee/iCloud) subscription account.
     /// Requires Yattee Server - uses stateless feed endpoint for efficient single-request fetching.
     private func performLocalAccountRefresh() async {
-        guard let appEnvironment else { return }
-
-        // Require Yattee Server for local account background refresh
-        guard let yatteeServer = appEnvironment.instancesManager.instances
-            .first(where: { $0.type == .yatteeServer && $0.isEnabled }) else {
-            LoggingService.shared.debug("Background refresh requires Yattee Server for local subscriptions", category: .notifications)
-            return
-        }
-
-        let lastCheckDate = appEnvironment.settingsManager.lastBackgroundCheck ?? Date.distantPast
-
-        // Get channel IDs with notifications enabled from ChannelNotificationSettings
-        let notifiableChannelIDs = Set(appEnvironment.dataManager.channelIDsWithNotificationsEnabled())
-
-        // Filter subscriptions to only those with notifications enabled
-        let notifiableSubscriptions = appEnvironment.dataManager.subscriptions().filter {
-            notifiableChannelIDs.contains($0.channelID)
-        }
-
-        LoggingService.shared.info(
-            "Background refresh starting (local account) | lastBackgroundCheck: \(lastCheckDate) | channels with notifications: \(notifiableSubscriptions.count)",
-            category: .notifications
-        )
-
-        guard !notifiableSubscriptions.isEmpty else {
-            LoggingService.shared.debug("No subscriptions with notifications enabled", category: .notifications)
-            appEnvironment.settingsManager.lastBackgroundCheck = Date()
-            return
-        }
-
-        LoggingService.shared.debug("Fetching feed from Yattee Server: \(yatteeServer.url)", category: .notifications)
-
-        // Convert subscriptions to channel requests
-        let channelRequests = notifiableSubscriptions.map { subscription in
-            StatelessChannelRequest(
-                channelId: subscription.channelID,
-                site: subscription.site,
-                channelName: subscription.name,
-                channelUrl: subscription.channelURLString,
-                avatarUrl: subscription.avatarURLString
-            )
-        }
-
+        guard let appEnvironment, let instance = appEnvironment.instancesManager.enabledInstances.first else { return }
+        let lastCheck = appEnvironment.settingsManager.lastBackgroundCheck ?? .distantPast
+        let channelIDs = Set(appEnvironment.dataManager.channelIDsWithNotificationsEnabled())
+        let subscriptions = appEnvironment.dataManager.subscriptions().filter { channelIDs.contains($0.channelID) }
+        var newVideos: [(video: Video, channelName: String)] = []
         do {
-            let httpClient = HTTPClient()
-            if let authHeader = appEnvironment.basicAuthCredentialsManager.basicAuthHeader(for: yatteeServer) {
-                await httpClient.setDefaultHeaders(["Authorization": authHeader])
-            }
-            let yatteeServerAPI = YatteeServerAPI(httpClient: httpClient)
-            let response = try await yatteeServerAPI.postFeed(
-                channels: channelRequests,
-                limit: 5 * notifiableSubscriptions.count,
-                offset: 0,
-                instance: yatteeServer
-            )
-
-            LoggingService.shared.debug("API returned \(response.videos.count) total videos", category: .notifications)
-
-            // Load last notified video IDs per channel for deduplication
-            let lastNotified = appEnvironment.settingsManager.lastNotifiedVideoPerChannel
-
-            // Filter to new videos - don't wait for ready, use whatever is available
-            var dateFilteredCount = 0
-            var dedupedCount = 0
-            let newVideos: [(video: Video, channelName: String)] = response.videos.compactMap { serverVideo in
-                guard let video = serverVideo.toVideo(),
-                      let publishedAt = video.publishedAt,
-                      publishedAt > lastCheckDate,
-                      publishedAt <= Date() else {
-                    return nil
+            for subscription in subscriptions {
+                try Task.checkCancellation()
+                let page = try await appEnvironment.contentService.channelVideos(id: subscription.channelID, instance: instance)
+                for video in page.videos where (video.publishedAt ?? .distantPast) > lastCheck
+                    && (video.publishedAt ?? .distantPast) <= Date()
+                    && appEnvironment.settingsManager.lastNotifiedVideoPerChannel[video.author.id] != video.id.videoID {
+                    newVideos.append((video, video.author.name))
                 }
-                dateFilteredCount += 1
-                // Skip if this is the last video we notified about for this channel
-                if lastNotified[video.author.id] == video.id.videoID {
-                    dedupedCount += 1
-                    return nil
-                }
-                return (video: video, channelName: serverVideo.author)
             }
-
-            LoggingService.shared.debug(
-                "After date filter: \(dateFilteredCount) videos newer than \(lastCheckDate)",
-                category: .notifications
-            )
-            LoggingService.shared.debug(
-                "After deduplication: \(newVideos.count) videos (removed \(dedupedCount) already-notified)",
-                category: .notifications
-            )
-
-            // Update last notified video per channel (store newest video ID for each channel)
-            var updatedLastNotified = lastNotified
-            for (video, _) in newVideos {
-                updatedLastNotified[video.author.id] = video.id.videoID
-            }
-            appEnvironment.settingsManager.lastNotifiedVideoPerChannel = updatedLastNotified
-
-            // Update timestamp before sending notification
             appEnvironment.settingsManager.lastBackgroundCheck = Date()
-
             await sendNotificationsIfNeeded(newVideos: newVideos)
-        } catch {
-            LoggingService.shared.logNotificationError("Background refresh failed (local account)", error: error)
-        }
+        } catch { LoggingService.shared.logNotificationError("Local Invidious feed refresh failed", error: error) }
     }
 
     // MARK: - Invidious Account Refresh
@@ -293,102 +207,6 @@ final class BackgroundFeedRefresher {
 
     /// Performs background refresh for Piped subscription account.
     /// Fetches the Piped feed and filters to channels with notifications enabled.
-    private func performPipedAccountRefresh() async {
-        guard let appEnvironment else { return }
-
-        guard let account = appEnvironment.account(forSelectedContext: .piped),
-              let pipedInstance = appEnvironment.accountsManager.instance(for: account),
-              let authToken = appEnvironment.accountCredentialsManager(for: account)?.credential(for: account) else {
-            LoggingService.shared.debug("Background refresh requires authenticated Piped instance", category: .notifications)
-            return
-        }
-
-        let lastCheckDate = appEnvironment.settingsManager.lastBackgroundCheck ?? Date.distantPast
-
-        // Get channel IDs with notifications enabled from ChannelNotificationSettings
-        let notifiableChannelIDs = Set(appEnvironment.dataManager.channelIDsWithNotificationsEnabled())
-
-        LoggingService.shared.info(
-            "Background refresh starting (Piped account) | lastBackgroundCheck: \(lastCheckDate) | channels with notifications: \(notifiableChannelIDs.count)",
-            category: .notifications
-        )
-
-        guard !notifiableChannelIDs.isEmpty else {
-            LoggingService.shared.debug("No channels with notifications enabled", category: .notifications)
-            appEnvironment.settingsManager.lastBackgroundCheck = Date()
-            return
-        }
-
-        LoggingService.shared.debug("Fetching feed from Piped: \(pipedInstance.url)", category: .notifications)
-
-        do {
-            // Fetch the Piped feed
-            let feedVideos = try await appEnvironment.contentService.feed(
-                for: pipedInstance,
-                credential: authToken
-            )
-
-            LoggingService.shared.debug("API returned \(feedVideos.count) total videos", category: .notifications)
-
-            // Load last notified video IDs per channel for deduplication
-            let lastNotified = appEnvironment.settingsManager.lastNotifiedVideoPerChannel
-
-            // Filter to new videos from notifiable channels
-            var channelFilteredCount = 0
-            var dateFilteredCount = 0
-            var dedupedCount = 0
-            let newVideos: [(video: Video, channelName: String)] = feedVideos.compactMap { video in
-                // Only include videos from channels with notifications enabled
-                guard notifiableChannelIDs.contains(video.author.id) else {
-                    return nil
-                }
-                channelFilteredCount += 1
-
-                // Only include videos published after last check and not in the future
-                guard let publishedAt = video.publishedAt,
-                      publishedAt > lastCheckDate,
-                      publishedAt <= Date() else {
-                    return nil
-                }
-                dateFilteredCount += 1
-
-                // Skip if this is the last video we notified about for this channel
-                if lastNotified[video.author.id] == video.id.videoID {
-                    dedupedCount += 1
-                    return nil
-                }
-
-                return (video: video, channelName: video.author.name)
-            }
-
-            LoggingService.shared.debug(
-                "After channel filter: \(channelFilteredCount) videos from notifiable channels",
-                category: .notifications
-            )
-            LoggingService.shared.debug(
-                "After date filter: \(dateFilteredCount) videos newer than \(lastCheckDate)",
-                category: .notifications
-            )
-            LoggingService.shared.debug(
-                "After deduplication: \(newVideos.count) videos (removed \(dedupedCount) already-notified)",
-                category: .notifications
-            )
-
-            // Update last notified video per channel (store newest video ID for each channel)
-            var updatedLastNotified = lastNotified
-            for (video, _) in newVideos {
-                updatedLastNotified[video.author.id] = video.id.videoID
-            }
-            appEnvironment.settingsManager.lastNotifiedVideoPerChannel = updatedLastNotified
-
-            // Update timestamp before sending notification
-            appEnvironment.settingsManager.lastBackgroundCheck = Date()
-
-            await sendNotificationsIfNeeded(newVideos: newVideos)
-        } catch {
-            LoggingService.shared.logNotificationError("Background refresh failed (Piped account)", error: error)
-        }
-    }
 
     // MARK: - Notification Sending
 

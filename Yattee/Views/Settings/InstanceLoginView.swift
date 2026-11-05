@@ -155,13 +155,7 @@ struct InstanceLoginView: View {
     /// here rather than falling through to somebody else's wording.
     private var usernameFieldLabel: String {
         switch instance.type {
-        case .piped:
-            return String(localized: "login.username")
         case .invidious:
-            return String(localized: "login.username")
-        case .yatteeServer:
-            return String(localized: "login.username")
-        case .peertube:
             return String(localized: "login.username")
         }
     }
@@ -169,16 +163,8 @@ struct InstanceLoginView: View {
     /// What this form is signing in to, said in the user's terms.
     private var footerText: String {
         switch instance.type {
-        case .piped:
-            return String(localized: "login.footer.pipedAccount \(instance.displayName)")
         case .invidious:
             return String(localized: "login.footer.invidiousAccount \(instance.displayName)")
-        case .yatteeServer:
-            return String(localized: "login.footer.yatteeServerAccount \(instance.displayName)")
-        case .peertube:
-            // No account concept at all, so no sign-in is offered — and if one
-            // ever were, an empty footer explains nothing.
-            return ""
         }
     }
 
@@ -264,7 +250,7 @@ struct InstanceLoginView: View {
 
 #Preview("Piped") {
     InstanceLoginView(
-        instance: Instance(type: .piped, url: URL(string: "https://piped.example.com")!)
+        instance: Instance(type: .invidious, url: URL(string: "https://piped.example.com")!)
     ) { _, _ in true }
     .appEnvironment(.preview)
 }

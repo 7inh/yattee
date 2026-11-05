@@ -553,42 +553,6 @@ struct LegacyCredentialAdoptionTests {
             .delete(key: KeychainCredentialStore.legacyKey(instanceID: instanceID))
     }
 
-    @Test("Adoption in one backend does not suppress the other's offer")
-    func markersAreNamespacedByService() {
-        // Both credential managers share one marker store, and an instance UUID
-        // can outlive a change of backend.
-        let invidiousService = makeService()
-        let pipedService = makeService()
-        let markers = makeMarkers()
-        let instanceID = UUID()
-        let account = Account.migrated(from: instanceID)
-
-        seedLegacyItem(service: invidiousService, instanceID: instanceID, value: "invidious-sid")
-        seedLegacyItem(service: pipedService, instanceID: instanceID, value: "piped-token")
-
-        let invidious = makeCredentials(service: invidiousService, scope: "identity-A", markers: markers)
-        let piped = makeCredentials(service: pipedService, scope: "identity-A", markers: markers)
-
-        #expect(invidious.adoptLegacyCredential(for: account) == true)
-
-        // Piped's own legacy item is untouched and still offered.
-        #expect(piped.hasAdoptableLegacyCredential(for: account) == true)
-        #expect(piped.adoptLegacyCredential(for: account) == true)
-        #expect(piped.credential(for: account) == "piped-token")
-        #expect(invidious.credential(for: account) == "invidious-sid")
-
-        // Each deletion consults its own marker and its own secret.
-        invidious.deleteLegacyCredentialIfOwned(for: account)
-        #expect(legacyValue(service: invidiousService, instanceID: instanceID) == nil)
-        #expect(legacyValue(service: pipedService, instanceID: instanceID) == "piped-token")
-
-        piped.deleteLegacyCredentialIfOwned(for: account)
-        #expect(legacyValue(service: pipedService, instanceID: instanceID) == nil)
-
-        invidious.deleteCredential(for: account)
-        piped.deleteCredential(for: account)
-    }
-
     @Test("Adoption is refused while the identity scope is unresolved")
     func adoptionRefusedWhenUnresolved() {
         let service = makeService()

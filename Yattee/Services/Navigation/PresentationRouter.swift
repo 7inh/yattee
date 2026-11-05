@@ -147,7 +147,6 @@ private struct AppSheetHost: ViewModifier {
         $sheet
     }
 
-
     private var dismissGeneration: Int? {
         dismissesOnExternalNavigation ? appEnvironment?.navigationCoordinator.dismissPresentationsGeneration : nil
     }
@@ -184,7 +183,7 @@ private struct AppSheetHost: ViewModifier {
             case .linkActionConfirmation(let confirmation):
                 LinkActionConfirmationSheet(confirmation: confirmation)
             case .downloadOptions(let video, let streams, let captions, let dislikeCount):
-                DownloadQualitySheet(video: video, streams: streams, captions: captions, dislikeCount: dislikeCount)
+                AudioDownloadSheet(video: video, streams: streams)
             }
         }
         // The next level: sheets opened from inside this one. It goes away

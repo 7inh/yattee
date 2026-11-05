@@ -20,7 +20,6 @@ struct URLRouter: Sendable {
     /// resolving a URL shortener.
     func routeConfidently(_ url: URL) -> NavigationDestination? {
         guard let destination = route(url) else { return nil }
-        if case .externalVideo = destination { return nil }
         return destination
     }
 
@@ -37,9 +36,6 @@ struct URLRouter: Sendable {
 
         // Try PeerTube playlist URLs before video URLs (`/w/p/{id}` would otherwise
         // parse as a video named "p")
-        if let (instance, playlistID) = parsePeerTubePlaylistURL(url) {
-            return .playlist(.remote(PlaylistID(source: .federated(provider: ContentSource.peertubeProvider, instance: instance), playlistID: playlistID), instance: nil))
-        }
 
         // Try YouTube playlist URLs first (before video URLs since playlist pages can have v= param)
         if let playlistID = parseYouTubePlaylistURL(url) {
@@ -69,21 +65,12 @@ struct URLRouter: Sendable {
         }
 
         // Try PeerTube URLs
-        if let (instance, videoID) = parsePeerTubeURL(url) {
-            return .video(.id(.federated(videoID, instance: instance, uuid: nil)))
-        }
 
         // Try direct media URLs (mp4, m3u8, etc.) - no extraction needed.
         // Remote only: a link from another app must never open a local file.
-        if isHTTPURL(url), DirectMediaHelper.isDirectMediaURL(url) {
-            return .directMedia(url)
-        }
 
         // Fallback: Try external URL extraction for any http/https URL
         // This will be handled by Yattee Server using yt-dlp
-        if isExternalVideoURL(url) {
-            return .externalVideo(url)
-        }
 
         return nil
     }
@@ -94,33 +81,6 @@ struct URLRouter: Sendable {
     private func isHTTPURL(_ url: URL) -> Bool {
         let scheme = url.scheme?.lowercased()
         return scheme == "http" || scheme == "https"
-    }
-
-    private func isExternalVideoURL(_ url: URL) -> Bool {
-        // Must be http or https
-        guard isHTTPURL(url) else {
-            return false
-        }
-
-        // Must have a host
-        guard let host = url.host?.lowercased(), !host.isEmpty else {
-            return false
-        }
-
-        // Skip known non-video sites
-        let excludedHosts = [
-            "google.com", "www.google.com",
-            "bing.com", "www.bing.com",
-            "duckduckgo.com", "www.duckduckgo.com",
-            "apple.com", "www.apple.com",
-            "github.com", "www.github.com"
-        ]
-
-        if excludedHosts.contains(host) {
-            return false
-        }
-
-        return true
     }
 
     // MARK: - Wrapper Unwrapping
@@ -218,53 +178,21 @@ struct URLRouter: Sendable {
 
         switch host {
         case "video":
-            // yattee://video/{videoId}?source={source}&instance={url}
             let videoID = url.lastPathComponent
-            guard !videoID.isEmpty else { return nil }
-
-            let sourceParam = components?.queryItems?.first(where: { $0.name == "source" })?.value
-
-            if sourceParam == "peertube",
-               let instanceStr = components?.queryItems?.first(where: { $0.name == "instance" })?.value,
-               let instanceURL = URL(string: instanceStr) {
-                return .video(.id(.federated(videoID, instance: instanceURL, uuid: nil)))
-            }
-
+            let source = components?.queryItems?.first(where: { $0.name == "source" })?.value
+            guard !videoID.isEmpty, source == nil || source == "youtube" else { return nil }
             return .video(.id(.global(videoID)))
-
         case "channel":
-            // yattee://channel/{channelId}?source={source}&instance={url}
             let channelID = url.lastPathComponent
-            guard !channelID.isEmpty else { return nil }
-
-            let sourceParam = components?.queryItems?.first(where: { $0.name == "source" })?.value
-            let source: ContentSource
-            if sourceParam == "peertube",
-               let instanceStr = components?.queryItems?.first(where: { $0.name == "instance" })?.value,
-               let instanceURL = URL(string: instanceStr) {
-                source = .federated(provider: ContentSource.peertubeProvider, instance: instanceURL)
-            } else {
-                source = .global(provider: ContentSource.youtubeProvider)
-            }
-
-            return .channel(channelID, source)
-
+            let source = components?.queryItems?.first(where: { $0.name == "source" })?.value
+            guard !channelID.isEmpty, source == nil || source == "youtube" else { return nil }
+            return .channel(channelID, .global(provider: ContentSource.youtubeProvider))
         case "playlist":
-            // yattee://playlist/{playlistId}?source={source}&instance={url}
             let playlistID = url.lastPathComponent
-            // yattee://playlist?list=… is the 1.x form
             guard !playlistID.isEmpty, playlistID != "/" else { return parseLegacyScheme(url) }
-
-            let sourceParam = components?.queryItems?.first(where: { $0.name == "source" })?.value
-            let source: ContentSource
-            if sourceParam == "peertube",
-               let instanceStr = components?.queryItems?.first(where: { $0.name == "instance" })?.value,
-               let instanceURL = URL(string: instanceStr) {
-                source = .federated(provider: ContentSource.peertubeProvider, instance: instanceURL)
-            } else {
-                source = .global(provider: ContentSource.youtubeProvider)
-            }
-            return .playlist(.remote(PlaylistID(source: source, playlistID: playlistID), instance: nil))
+            let source = components?.queryItems?.first(where: { $0.name == "source" })?.value
+            guard source == nil || source == "youtube" else { return nil }
+            return .playlist(.remote(.global(playlistID), instance: nil))
 
         case "search":
             // yattee://search?q={query}
@@ -462,67 +390,8 @@ struct URLRouter: Sendable {
     // MARK: - PeerTube URL Parsing
 
     /// Parse PeerTube URLs and extract instance URL and video ID.
-    private func parsePeerTubeURL(_ url: URL) -> (URL, String)? {
-        // PeerTube URLs are typically:
-        // https://instance.tld/w/VIDEO_ID
-        // https://instance.tld/videos/watch/VIDEO_ID
-
-        guard let host = url.host,
-              let scheme = url.scheme else {
-            return nil
-        }
-
-        // Skip known non-PeerTube hosts
-        let nonPeerTubeHosts = [
-            "youtube.com", "www.youtube.com", "m.youtube.com",
-            "youtu.be", "music.youtube.com",
-            "vimeo.com", "www.vimeo.com",
-            "dailymotion.com", "www.dailymotion.com"
-        ]
-
-        if nonPeerTubeHosts.contains(host) {
-            return nil
-        }
-
-        let pathComponents = url.pathComponents
-
-        // /w/VIDEO_ID or /videos/watch/VIDEO_ID
-        if pathComponents.contains("w") || pathComponents.contains("videos") {
-            var videoID: String?
-
-            if let wIndex = pathComponents.firstIndex(of: "w"),
-               pathComponents.count > wIndex + 1 {
-                videoID = pathComponents[wIndex + 1]
-            } else if let watchIndex = pathComponents.firstIndex(of: "watch"),
-                      pathComponents.count > watchIndex + 1 {
-                videoID = pathComponents[watchIndex + 1]
-            }
-
-            if let videoID, !videoID.isEmpty {
-                let instanceURL = URL(string: "\(scheme)://\(host)")!
-                return (instanceURL, videoID)
-            }
-        }
-
-        return nil
-    }
 
     /// Parse PeerTube playlist URLs: `/w/p/{id}` and `/video-playlists/{id}`.
-    private func parsePeerTubePlaylistURL(_ url: URL) -> (URL, String)? {
-        guard let host = url.host, let scheme = url.scheme, isHTTPURL(url) else { return nil }
-        let path = url.pathComponents
-
-        var playlistID: String?
-        if path.count >= 4, path[1] == "w", path[2] == "p" {
-            playlistID = path[3]
-        } else if path.count >= 3, path[1] == "video-playlists" {
-            playlistID = path[2]
-        }
-
-        guard let playlistID, !playlistID.isEmpty,
-              let instanceURL = URL(string: "\(scheme)://\(host)") else { return nil }
-        return (instanceURL, playlistID)
-    }
 
     // MARK: - Channel URL Parsing
 

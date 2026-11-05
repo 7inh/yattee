@@ -26,7 +26,7 @@ struct VideoInfoView: View {
     @State private var loadedVideo: Video?
     @State private var isLoadingInitialVideo = false
     @State private var initialVideoLoadError: String?
-    
+
     // Navigation state - track current position in queue
     @State private var currentVideoIndex: Int?
     @State private var scrollViewID = UUID()
@@ -37,12 +37,12 @@ struct VideoInfoView: View {
     @State private var clearsCarouselPositionWhenIdle = false
     /// Last scroll offset, kept in a box so tracking it doesn't re-render the view every frame
     @State private var carouselOffset = CarouselOffsetBox()
-    
+
     // Continuation loading state
     @State private var extendedVideoList: [Video] = []
     @State private var isLoadingMoreVideos = false
     @State private var loadMoreError: String?
-    
+
     @State private var isBookmarked = false
     @State private var showingCommentsSheet = false
     @State private var showingRemoveBookmarkAlert = false
@@ -70,19 +70,19 @@ struct VideoInfoView: View {
     @State private var isOriginalTitleExpanded = true
 
     // MARK: - Initializers
-    
+
     /// Initialize with a loaded video.
     init(video: Video) {
         self.initMode = .video(video)
     }
-    
+
     /// Initialize with a video ID to fetch.
     init(videoID: VideoID) {
         self.initMode = .videoID(videoID)
     }
-    
+
     // MARK: - Computed Properties
-    
+
     /// The video from init or loaded from API (nil while loading in videoID mode).
     private var video: Video? {
         switch initMode {
@@ -98,9 +98,9 @@ struct VideoInfoView: View {
     @State private var download: Download?
     @State private var isEnqueuingDownload = false
     @State private var showingRemoveDownloadConfirmation = false
-    
+
     // Resume action sheet state
-    
+
     // Video details cache - stores full video details loaded from API
     @State private var loadedVideoDetails: [String: Video] = [:]
     @State private var isLoadingVideoDetails = false
@@ -110,7 +110,7 @@ struct VideoInfoView: View {
         guard let originalList = videoQueueContext?.videoList else { return nil }
         return originalList + extendedVideoList
     }
-    
+
     /// The base video from queue or init parameter (before details are loaded).
     /// Returns nil only when in videoID mode and video hasn't loaded yet.
     private var baseVideo: Video? {
@@ -122,7 +122,7 @@ struct VideoInfoView: View {
         }
         return video
     }
-    
+
     /// The video currently being displayed - prefers cached full details if available.
     /// Returns nil only when in videoID mode and video hasn't loaded yet.
     private var displayedVideo: Video? {
@@ -151,9 +151,7 @@ struct VideoInfoView: View {
     private var downloadManager: DownloadManager? { appEnvironment?.downloadManager }
 
     /// Returns the first enabled Yattee Server instance URL, if any.
-    private var yatteeServerURL: URL? {
-        instancesManager?.yatteeServerInstances.first { $0.isEnabled }?.url
-    }
+    private var yatteeServerURL: URL? { nil }
 
     /// Whether this video is from YouTube (global YouTube provider).
     private var isYouTube: Bool {
@@ -216,10 +214,7 @@ struct VideoInfoView: View {
             return "PeerTube • \(instance.host ?? instance.absoluteString)"
         case .extracted(let extractor, _):
             // For media sources, show type + share name
-            if let mediaSourceID = video.mediaSourceID,
-               let mediaSource = appEnvironment?.mediaSourcesManager.source(byID: mediaSourceID) {
-                return "\(mediaSource.type.displayName) • \(mediaSource.name)"
-            }
+
             // Fallback for other extracted sources (e.g., Bilibili, Vimeo)
             let formatted = extractor.replacingOccurrences(of: "_", with: " ")
             return formatted.prefix(1).uppercased() + formatted.dropFirst()
@@ -230,7 +225,7 @@ struct VideoInfoView: View {
     private var displayTitle: String {
         videoQueueContext?.sourceLabel ?? displayedVideo?.title ?? ""
     }
-    
+
     /// Maximum thumbnail width - full card width on iPhone, capped on iPad/macOS
     private var thumbnailMaxWidth: CGFloat { 500 }
 
@@ -241,7 +236,7 @@ struct VideoInfoView: View {
     private func thumbnailWidth(forCardWidth cardWidth: CGFloat) -> CGFloat {
         min(max(cardWidth - 32, 0), thumbnailMaxWidth)
     }
-    
+
     /// Dynamic label for the play button - shows "Continue at XX:XX" if video has meaningful progress
     /// and resume setting is continueWatching or ask.
     private var playButtonLabel: String {
@@ -253,7 +248,7 @@ struct VideoInfoView: View {
               savedProgress < video.duration * 0.9 else {
             return String(localized: "video.context.play")
         }
-        
+
         let resumeAction = appEnvironment?.settingsManager.resumeAction ?? .continueWatching
         switch resumeAction {
         case .continueWatching, .ask:
@@ -315,7 +310,7 @@ struct VideoInfoView: View {
                 extendedVideoList = context.pageState.extendedVideoList
                 currentVideoIndex = context.pageState.currentVideoIndex ?? context.videoIndex
             }
-            
+
             // Load initial video data (only if video is already loaded)
             guard displayedVideo != nil else { return }
             loadVideoData()
@@ -346,10 +341,10 @@ struct VideoInfoView: View {
             scrollViewID = UUID() // Reset scroll position
             // Don't reset scrollOffset here - let the new scroll view report its geometry
             // Resetting to 0 causes the blur to jump to an incorrect position briefly
-            
+
             // Load new video data
             loadVideoData()
-            
+
             // Pre-load more videos if we're at 95% of the list
             if shouldPreloadMore {
                 Task {
@@ -398,9 +393,9 @@ struct VideoInfoView: View {
             Text(String(localized: "videoInfo.download.remove.message"))
         }
     }
-    
+
     // MARK: - Video Content
-    
+
     /// Main video content view (shown after video is loaded).
     @ViewBuilder
     private var videoContent: some View {
@@ -504,7 +499,6 @@ struct VideoInfoView: View {
                                 relatedVideosSection(relatedVideos)
                             }
 
-
                             // Watch history section (only show if entry exists)
                             if let entry = watchEntry {
                                 Divider()
@@ -531,8 +525,6 @@ struct VideoInfoView: View {
             }
         }
     }
-
-
 
     private var loadingView: some View {
         ProgressView()
@@ -614,7 +606,7 @@ struct VideoInfoView: View {
     private var headerBackgroundColor: Color {
         Color(uiColor: .systemBackground)
     }
-    
+
     /// Single video card without carousel (used when no queue context or non-iOS)
     @ViewBuilder
     private func singleVideoCard(cardWidth: CGFloat) -> some View {
@@ -625,13 +617,13 @@ struct VideoInfoView: View {
                 .frame(maxWidth: .infinity)
         }
     }
-    
+
     /// Spacing between carousel items
     private var carouselSpacing: CGFloat { 16 }
-    
+
     /// Opacity for adjacent thumbnails (non-current videos)
     private var peekOpacity: Double { 0.5 }
-    
+
     /// Full-width thumbnail carousel with peek effect (iOS only)
     /// Uses horizontal ScrollView with scrollTargetBehavior for native gesture handling
     @ViewBuilder
@@ -664,7 +656,7 @@ struct VideoInfoView: View {
                                     }
                                 }
                         }
-                        
+
                         // Placeholder for loading more
                         if videoQueueContext?.canLoadMore == true {
                             videoCardPlaceholder(isLoading: isLoadingMoreVideos, cardWidth: cardWidth)
@@ -742,12 +734,12 @@ struct VideoInfoView: View {
             }
         }
     }
-    
+
     /// Height of thumbnail based on available width (minus horizontal padding), capped, and 16:9 aspect ratio
     private func thumbnailHeight(for containerWidth: CGFloat) -> CGFloat {
         thumbnailWidth(forCardWidth: containerWidth) * 9 / 16
     }
-    
+
     /// A single video card with thumbnail, title, and channel info
     /// - Parameters:
     ///   - video: The video to display (used for title/channel - stable reference across carousel scrolls)
@@ -808,7 +800,7 @@ struct VideoInfoView: View {
                 }
             }
             .modifier(VideoInfoPlayThumbnailTipModifier(enabled: isCurrent && showsThumbnailPlayTip, canSwipe: canSwipeThumbnails))
-            
+
             // Title - full card width so long titles fit more characters per line.
             // Always reserves two lines of height so carousel cards don't shift
             // vertically when swiping between short and long titles.
@@ -819,7 +811,7 @@ struct VideoInfoView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
                 .opacity(showTitle ? 1.0 : 0.0)
-            
+
             // Channel row (horizontal) - only tappable if we have real channel info
             // Use authorFrom for author info (includes avatar URL) if available
             Group {
@@ -1156,71 +1148,7 @@ struct VideoInfoView: View {
 
     /// Starts a download either automatically or by showing the quality sheet.
     private func startDownload(for video: Video) {
-        guard let appEnvironment else {
-            presentAppSheet(.downloadOptions(video))
-            return
-        }
-
-        // Media source videos (SMB/WebDAV/local) use direct file URLs - no API call needed
-        if video.isFromMediaSource {
-            isEnqueuingDownload = true
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueueMediaSource(
-                        video,
-                        mediaSourcesManager: appEnvironment.mediaSourcesManager,
-                        webDAVClient: appEnvironment.webDAVClient,
-                        smbClient: appEnvironment.smbClient
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-                await MainActor.run {
-                    isEnqueuingDownload = false
-                }
-            }
-            return
-        }
-
-        let downloadSettings = appEnvironment.downloadSettings
-
-        // Check if auto-download mode
-        if downloadSettings.preferredDownloadQuality != .ask,
-           let instance = appEnvironment.instancesManager.instance(for: video) {
-            isEnqueuingDownload = true
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueue(
-                        video,
-                        preferredQuality: downloadSettings.preferredDownloadQuality,
-                        preferredAudioLanguage: appEnvironment.settingsManager.preferredAudioLanguage,
-                        preferredSubtitlesLanguage: appEnvironment.settingsManager.preferredSubtitlesLanguage,
-                        includeSubtitles: downloadSettings.includeSubtitlesInAutoDownload,
-                        contentService: appEnvironment.contentService,
-                        instance: instance
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-                await MainActor.run {
-                    isEnqueuingDownload = false
-                }
-            }
-        } else {
-            presentAppSheet(.downloadOptions(video))
-        }
+        presentAppSheet(.downloadOptions(video))
     }
 
     private func downloadSection(_ download: Download) -> some View {
@@ -1431,7 +1359,7 @@ struct VideoInfoView: View {
     }
 
     // MARK: - Bookmark Details Section
-    
+
     private func bookmarkDetailsSection(_ bookmark: Bookmark) -> some View {
         CollapsibleSection(title: String(localized: "videoInfo.section.bookmarkDetails"), isExpanded: $isBookmarkExpanded) {
             VStack(alignment: .leading, spacing: 12) {
@@ -1440,12 +1368,12 @@ struct VideoInfoView: View {
                     Text(String(localized: "videoInfo.bookmarkedAt"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     Text(bookmark.createdAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
-                
+
                 // Tags section
                 VStack(alignment: .leading, spacing: 8) {
                     Text(String(localized: "videoInfo.bookmark.tags"))
@@ -1470,7 +1398,7 @@ struct VideoInfoView: View {
                             }
                     }
                 }
-                
+
                 // Notes section
                 VStack(alignment: .leading, spacing: 8) {
                     Text(String(localized: "videoInfo.bookmark.notes"))
@@ -1795,7 +1723,7 @@ struct VideoInfoView: View {
             // Not bookmarked - add bookmark
             dataManager.addBookmark(for: video)
             isBookmarked = true
-            
+
             // Fetch newly created bookmark and load its data
             if let bookmark = dataManager.bookmark(for: video.id.videoID) {
                 currentBookmark = bookmark
@@ -1804,13 +1732,13 @@ struct VideoInfoView: View {
             }
         }
     }
-    
+
     private func removeBookmark() {
         guard let dataManager, let video = displayedVideo else { return }
-        
+
         // Cancel any pending save
         bookmarkSaveTask?.cancel()
-        
+
         // Remove bookmark
         dataManager.removeBookmark(for: video.id.videoID)
         isBookmarked = false
@@ -1818,40 +1746,40 @@ struct VideoInfoView: View {
         bookmarkTags = []
         bookmarkNote = ""
     }
-    
+
     private func debouncedSaveBookmark() {
         // Cancel existing save task
         bookmarkSaveTask?.cancel()
-        
+
         // Create new debounced save task
         bookmarkSaveTask = Task {
             // Wait 1 second before saving
             try? await Task.sleep(for: .seconds(1))
-            
+
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
-            
+
             // Save bookmark
             await MainActor.run {
                 saveBookmark()
             }
         }
     }
-    
+
     private func saveBookmark() {
         guard let dataManager, let video = displayedVideo else { return }
-        
+
         // Truncate note if too long
         let finalNote = bookmarkNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let truncatedNote = String(finalNote.prefix(1000))
-        
+
         // Update bookmark
         dataManager.updateBookmark(
             videoID: video.id.videoID,
             tags: bookmarkTags,
             note: truncatedNote.isEmpty ? nil : truncatedNote
         )
-        
+
         // Refresh bookmark data
         currentBookmark = dataManager.bookmark(for: video.id.videoID)
     }
@@ -1921,9 +1849,9 @@ struct VideoInfoView: View {
             }
         }
     }
-    
+
     // MARK: - Video Details Loading
-    
+
     /// Load full video details from the API (fails silently)
     @MainActor
     private func loadVideoDetails() async {
@@ -1940,41 +1868,6 @@ struct VideoInfoView: View {
         }
 
         // Check the video source type for extracted content
-        if case .extracted(let extractor, let originalURL) = base.id.source {
-            // Skip API fetch for local media sources (SMB, WebDAV, local files)
-            if extractor == MediaFile.smbProvider
-                || extractor == MediaFile.webdavProvider
-                || extractor == MediaFile.localFolderProvider
-                || extractor == DirectMediaHelper.provider {
-                isLoadingVideoDetails = false
-                return
-            }
-
-            // For other extracted content (Bilibili, etc.), use the extract endpoint
-            guard let contentService,
-                  let instancesManager,
-                  let instance = instancesManager.yatteeServerInstances.first else {
-                isLoadingVideoDetails = false
-                return
-            }
-
-            isLoadingVideoDetails = true
-            videoDetailsLoadError = nil
-            do {
-                // Use extractURL method - just use the video part
-                let (fullVideo, _, _) = try await contentService.extractURL(originalURL, instance: instance)
-                await prefetchNewThumbnailIfNeeded(old: base, new: fullVideo)
-                invalidateStaleThumbnails(old: base, new: fullVideo)
-                loadedVideoDetails[videoID] = fullVideo
-                CachedChannelData.cacheAuthor(fullVideo.author)
-            } catch {
-                // Use the partial video data we have; the body surfaces the
-                // error only when the video is a bare placeholder.
-                videoDetailsLoadError = error.localizedDescription
-            }
-            isLoadingVideoDetails = false
-            return
-        }
 
         // For YouTube/global content, use existing video endpoint
         guard let contentService,
@@ -2032,7 +1925,7 @@ struct VideoInfoView: View {
             ImageLoadingService.shared.removeCachedImage(for: thumb.url)
         }
     }
-    
+
     /// Load initial video from API (for videoID init mode).
     private func loadInitialVideoIfNeeded() async {
         guard case .videoID(let videoID) = initMode else { return }
@@ -2043,14 +1936,14 @@ struct VideoInfoView: View {
             initialVideoLoadError = String(localized: "error.noInstance")
             return
         }
-        
+
         isLoadingInitialVideo = true
         initialVideoLoadError = nil
-        
+
         do {
             loadedVideo = try await contentService.video(id: videoID.videoID, instance: instance)
             isLoadingInitialVideo = false
-            
+
             // Now that video is loaded, trigger initial data loading
             loadVideoData()
         } catch {
@@ -2058,7 +1951,7 @@ struct VideoInfoView: View {
             isLoadingInitialVideo = false
         }
     }
-    
+
     // MARK: - Queue Context Helpers
 
     /// Play the video, respecting the user's resume action setting for partially watched videos.
@@ -2087,11 +1980,11 @@ struct VideoInfoView: View {
         let completionThreshold = videoDuration > 0 ? videoDuration * 0.9 : Double.greatestFiniteMagnitude
         // Minimum threshold - treat < 5 seconds as "not watched" to avoid asking for very short progress
         let minimumThreshold: TimeInterval = 5
-        
+
         // Only consider resume logic if there's meaningful saved progress (>5s) and video wasn't completed
         if let savedProgress, savedProgress >= minimumThreshold, savedProgress < completionThreshold {
             let resumeActionSetting = env.settingsManager.resumeAction
-            
+
             switch resumeActionSetting {
             case .continueWatching:
                 // Use saved progress as start time
@@ -2113,7 +2006,7 @@ struct VideoInfoView: View {
             playVideoWithStartTime(0)
         }
     }
-    
+
     /// Plays the video with the specified start time.
     private func playVideoWithStartTime(_ time: TimeInterval, forceStartTime: Bool = false) {
         guard let video = displayedVideo else { return }
@@ -2121,22 +2014,6 @@ struct VideoInfoView: View {
         // Media-browser playback must go through `playFromMediaBrowser` so the
         // queue manager sets up on-demand stream/caption resolution — otherwise
         // Samba/WebDAV files cannot play.
-        if let ctx = videoQueueContext,
-           let mb = ctx.mediaBrowserPlayback,
-           let queueManager = queueManager {
-            let playableFiles = mb.allFilesInFolder.filter { $0.isPlayable }
-            let index = playableFiles.firstIndex(where: { $0.toVideo().id.videoID == video.id.videoID })
-                ?? currentVideoIndex
-                ?? ctx.videoIndex
-                ?? 0
-            queueManager.playFromMediaBrowser(
-                files: playableFiles,
-                index: index,
-                source: mb.source,
-                allFilesInFolder: mb.allFilesInFolder
-            )
-            return
-        }
 
         guard let context = videoQueueContext,
               context.hasQueueInfo,
@@ -2150,10 +2027,10 @@ struct VideoInfoView: View {
             }
             return
         }
-        
+
         // Use current index if navigating, otherwise use original context index
         let playIndex = currentVideoIndex ?? context.videoIndex ?? 0
-        
+
         // Play with queue context
         queueManager.playFromList(
             videos: list,
@@ -2164,30 +2041,30 @@ struct VideoInfoView: View {
             forceStartTime: forceStartTime
         )
     }
-    
+
     // MARK: - Video Navigation
-    
+
     /// Whether we can navigate to the previous video
     private var canNavigatePrevious: Bool {
         guard let index = currentVideoIndex else { return false }
         return index > 0
     }
-    
+
     /// Whether we can navigate to the next video
     private var canNavigateNext: Bool {
         guard let index = currentVideoIndex else {
             return false
         }
-        
+
         // Check if we can navigate within loaded videos
         if let videos = allVideos, index < videos.count - 1 {
             return true
         }
-        
+
         // Check if we can load more videos
         return videoQueueContext?.canLoadMore == true
     }
-    
+
     /// Whether we should pre-load more videos (at 95% of current list)
     private var shouldPreloadMore: Bool {
         guard let videos = allVideos,
@@ -2197,26 +2074,26 @@ struct VideoInfoView: View {
               loadMoreError == nil else {
             return false
         }
-        
+
         let threshold = Int(Double(videos.count) * 0.95)
         return index >= threshold
     }
-    
+
     /// Navigate to the previous video in the queue
     private func navigateToPrevious() {
         guard canNavigatePrevious, let index = currentVideoIndex else { return }
         currentVideoIndex = index - 1
     }
-    
+
     /// Navigate to the next video in the queue
     private func navigateToNext() {
         guard let index = currentVideoIndex else {
             return
         }
-        
+
         // Clear any previous errors when navigating
         loadMoreError = nil
-        
+
         // If we're at the last loaded video and can load more, trigger loading
         if let videos = allVideos,
            index == videos.count - 1,
@@ -2235,7 +2112,7 @@ struct VideoInfoView: View {
             currentVideoIndex = index + 1
         }
     }
-    
+
     /// Load more videos via continuation callback
     @MainActor
     private func loadMoreVideos() async {
@@ -2243,32 +2120,32 @@ struct VideoInfoView: View {
               let callback = videoQueueContext?.loadMoreVideos else {
             return
         }
-        
+
         isLoadingMoreVideos = true
         loadMoreError = nil
-        
+
         do {
             let (newVideos, _) = try await callback()
-            
+
             // Limit extended list to 500 videos to prevent memory issues
             let remainingCapacity = max(0, 500 - extendedVideoList.count)
             let videosToAdd = Array(newVideos.prefix(remainingCapacity))
-            
+
             extendedVideoList.append(contentsOf: videosToAdd)
             videoQueueContext?.pageState.extendedVideoList = extendedVideoList
         } catch {
             loadMoreError = error.localizedDescription
         }
-        
+
         isLoadingMoreVideos = false
     }
-    
+
     /// Load video-specific data (bookmark, watch history, comments, etc.)
     private func loadVideoData() {
         guard let video = displayedVideo else { return }
-        
+
         isBookmarked = dataManager?.isBookmarked(videoID: video.id.videoID) ?? false
-        
+
         // Load bookmark details if bookmarked
         if isBookmarked, let bookmark = dataManager?.bookmark(for: video.id.videoID) {
             currentBookmark = bookmark
@@ -2279,7 +2156,7 @@ struct VideoInfoView: View {
             bookmarkTags = []
             bookmarkNote = ""
         }
-        
+
         watchEntry = dataManager?.watchEntry(for: video.id.videoID)
         download = downloadManager?.download(for: video.id)
         loadComments()

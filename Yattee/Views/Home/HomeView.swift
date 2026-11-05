@@ -132,7 +132,6 @@ struct HomeView: View {
         appEnvironment?.settingsManager.listStyle ?? .inset
     }
 
-
     var body: some View {
         // Split from `chrome` so the modifier chain stays within what the
         // type-checker will resolve in one expression.
@@ -285,7 +284,6 @@ struct HomeView: View {
     }
 
     // MARK: - Main Content
-
 
     @ViewBuilder
     private var mainContent: some View {
@@ -506,8 +504,6 @@ struct HomeView: View {
             mediaSourcesShortcutCard
         case .instanceContent(let instanceID, let contentType):
             instanceContentShortcutCard(instanceID: instanceID, contentType: contentType)
-        case .mediaSource(let sourceID):
-            mediaSourceShortcutCard(sourceID: sourceID)
         }
     }
 
@@ -536,8 +532,6 @@ struct HomeView: View {
             mediaSourcesShortcutRow
         case .instanceContent(let instanceID, let contentType):
             instanceContentShortcutRow(instanceID: instanceID, contentType: contentType)
-        case .mediaSource(let sourceID):
-            mediaSourceShortcutRow(sourceID: sourceID)
         }
     }
 
@@ -697,9 +691,8 @@ struct HomeView: View {
     }
 
     private var mediaSourcesShortcutCard: some View {
-        let mediaSourcesCount = appEnvironment?.mediaSourcesManager.enabledSources.count ?? 0
         let instancesCount = appEnvironment?.instancesManager.enabledInstances.count ?? 0
-        let count = mediaSourcesCount + instancesCount
+        let count = instancesCount
         return Button {
             appEnvironment?.navigationCoordinator.navigate(to: .mediaSources)
         } label: {
@@ -737,25 +730,6 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func mediaSourceShortcutCard(sourceID: UUID) -> some View {
-        if let source = appEnvironment?.mediaSourcesManager.sources.first(where: { $0.id == sourceID }),
-           source.isEnabled {
-            Button {
-                // Navigate to MediaBrowserView at root path
-                appEnvironment?.navigationCoordinator.navigate(to: .mediaBrowser(source, path: "/"))
-            } label: {
-                HomeShortcutCardView(
-                    icon: source.type.systemImage,
-                    title: source.name,
-                    count: 0,
-                    subtitle: source.type.displayName,
-                    showsCount: false,
-                    colorfulColor: HomeShortcutItem.mediaSource(sourceID: sourceID).cardColor
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
 
     // MARK: - Shortcut Row Views
 
@@ -883,9 +857,8 @@ struct HomeView: View {
     }
 
     private var mediaSourcesShortcutRow: some View {
-        let mediaSourcesCount = appEnvironment?.mediaSourcesManager.enabledSources.count ?? 0
         let instancesCount = appEnvironment?.instancesManager.enabledInstances.count ?? 0
-        let count = mediaSourcesCount + instancesCount
+        let count = instancesCount
         return Button {
             appEnvironment?.navigationCoordinator.navigate(to: .mediaSources)
         } label: {
@@ -909,23 +882,6 @@ struct HomeView: View {
                     icon: contentType.icon,
                     title: contentType.localizedTitle,
                     subtitle: instance.displayName
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
-    private func mediaSourceShortcutRow(sourceID: UUID) -> some View {
-        if let source = appEnvironment?.mediaSourcesManager.sources.first(where: { $0.id == sourceID }),
-           source.isEnabled {
-            Button {
-                appEnvironment?.navigationCoordinator.navigate(to: .mediaBrowser(source, path: "/"))
-            } label: {
-                HomeShortcutRowView(
-                    icon: source.type.systemImage,
-                    title: source.name,
-                    subtitle: source.type.displayName
                 )
             }
             .buttonStyle(.plain)
@@ -977,56 +933,56 @@ struct HomeView: View {
             lowerBound: serverHistory?.countIsLowerBound == true
         )
     }
-    
+
     // MARK: - Queue Support
-    
+
     /// Queue source for recent bookmarks section
     private var recentBookmarksQueueSource: QueueSource { .manual }
-    
+
     /// Queue source for continue watching section
     private var continueWatchingQueueSource: QueueSource { .manual }
-    
+
     /// Queue source for recent history section
     private var recentHistoryQueueSource: QueueSource { .manual }
-    
+
     /// Queue source for feed section
     private var feedQueueSource: QueueSource { .subscriptions(continuation: nil) }
-    
+
     /// Returns queue source for instance content
     private func instanceQueueSource(instanceID: UUID, contentType: InstanceContentType) -> QueueSource {
         .manual
     }
-    
+
     /// Stub callback for recent bookmarks queue continuation
     @Sendable
     private func loadMoreRecentBookmarksCallback() async throws -> ([Video], String?) {
         return ([], nil)  // No pagination for Home sections
     }
-    
+
     /// Stub callback for continue watching queue continuation
     @Sendable
     private func loadMoreContinueWatchingCallback() async throws -> ([Video], String?) {
         return ([], nil)  // No pagination for Home sections
     }
-    
+
     /// Stub callback for recent history queue continuation
     @Sendable
     private func loadMoreRecentHistoryCallback() async throws -> ([Video], String?) {
         return ([], nil)  // No pagination for Home sections
     }
-    
+
     /// Stub callback for feed queue continuation
     @Sendable
     private func loadMoreFeedCallback() async throws -> ([Video], String?) {
         return ([], nil)  // Feed section doesn't paginate
     }
-    
+
     /// Stub callback for instance content queue continuation
     @Sendable
     private func loadMoreInstanceContentCallback() async throws -> ([Video], String?) {
         return ([], nil)  // No pagination for Home sections
     }
-    
+
     /// Stub callback for recent downloads queue continuation
     @Sendable
     private func loadMoreRecentDownloadsCallback() async throws -> ([Video], String?) {
@@ -1066,17 +1022,8 @@ struct HomeView: View {
             if !homeRemoteServers.isEmpty {
                 remoteServersSection
             }
-        case .fileSources:
-            if !homeFileSources.isEmpty {
-                fileSourcesSection
-            }
         case .instanceContent(let instanceID, let contentType):
             instanceContentSection(instanceID: instanceID, contentType: contentType)
-        case .mediaSource:
-            // Media sources are shortcuts-only; any legacy media-source section is
-            // stripped by removeAllHomeMediaSourceSections() on load, so this is
-            // unreachable in practice. Rendered as empty for defense-in-depth.
-            EmptyView()
         }
     }
 
@@ -1089,10 +1036,6 @@ struct HomeView: View {
     }
 
     /// Enabled file sources in the Sources screen's order.
-    private var homeFileSources: [MediaSource] {
-        let sources = appEnvironment?.mediaSourcesManager.enabledSources ?? []
-        return appEnvironment?.sourcesSettings.sorted(sources) ?? sources
-    }
 
     private var remoteServersSection: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1111,40 +1054,6 @@ struct HomeView: View {
                                 systemImage: instance.type.systemImage,
                                 name: instance.displayName,
                                 detail: "\(instance.type.displayName) - \(instance.url.host ?? instance.url.absoluteString)"
-                            )
-                        }
-                        .foregroundStyle(.primary)
-                    }
-                }
-            }
-        }
-    }
-
-    private var fileSourcesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(title: "sources.section.fileSources") {
-                appEnvironment?.navigationCoordinator.navigate(to: .mediaSources)
-            }
-
-            VideoListContent(listStyle: listStyle) {
-                let sources = homeFileSources
-                ForEach(Array(sources.enumerated()), id: \.element.id) { index, source in
-                    let needsPassword = appEnvironment?.mediaSourcesManager.needsPassword(for: source) ?? false
-                    SourceListRow(isLast: index == sources.count - 1, listStyle: listStyle) {
-                        Button {
-                            if needsPassword {
-                                // The browser can't open without credentials; the
-                                // Sources screen holds the edit flow that fixes it.
-                                appEnvironment?.navigationCoordinator.navigate(to: .mediaSources)
-                            } else {
-                                appEnvironment?.navigationCoordinator.navigate(to: .mediaBrowser(source, path: "/"))
-                            }
-                        } label: {
-                            homeSourceRow(
-                                systemImage: source.type.systemImage,
-                                name: source.name,
-                                detail: "\(source.type.displayName) - \(source.urlDisplayString)",
-                                needsPassword: needsPassword
                             )
                         }
                         .foregroundStyle(.primary)
@@ -1575,9 +1484,7 @@ struct HomeView: View {
         loadChannelsData()
         loadRemoteDevicesData()
         cleanupOrphanedHomeInstanceItems()
-        cleanupOrphanedHomeMediaSourceItems()
         // Media sources are shortcuts-only; drop any legacy media-source sections.
-        appEnvironment?.settingsManager.removeAllHomeMediaSourceSections()
     }
 
     private func cleanupOrphanedHomeInstanceItems() {
@@ -1586,14 +1493,6 @@ struct HomeView: View {
 
         let validIDs = Set(instancesManager.instances.map(\.id))
         settingsManager.cleanupOrphanedHomeInstanceItems(validInstanceIDs: validIDs)
-    }
-
-    private func cleanupOrphanedHomeMediaSourceItems() {
-        guard let mediaSourcesManager = appEnvironment?.mediaSourcesManager,
-              let settingsManager = appEnvironment?.settingsManager else { return }
-
-        let validIDs = Set(mediaSourcesManager.sources.map(\.id))
-        settingsManager.cleanupOrphanedHomeMediaSourceItems(validSourceIDs: validIDs)
     }
 
     private func loadPlaylistsData() {

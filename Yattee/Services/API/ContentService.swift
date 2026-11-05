@@ -19,9 +19,6 @@ actor ContentService: ContentServiceProtocol {
 
     // Cached API instances for default SSL mode
     private let defaultInvidiousAPI: InvidiousAPI
-    private let defaultPipedAPI: PipedAPI
-    private let defaultPeerTubeAPI: PeerTubeAPI
-    private let defaultYatteeServerAPI: YatteeServerAPI
 
     /// Credentials manager for fetching basic auth headers on demand.
     private let basicAuthCredentialsManager: BasicAuthCredentialsManager?
@@ -31,9 +28,6 @@ actor ContentService: ContentServiceProtocol {
         self.httpClientFactory = HTTPClientFactory()
         self.defaultHTTPClient = httpClient
         self.defaultInvidiousAPI = InvidiousAPI(httpClient: httpClient)
-        self.defaultPipedAPI = PipedAPI(httpClient: httpClient)
-        self.defaultPeerTubeAPI = PeerTubeAPI(httpClient: httpClient)
-        self.defaultYatteeServerAPI = YatteeServerAPI(httpClient: httpClient)
         self.basicAuthCredentialsManager = basicAuthCredentialsManager
     }
 
@@ -56,26 +50,10 @@ actor ContentService: ContentServiceProtocol {
         switch instance.type {
         case .invidious:
             return await invidiousAPI(for: instance)
-        case .piped:
-            return await pipedAPI(for: instance)
-        case .peertube:
-            return await peerTubeAPI(for: instance)
-        case .yatteeServer:
-            return await yatteeServerAPI(for: instance)
         }
     }
 
     /// Returns a YatteeServerAPI configured for the instance's SSL and auth requirements.
-    private func yatteeServerAPI(for instance: Instance) async -> YatteeServerAPI {
-        if let authClient = await httpClientWithBasicAuth(for: instance) {
-            return YatteeServerAPI(httpClient: authClient)
-        }
-        if !instance.allowInvalidCertificates {
-            return defaultYatteeServerAPI
-        }
-        let insecureClient = httpClientFactory.createClient(for: instance)
-        return YatteeServerAPI(httpClient: insecureClient)
-    }
 
     /// Returns an InvidiousAPI configured for the instance's SSL and auth requirements.
     private func invidiousAPI(for instance: Instance) async -> InvidiousAPI {
@@ -90,28 +68,8 @@ actor ContentService: ContentServiceProtocol {
     }
 
     /// Returns a PipedAPI configured for the instance's SSL and auth requirements.
-    private func pipedAPI(for instance: Instance) async -> PipedAPI {
-        if let authClient = await httpClientWithBasicAuth(for: instance) {
-            return PipedAPI(httpClient: authClient)
-        }
-        if !instance.allowInvalidCertificates {
-            return defaultPipedAPI
-        }
-        let insecureClient = httpClientFactory.createClient(for: instance)
-        return PipedAPI(httpClient: insecureClient)
-    }
 
     /// Returns a PeerTubeAPI configured for the instance's SSL and auth requirements.
-    private func peerTubeAPI(for instance: Instance) async -> PeerTubeAPI {
-        if let authClient = await httpClientWithBasicAuth(for: instance) {
-            return PeerTubeAPI(httpClient: authClient)
-        }
-        if !instance.allowInvalidCertificates {
-            return defaultPeerTubeAPI
-        }
-        let insecureClient = httpClientFactory.createClient(for: instance)
-        return PeerTubeAPI(httpClient: insecureClient)
-    }
 
     // MARK: - ContentServiceProtocol
 
@@ -133,11 +91,6 @@ actor ContentService: ContentServiceProtocol {
                 maxResults: 50  // Fetch 50, but HomeView will show max 15 per section
             )
             return response.videos
-        case .piped:
-            return try await pipedAPI(for: instance).feed(
-                instance: instance,
-                authToken: credential
-            )
         default:
             throw APIError.notSupported
         }
@@ -157,12 +110,6 @@ actor ContentService: ContentServiceProtocol {
                 page: page
             )
             return FeedPage(videos: response.videos, hasMore: response.hasMore)
-        case .piped:
-            let videos = try await pipedAPI(for: instance).feed(
-                instance: instance,
-                authToken: credential
-            )
-            return FeedPage(videos: videos, hasMore: false)
         default:
             throw APIError.notSupported
         }
@@ -176,12 +123,6 @@ actor ContentService: ContentServiceProtocol {
                 sid: credential
             )
             return subs.map { $0.toChannel(baseURL: instance.url) }
-        case .piped:
-            let subs = try await pipedAPI(for: instance).subscriptions(
-                instance: instance,
-                authToken: credential
-            )
-            return subs.map { $0.toChannel() }
         default:
             throw APIError.notSupported
         }
@@ -242,8 +183,6 @@ actor ContentService: ContentServiceProtocol {
         switch instance.type {
         case .invidious:
             return try await invidiousAPI(for: instance).userPlaylists(instance: instance, sid: credential)
-        case .piped:
-            return try await pipedAPI(for: instance).userPlaylists(instance: instance, authToken: credential)
         default:
             throw APIError.notSupported
         }
@@ -262,12 +201,6 @@ actor ContentService: ContentServiceProtocol {
                 id: id,
                 instance: instance,
                 sid: credential
-            )
-        case .piped:
-            return try await pipedAPI(for: instance).userPlaylistSnapshot(
-                id: id,
-                instance: instance,
-                authToken: credential
             )
         default:
             throw APIError.notSupported
@@ -302,14 +235,6 @@ actor ContentService: ContentServiceProtocol {
                 sid: credential
             )
 
-        case .piped:
-            let playlistID = try await pipedAPI(for: instance).createPlaylist(
-                name: title,
-                instance: instance,
-                authToken: credential
-            )
-            return Playlist(id: .global(playlistID), title: title)
-
         default:
             throw APIError.notSupported
         }
@@ -335,14 +260,6 @@ actor ContentService: ContentServiceProtocol {
                 privacy: privacy,
                 instance: instance,
                 sid: credential
-            )
-
-        case .piped:
-            try await pipedAPI(for: instance).renamePlaylist(
-                id: id,
-                newName: title,
-                instance: instance,
-                authToken: credential
             )
 
         default:
@@ -373,14 +290,6 @@ actor ContentService: ContentServiceProtocol {
                 sid: credential
             )
 
-        case .piped:
-            try await pipedAPI(for: instance).updatePlaylistDescription(
-                id: id,
-                description: description,
-                instance: instance,
-                authToken: credential
-            )
-
         default:
             throw APIError.notSupported
         }
@@ -391,8 +300,6 @@ actor ContentService: ContentServiceProtocol {
         switch instance.type {
         case .invidious:
             try await invidiousAPI(for: instance).deletePlaylist(id: id, instance: instance, sid: credential)
-        case .piped:
-            try await pipedAPI(for: instance).deletePlaylist(id: id, instance: instance, authToken: credential)
         default:
             throw APIError.notSupported
         }
@@ -413,13 +320,6 @@ actor ContentService: ContentServiceProtocol {
                 instance: instance,
                 sid: credential
             )
-        case .piped:
-            try await pipedAPI(for: instance).addToPlaylist(
-                id: playlistID,
-                videoID: videoID,
-                instance: instance,
-                authToken: credential
-            )
         default:
             throw APIError.notSupported
         }
@@ -436,29 +336,10 @@ actor ContentService: ContentServiceProtocol {
         instance: Instance,
         credential: String
     ) async throws {
-        switch (entryID, instance.type) {
-        case (.invidious(let playlistID, let indexID), .invidious):
-            try await invidiousAPI(for: instance).removeVideoFromPlaylist(
-                playlistID: playlistID,
-                indexID: indexID,
-                instance: instance,
-                sid: credential
-            )
-
-        case (.piped(let playlistID, let position), .piped):
-            try await pipedAPI(for: instance).removeFromPlaylist(
-                id: playlistID,
-                index: position,
-                instance: instance,
-                authToken: credential
-            )
-
-        case (_, .invidious), (_, .piped):
-            throw APIError.invalidRequest
-
-        default:
-            throw APIError.notSupported
-        }
+        guard case .invidious(let playlistID, let indexID) = entryID else { throw APIError.invalidRequest }
+        try await invidiousAPI(for: instance).removeVideoFromPlaylist(
+            playlistID: playlistID, indexID: indexID, instance: instance, sid: credential
+        )
     }
 
     // MARK: - Watch History
@@ -541,14 +422,6 @@ actor ContentService: ContentServiceProtocol {
                 instance: instance,
                 extraHeaders: extraHeaders
             )
-        case .piped:
-            // Piped's login goes through the HTTPClient, so the per-instance
-            // client already carries the proxy header in its default headers.
-            return try await pipedAPI(for: instance).login(
-                username: username,
-                password: password,
-                instance: instance
-            )
         default:
             // Routing, not policy: whether a backend has accounts to sign in to
             // is `InstanceType.accountCapabilities.supportsAccounts`, and a case
@@ -560,10 +433,7 @@ actor ContentService: ContentServiceProtocol {
     /// Fetches video details + streams for downloads. For Yattee Server this routes
     /// through `/proxy/fast/`, which caches the file on disk on the server.
     func videoWithProxyStreamsAndCaptionsAndStoryboards(id: String, instance: Instance) async throws -> (video: Video, streams: [Stream], captions: [Caption], storyboards: [Storyboard]) {
-        if instance.type == .yatteeServer {
-            return try await yatteeServerAPI(for: instance)
-                .videoWithProxyStreamsAndCaptionsAndStoryboards(id: id, instance: instance, mode: .download)
-        }
+
         var result = try await videoWithStreamsAndCaptionsAndStoryboards(id: id, instance: instance)
         result.streams = await InvidiousAPI.proxyStreamsIfNeeded(result.streams, instance: instance)
         return result
@@ -582,40 +452,6 @@ actor ContentService: ContentServiceProtocol {
         switch instance.type {
         case .invidious:
             return try await invidiousAPI(for: instance).videoWithStreamsAndCaptionsAndStoryboards(id: id, instance: instance)
-        case .yatteeServer:
-            // When the user has opted into proxying for this Yattee Server source,
-            // fetch playback streams through the server's /proxy/relay byte-relay
-            // (Range-friendly, fast TTFB). When off, leave routing to the server's
-            // per-site proxy_streaming flag — the server can still proxy by default,
-            // but the client doesn't force it on top.
-            if instance.proxiesVideos {
-                return try await yatteeServerAPI(for: instance)
-                    .videoWithProxyStreamsAndCaptionsAndStoryboards(id: id, instance: instance, mode: .relay)
-            }
-            return try await yatteeServerAPI(for: instance).videoWithStreamsAndCaptionsAndStoryboards(id: id, instance: instance)
-        case .piped:
-            // Piped fallback - make separate calls (no storyboard support)
-            let pipedAPI = await pipedAPI(for: instance)
-            async let videoTask = pipedAPI.video(id: id, instance: instance)
-            async let streamsTask = pipedAPI.streams(videoID: id, instance: instance)
-            async let captionsTask = pipedAPI.captions(videoID: id, instance: instance)
-
-            let video = try await videoTask
-            let streams = try await streamsTask
-            let captions = try await captionsTask
-            return (video, streams, captions, [])
-
-        case .peertube:
-            // PeerTube fallback - make separate calls (no storyboard support)
-            let peerTubeAPI = await peerTubeAPI(for: instance)
-            async let videoTask = peerTubeAPI.video(id: id, instance: instance)
-            async let streamsTask = peerTubeAPI.streams(videoID: id, instance: instance)
-            async let captionsTask = peerTubeAPI.captions(videoID: id, instance: instance)
-
-            let video = try await videoTask
-            let streams = try await streamsTask
-            let captions = try await captionsTask
-            return (video, streams, captions, [])
         }
     }
 
@@ -628,21 +464,6 @@ actor ContentService: ContentServiceProtocol {
     ///   - url: The URL to extract (e.g., https://vimeo.com/12345)
     ///   - instance: A Yattee Server instance
     /// - Returns: Tuple of video, streams, and captions
-    func extractURL(_ url: URL, instance: Instance) async throws -> (video: Video, streams: [Stream], captions: [Caption]) {
-        guard instance.type == .yatteeServer else {
-            throw APIError.notSupported
-        }
-        // Keyed by link only: callers pick the Yattee Server differently, and
-        // any server returns equivalent streams within the TTL.
-        let key = url.absoluteString
-        if let cached = recentExtractions[key], Date().timeIntervalSince(cached.date) < Self.extractionCacheTTL {
-            return cached.result
-        }
-        let result = try await yatteeServerAPI(for: instance).extractURL(url, instance: instance)
-        recentExtractions = recentExtractions.filter { Date().timeIntervalSince($0.value.date) < Self.extractionCacheTTL }
-        recentExtractions[key] = (result, Date())
-        return result
-    }
 
     /// How long an extraction is reused. A link opened from Open Link is
     /// extracted to show its details page, which re-extracts for full details,
@@ -662,23 +483,12 @@ actor ContentService: ContentServiceProtocol {
     ///   - page: Page number (1-based)
     ///   - instance: A Yattee Server instance
     /// - Returns: Tuple of channel, videos list, and optional continuation token for next page
-    func extractChannel(url: URL, page: Int = 1, instance: Instance) async throws -> (channel: Channel, videos: [Video], continuation: String?) {
-        guard instance.type == .yatteeServer else {
-            throw APIError.notSupported
-        }
-        return try await yatteeServerAPI(for: instance).extractChannel(url: url, page: page, instance: instance)
-    }
 
     // MARK: - Yattee Server Info
 
     /// Fetches server info including version, dependencies, and enabled sites.
     /// Requires a Yattee Server instance.
-    func yatteeServerInfo(for instance: Instance) async throws -> InstanceDetectorModels.YatteeServerFullInfo {
-        guard instance.type == .yatteeServer else {
-            throw APIError.notSupported
-        }
-        return try await yatteeServerAPI(for: instance).fetchServerInfo(for: instance)
-    }
+
 }
 
 /// The real transport behind ``AccountService``. Declared here rather than on

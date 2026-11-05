@@ -44,14 +44,14 @@ struct InstanceBrowseView: View {
     @State private var isLoadingMoreFeed = false
     @State private var contentLoadTask: Task<Void, Never>?
     @State private var feedLoadedVideoCount = 0  // Track count when last load was triggered
-    
+
     // View options (persisted per instance)
     @AppStorage var layout: VideoListLayout
     @AppStorage var rowStyle: VideoRowStyle
     @AppStorage var gridColumnCount: Int
     @AppStorage var hideWatched: Bool
     @AppStorage var hideShorts: Bool
-    
+
     // View options UI state
     @State private var showViewOptions = false
     @State private var showEditInstance = false
@@ -65,7 +65,7 @@ struct InstanceBrowseView: View {
     @State private var viewWidth: CGFloat = 0
     @State private var watchEntriesMap: [String: WatchEntry] = [:]
     @State private var hasInitializedTab = false
-    
+
     init(instance: Instance, initialTab: BrowseTab? = nil) {
         self.instance = instance
         self.initialTab = initialTab
@@ -84,10 +84,8 @@ struct InstanceBrowseView: View {
     }
 
     /// The first enabled Yattee Server instance (for avatar URLs).
-    private var yatteeServer: Instance? {
-        appEnvironment?.instancesManager.enabledYatteeServerInstances.first
-    }
-    private var yatteeServerURL: URL? { yatteeServer?.url }
+    private var yatteeServer: Instance? { nil }
+    private var yatteeServerURL: URL? { nil }
 
     /// Auth header for avatar loading (uses Yattee Server for YouTube channel avatars)
     private var avatarAuthHeader: String? {
@@ -418,9 +416,9 @@ struct InstanceBrowseView: View {
                     settingsManager: appEnvironment.settingsManager
                 )
             }
-            
+
             refreshLoginState()
-            
+
             // Set initial tab only once (not on navigation back)
             if !hasInitializedTab {
                 hasInitializedTab = true
@@ -431,10 +429,10 @@ struct InstanceBrowseView: View {
                     selectedTab = .feed
                 }
             }
-            
+
             // Load watch entries for hide watched feature
             loadWatchEntries()
-            
+
             await startContentLoad()
         }
         .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
@@ -514,7 +512,6 @@ struct InstanceBrowseView: View {
         ))
     }
 
-
     private var tabPicker: some View {
         Picker("", selection: $selectedTab) {
             ForEach(availableTabs) { tab in
@@ -565,7 +562,7 @@ struct InstanceBrowseView: View {
         case .feed: videos = filteredFeedVideos
         case .playlists: videos = []  // Playlists tab doesn't show videos directly
         }
-        
+
         // Filter out watched videos if enabled
         if hideWatched {
             videos = videos.filter { video in
@@ -577,7 +574,7 @@ struct InstanceBrowseView: View {
         if hideShorts {
             videos = videos.filter { !$0.isKnownShort }
         }
-        
+
         return videos
     }
 
@@ -591,12 +588,12 @@ struct InstanceBrowseView: View {
     private var isInSearchMode: Bool {
         !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
-    
+
     // Grid layout configuration
     private var gridConfig: GridLayoutConfiguration {
         GridLayoutConfiguration(viewWidth: viewWidth, gridColumns: gridColumnCount)
     }
-    
+
     /// Gets the watch progress (0.0-1.0) for a video, or nil if not watched/finished.
     private func watchProgress(for video: Video) -> Double? {
         guard let entry = watchEntriesMap[video.id.videoID] else { return nil }
@@ -737,7 +734,7 @@ struct InstanceBrowseView: View {
             }
         }
     }
-    
+
     // MARK: - Grid Layout
 
     @ViewBuilder
@@ -868,7 +865,7 @@ struct InstanceBrowseView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private func searchResultsListContent(vm: SearchViewModel) -> some View {
         VideoListContent(listStyle: listStyle) {
@@ -942,7 +939,7 @@ struct InstanceBrowseView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private func searchResultsGridContent(vm: SearchViewModel) -> some View {
         VideoGridContent(columns: gridConfig.effectiveColumns) {
@@ -1070,7 +1067,7 @@ struct InstanceBrowseView: View {
     }
 
     // MARK: - Data Loading
-    
+
     /// Drops what belonged to the previously selected login.
     ///
     /// Public browsing — popular and trending — is unauthenticated and stays.
@@ -1269,18 +1266,6 @@ struct InstanceBrowseView: View {
                     )
                     videos = feedResponse.videos
                     hasMore = feedResponse.hasMore
-
-                case .piped:
-                    // Load subscriptions and feed in parallel
-                    async let subscriptionsTask = contentService.subscriptions(for: instance, credential: credential)
-                    async let feedTask = contentService.feed(for: instance, credential: credential)
-
-                    let (pipedSubscriptions, feedVideos) = try await (subscriptionsTask, feedTask)
-
-                    subscriptionChannels = pipedSubscriptions
-                    videos = feedVideos
-                    // Piped doesn't support pagination for feed
-                    hasMore = false
 
                 default:
                     errorMessage = String(localized: "feed.error.notSupported")

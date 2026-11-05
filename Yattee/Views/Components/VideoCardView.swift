@@ -29,11 +29,11 @@ struct VideoCardView: View {
     private var titleFont: Font { .subheadline }
     private var authorFont: Font { isCompact ? .caption2 : .caption }
     private var metadataFont: Font { isCompact ? .caption2 : .caption }
-    
+
     private var thumbnailTapAction: VideoTapAction {
         .playVideo
     }
-    
+
     private var textAreaTapAction: VideoTapAction {
         .playVideo
     }
@@ -49,7 +49,7 @@ struct VideoCardView: View {
         .contentShape(Rectangle())
         .zoomTransitionSource(id: video.id)
     }
-    
+
     @ViewBuilder
     private var thumbnailView: some View {
         DeArrowVideoThumbnail(
@@ -66,7 +66,7 @@ struct VideoCardView: View {
             )
         }
     }
-    
+
     @ViewBuilder
     private var metadataView: some View {
         VStack(alignment: .leading, spacing: isCompact ? 2 : 4) {
@@ -108,10 +108,10 @@ struct VideoCardView: View {
             )
         }
     }
-    
+
     private func handleTapAction(_ action: VideoTapAction) {
         guard let env = appEnvironment else { return }
-        
+
         switch action {
         case .playVideo:
             // This should not be called since we only add gesture for non-playVideo actions

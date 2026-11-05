@@ -69,3 +69,25 @@ struct AudioStreamSelectorTests {
         #expect(AudioStreamSelector.select(from: [low, high]) == high)
     }
 }
+
+@Suite("Audio download selection")
+struct AudioDownloadSelectionTests {
+    @Test("Itag 140 m4a is preferred over a higher bitrate rendition")
+    func prefers140() {
+        let standard = Stream(url: URL(string: "https://example.com/audio?itag=140")!, format: "m4a",
+                              bitrate: 128_000, isAudioOnly: true)
+        let high = Stream(url: URL(string: "https://example.com/audio?itag=141")!, format: "m4a",
+                          bitrate: 256_000, isAudioOnly: true)
+        #expect(AudioStreamSelector.downloadStream(from: [high, standard]) == standard)
+    }
+
+    @Test("Downloads reject video, HLS, raw AAC and Opus")
+    func rejectsNonM4A() {
+        let hls = Stream(url: URL(string: "https://example.com/audio.m3u8")!, format: "hls",
+                         audioCodec: "aac", isAudioOnly: true, mimeType: "application/vnd.apple.mpegurl")
+        let aac = Stream(url: URL(string: "https://example.com/audio.aac")!, format: "aac", isAudioOnly: true)
+        let opus = Stream(url: URL(string: "https://example.com/audio.webm")!, format: "webm",
+                          audioCodec: "opus", isAudioOnly: true)
+        #expect(AudioStreamSelector.downloadStream(from: [.preview, .videoOnlyPreview, hls, aac, opus]) == nil)
+    }
+}

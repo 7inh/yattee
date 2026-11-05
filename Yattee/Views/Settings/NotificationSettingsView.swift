@@ -264,9 +264,7 @@ private struct ChannelNotificationToggle: View {
     let subscription: Subscription
     @State private var notificationsEnabled: Bool = false
 
-    private var yatteeServer: Instance? {
-        appEnvironment?.instancesManager.enabledYatteeServerInstances.first
-    }
+    private var yatteeServer: Instance? { nil }
 
     private var effectiveAvatarURL: URL? {
         AvatarURLBuilder.avatarURL(

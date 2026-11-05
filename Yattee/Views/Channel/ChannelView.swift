@@ -91,19 +91,18 @@ struct ChannelView: View {
     // External channel state (page-based pagination for extracted channels)
     @State private var externalCurrentPage = 1
 
-
     // Header configuration
     private let baseHeaderHeight: CGFloat = 280
     private let searchBarExtraHeight: CGFloat = 70
     private let collapsedHeaderHeight: CGFloat = 60
     private let avatarSize: CGFloat = 80
     private let collapsedAvatarSize: CGFloat = 36
-    
+
     /// Whether search bar adjustments are needed (only on compact/iPhone where search bar overlays content)
     private var needsSearchBarAdjustment: Bool {
         supportsChannelSearch && horizontalSizeClass == .compact
     }
-    
+
     /// Header height adjusted for search bar on iPhone (iOS 18+ places search bar in navigation area)
     private var headerHeight: CGFloat {
         baseHeaderHeight + (needsSearchBarAdjustment ? searchBarExtraHeight : 0)
@@ -281,8 +280,6 @@ struct ChannelView: View {
         max((collapseProgress - 0.5) * 2, 0)
     }
 
-
-
     // MARK: - Channel Content
 
     @ViewBuilder
@@ -324,7 +321,7 @@ struct ChannelView: View {
                             // macOS: safe area + toolbar (~52pt)
                             Spacer()
                                 .frame(height: geometry.safeAreaInsets.top + 130)
-                            
+
                             searchResultsContent
                         } else if supportsChannelTabs {
                             tabContent
@@ -543,9 +540,7 @@ struct ChannelView: View {
         .presentationCompactAdaptation(.sheet)
     }
 
-
     // MARK: - Header
-
 
     private func header(_ channel: Channel) -> some View {
         header(name: channel.name, thumbnailURL: channel.thumbnailURL, bannerURL: channel.bannerURL)
@@ -704,7 +699,7 @@ struct ChannelView: View {
         guard let instance = instanceForSource() else {
             return false
         }
-        return instance.type == .invidious || instance.type == .yatteeServer || instance.type == .piped
+        return instance.type == .invidious
     }
 
     /// Whether the current instance supports channel search (Invidious or Yattee Server, not external channels or Piped)
@@ -712,7 +707,7 @@ struct ChannelView: View {
         // External channels don't support search
         guard !isExternalChannel else { return false }
         guard let instance = instanceForSource() else { return false }
-        return instance.type == .invidious || instance.type == .yatteeServer
+        return instance.type == .invidious
     }
 
     // MARK: - Channel Menu
@@ -1828,51 +1823,7 @@ struct ChannelView: View {
     }
 
     private func loadExternalChannel() async {
-        guard let appEnvironment,
-              let url = channelURL else {
-            errorMessage = "Invalid channel URL"
-            isLoading = false
-            return
-        }
-
-        guard let instance = appEnvironment.instancesManager.yatteeServerInstance else {
-            errorMessage = String(localized: "externalChannel.noYatteeServer")
-            isLoading = false
-            return
-        }
-
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            let (fetchedChannel, fetchedVideos, fetchedContinuation) = try await appEnvironment.contentService.extractChannel(
-                url: url,
-                page: 1,
-                instance: instance
-            )
-
-            await MainActor.run {
-                channel = fetchedChannel
-                videos = fetchedVideos
-                videosContinuation = fetchedContinuation
-                externalCurrentPage = 1
-                videosLoaded = true
-                isLoading = false
-
-                // Check subscription status using extracted channel ID
-                refreshSubscription()
-            }
-        } catch let error as APIError {
-            await MainActor.run {
-                handleExternalChannelError(error)
-                isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                isLoading = false
-            }
-        }
+        return
     }
 
     private func handleExternalChannelError(_ error: APIError) {
@@ -1964,37 +1915,9 @@ struct ChannelView: View {
     }
 
     private func loadMoreExternalVideos() async {
-        guard let appEnvironment,
-              let url = channelURL,
-              let instance = appEnvironment.instancesManager.yatteeServerInstance,
-              videosContinuation != nil,
-              !isLoadingMore else {
-            return
-        }
-
-        isLoadingMore = true
-
-        do {
-            let nextPage = externalCurrentPage + 1
-            let (_, fetchedVideos, fetchedContinuation) = try await appEnvironment.contentService.extractChannel(
-                url: url,
-                page: nextPage,
-                instance: instance
-            )
-
-            await MainActor.run {
-                videos.append(contentsOf: fetchedVideos)
-                videosContinuation = fetchedContinuation
-                externalCurrentPage = nextPage
-                isLoadingMore = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoadingMore = false
-            }
-        }
+        return
     }
-    
+
     /// Callback for loading more videos via continuation (used by VideoInfoView navigation)
     @Sendable
     private func loadMoreVideosCallback() async throws -> ([Video], String?) {
@@ -2003,16 +1926,16 @@ struct ChannelView: View {
               let continuation = videosContinuation else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No continuation available"])
         }
-        
+
         let result = try await appEnvironment.contentService.channelVideos(
             id: channelID,
             instance: instance,
             continuation: continuation
         )
-        
+
         return (result.videos, result.continuation)
     }
-    
+
     /// Callback for loading more shorts via continuation
     @Sendable
     private func loadMoreShortsCallback() async throws -> ([Video], String?) {
@@ -2021,16 +1944,16 @@ struct ChannelView: View {
               let continuation = shortsContinuation else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No continuation available"])
         }
-        
+
         let result = try await appEnvironment.contentService.channelShorts(
             id: channelID,
             instance: instance,
             continuation: continuation
         )
-        
+
         return (result.videos, result.continuation)
     }
-    
+
     /// Callback for loading more streams via continuation
     @Sendable
     private func loadMoreStreamsCallback() async throws -> ([Video], String?) {
@@ -2039,13 +1962,13 @@ struct ChannelView: View {
               let continuation = streamsContinuation else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No continuation available"])
         }
-        
+
         let result = try await appEnvironment.contentService.channelStreams(
             id: channelID,
             instance: instance,
             continuation: continuation
         )
-        
+
         return (result.videos, result.continuation)
     }
 
@@ -2278,7 +2201,7 @@ private struct ChannelScrollOffsetModifier: ViewModifier {
 /// Applies backgroundExtensionEffect on iOS 26+ for Liquid Glass sidebar (iPad/Mac only)
 private struct BackgroundExtensionModifier: ViewModifier {
     let useBackgroundExtension: Bool
-    
+
     func body(content: Content) -> some View {
         if useBackgroundExtension {
             if #available(iOS 26, macOS 26, tvOS 26, *) {

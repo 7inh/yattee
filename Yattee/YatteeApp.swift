@@ -109,7 +109,7 @@ struct YatteeApp: App {
                 .alert(String(localized: "alert.openVideo.title"), isPresented: $showingClipboardAlert) {
                     Button(String(localized: "common.open")) {
                         if let url = detectedClipboardURL {
-                            appEnvironment.navigationCoordinator.navigate(to: .externalVideo(url))
+                            appEnvironment.navigationCoordinator.presenter.present(.openLink(url))
                         }
                     }
                     Button(String(localized: "common.cancel"), role: .cancel) {}
@@ -205,7 +205,6 @@ struct YatteeApp: App {
                     using: appEnvironment.navigationCoordinator
                 )
                 // Refresh media source password status (Keychain state can change in background)
-                appEnvironment.mediaSourcesManager.refreshPasswordStoredStatus()
 
                 // Identity, statuses, deletion repair and the fetch, in that
                 // order — each one is what makes the next one correct.
@@ -214,7 +213,6 @@ struct YatteeApp: App {
                 }
 
                 // Check clipboard for external video URLs
-                checkClipboardForExternalURL()
 
                 // Start periodic polling as fallback for missed push notifications
                 appEnvironment.cloudKitSync.startForegroundPolling()
@@ -341,7 +339,6 @@ struct YatteeApp: App {
 
             settings.replaceWithiCloudData()
             appEnvironment.instancesManager.replaceWithiCloudData()
-            appEnvironment.mediaSourcesManager.replaceWithiCloudData()
 
             showingICloudProgress = false
             finishFirstLaunchFlow()
@@ -394,10 +391,6 @@ struct YatteeApp: App {
         }
 
         // External videos also check setting
-        if case .externalVideo(let externalURL) = destination {
-            handleExternalVideoDeepLink(externalURL: externalURL, action: action)
-            return
-        }
 
         // Show the linked screen above the current navigation stack. An
         // expanded player would otherwise hide a playlist behind its video.
@@ -492,25 +485,6 @@ struct YatteeApp: App {
     }
 
     /// Handle external video deep link based on default link action setting.
-    private func handleExternalVideoDeepLink(externalURL: URL, action: DefaultLinkAction) {
-        switch action {
-        case .open:
-            // Navigate to ExternalVideoView (existing behavior)
-            appEnvironment.navigationCoordinator.navigate(to: .externalVideo(externalURL))
-
-        case .download:
-            // Extract and show download sheet
-            Task {
-                await downloadExternalVideoFromDeepLink(url: externalURL)
-            }
-
-        case .ask:
-            // Extract, then show the video's details page
-            Task {
-                await showLinkDetails(externalURL, fallback: .externalVideo(externalURL))
-            }
-        }
-    }
 
     /// Load a link's video and show its details page. On failure, `fallback`
     /// (a screen that loads the link itself) shows the error.
@@ -617,35 +591,6 @@ struct YatteeApp: App {
     }
 
     /// Download an external video from a deep link.
-    private func downloadExternalVideoFromDeepLink(url: URL) async {
-        // A file player plays as-is can be downloaded straight from its URL
-        if let probe = await DirectMediaProbe.probe(url) {
-            let video = DirectMediaHelper.createVideo(from: url, probe: probe)
-            let stream = DirectMediaHelper.createStream(from: url, probe: probe)
-            await MainActor.run {
-                appEnvironment.navigationCoordinator.presenter.present(.downloadOptions(video, streams: [stream], captions: []))
-            }
-            return
-        }
-
-        guard let instance = appEnvironment.instancesManager.yatteeServerInstance else {
-            // No Yattee Server - fall back to open
-            appEnvironment.navigationCoordinator.navigate(to: .externalVideo(url))
-            return
-        }
-
-        do {
-            let (video, streams, captions) = try await appEnvironment.contentService
-                .extractURL(url, instance: instance)
-
-            await MainActor.run {
-                appEnvironment.navigationCoordinator.presenter.present(.downloadOptions(video, streams: streams, captions: captions))
-            }
-        } catch {
-            // Fall back to open on error
-            appEnvironment.navigationCoordinator.navigate(to: .externalVideo(url))
-        }
-    }
 
     // MARK: - Handoff
 
@@ -671,12 +616,6 @@ struct YatteeApp: App {
         }
 
         // For external video with playback time
-        if case .externalVideo = destination, playbackTime != nil {
-            // External videos don't support resume time in the same way
-            // Just navigate to the destination
-            appEnvironment.navigationCoordinator.navigate(to: destination)
-            return
-        }
 
         // All other destinations use standard navigation
         appEnvironment.navigationCoordinator.navigate(to: destination)
@@ -722,38 +661,6 @@ struct YatteeApp: App {
     // MARK: - Clipboard Detection
 
     /// Check clipboard for external video URLs when app becomes active.
-    private func checkClipboardForExternalURL() {
-        guard appEnvironment.settingsManager.clipboardURLDetectionEnabled else { return }
-
-        let clipboardURL: URL?
-        if UIPasteboard.general.hasURLs {
-            clipboardURL = UIPasteboard.general.url
-        } else if let string = UIPasteboard.general.string,
-                  let url = URL(string: string),
-                  url.scheme == "http" || url.scheme == "https" {
-            clipboardURL = url
-        } else {
-            clipboardURL = nil
-        }
-
-        guard let url = clipboardURL else { return }
-
-        // Skip if we already checked this URL
-        guard url != lastCheckedClipboardURL else { return }
-        lastCheckedClipboardURL = url
-
-        // Skip YouTube URLs - they're handled by regular deep links
-        if isYouTubeURL(url) { return }
-
-        // Skip known non-video sites
-        if isExcludedHost(url) { return }
-
-        // Only prompt if Yattee Server is configured
-        guard appEnvironment.instancesManager.yatteeServerInstance != nil else { return }
-
-        detectedClipboardURL = url
-        showingClipboardAlert = true
-    }
 
     private func isYouTubeURL(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }

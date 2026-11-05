@@ -84,7 +84,6 @@ final class RemoteControlCoordinator {
     private weak var contentService: ContentService?
     private weak var instancesManager: InstancesManager?
     private weak var navigationCoordinator: NavigationCoordinator?
-    private weak var mediaSourcesManager: MediaSourcesManager?
     private weak var toastManager: ToastManager?
     private weak var settingsManager: SettingsManager?
 
@@ -150,9 +149,6 @@ final class RemoteControlCoordinator {
     }
 
     /// Set the media sources manager reference.
-    func setMediaSourcesManager(_ manager: MediaSourcesManager) {
-        self.mediaSourcesManager = manager
-    }
 
     /// Set the toast manager reference.
     func setToastManager(_ manager: ToastManager) {
@@ -180,13 +176,13 @@ final class RemoteControlCoordinator {
     /// Does nothing if incognito mode is enabled - remote control is completely disabled in incognito.
     private func start() {
         let isIncognito = settingsManager?.incognitoModeEnabled ?? false
-        
+
         // Remote control is completely disabled in incognito mode
         if isIncognito {
             rcLog("LIFECYCLE", "Remote control disabled (incognito mode enabled)")
             return
         }
-        
+
         rcLog("LIFECYCLE", "Starting remote control services", details: "deviceName=\(networkService.deviceName), deviceID=\(networkService.deviceID)")
 
         networkService.startHosting()
@@ -433,12 +429,8 @@ final class RemoteControlCoordinator {
 
         let state = playerService.state
 
-        // Compute fullscreen state (same logic as shouldShowFullscreenButton in PlayerControlsActions)
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let isWideScreenLayout = navigationCoordinator?.isWideScreenLayoutActive ?? false
-        // iPad in widescreen = can't force rotation, so fullscreen toggle not available
-        let canToggleFullscreen = !(isIPad && isWideScreenLayout) && state.currentVideo != nil
-        let isFullscreen = isWideScreenLayout
+        let canToggleFullscreen = false
+        let isFullscreen = false
 
         return RemotePlayerState(
             videoID: state.currentVideo?.id.videoID,
@@ -601,7 +593,7 @@ final class RemoteControlCoordinator {
         case .toggleFullscreen:
             rcLog("HANDLE", "[\(senderName)] Executing: toggleFullscreen")
             // Trigger fullscreen toggle via navigation coordinator
-            navigationCoordinator?.pendingFullscreenToggle += 1
+            break
             // Send state update after a short delay so the orientation change has time to complete
             Task {
                 try? await Task.sleep(for: .milliseconds(500))
@@ -741,49 +733,6 @@ final class RemoteControlCoordinator {
             return
         }
 
-        // Check if this is a WebDAV video (format: "UUID:path")
-        // WebDAV videoIDs start with a UUID followed by colon and path
-        let components = videoID.split(separator: ":", maxSplits: 1)
-        if components.count == 2,
-           let sourceUUID = UUID(uuidString: String(components[0])),
-           let mediaSourcesManager,
-           let source = mediaSourcesManager.source(byID: sourceUUID) {
-            // This is a WebDAV video - play directly
-            rcLog("LOADVIDEO", "Detected WebDAV video, loading from source: \(source.name)")
-            await handleLoadMediaSourceVideo(
-                videoID: videoID,
-                path: String(components[1]),
-                source: source,
-                startTime: startTime,
-                awaitPlayCommand: awaitPlayCommand,
-                senderDeviceID: senderDeviceID
-            )
-            return
-        }
-
-        // Extracted videos (Twitch streams, other yt-dlp sites) can't be fetched from the
-        // /videos API - reconstruct the VideoID from the sender's ContentSource and let the
-        // player re-extract from the original URL. Media-source extractors (WebDAV/SMB/local)
-        // are excluded: they're handled by the UUID:path branch above and need a locally
-        // configured source, not extraction.
-        if let videoSource,
-           case .extracted(let extractor, let originalURL) = videoSource,
-           extractor != MediaFile.webdavProvider,
-           extractor != MediaFile.smbProvider,
-           extractor != MediaFile.localFolderProvider {
-            rcLog("LOADVIDEO", "Detected extracted video (\(extractor)), loading via original URL: \(originalURL.absoluteString)")
-            await handleLoadExtractedVideo(
-                videoID: videoID,
-                source: videoSource,
-                originalURL: originalURL,
-                title: videoTitle,
-                startTime: startTime,
-                awaitPlayCommand: awaitPlayCommand,
-                senderDeviceID: senderDeviceID
-            )
-            return
-        }
-
         // Existing API video loading...
         guard let contentService, let instancesManager else {
             rcLog("LOADVIDEO", "Missing contentService or instancesManager", isError: true)
@@ -797,24 +746,7 @@ final class RemoteControlCoordinator {
                 instance = configuredInstance
                 rcDebug("LOADVIDEO", "Using configured instance: \(instance?.name ?? "not found")")
             } else {
-                // Instance not configured locally - check if it's a PeerTube video
-                // PeerTube video IDs are numeric, while YouTube IDs are alphanumeric with dashes/underscores
-                let isPeerTubeVideoID = videoID.allSatisfy { $0.isNumber }
-                
-                if isPeerTubeVideoID {
-                    // Create a temporary PeerTube instance for this request
-                    rcDebug("LOADVIDEO", "Creating temporary PeerTube instance for: \(url.absoluteString)")
-                    instance = Instance(
-                        type: .peertube,
-                        url: url,
-                        name: url.host,
-                        isEnabled: true
-                    )
-                } else {
-                    // For YouTube content, any configured instance that supports it works
-                    instance = instancesManager.instances.first { $0.isEnabled && $0.isYouTubeInstance }
-                    rcDebug("LOADVIDEO", "Using fallback YouTube instance: \(instance?.name ?? "none")")
-                }
+                instance = instancesManager.enabledInstances.first
             }
         } else {
             instance = instancesManager.instances.first { $0.isEnabled }
@@ -861,108 +793,9 @@ final class RemoteControlCoordinator {
         }
     }
 
-    private func handleLoadMediaSourceVideo(videoID: String, path: String, source: MediaSource, startTime: TimeInterval? = nil, awaitPlayCommand: Bool = false, senderDeviceID: String? = nil) async {
-        // Construct full URL from source base URL + path
-        let url = source.url.appendingPathComponent(path)
-
-        // Extract filename for title
-        let title = url.deletingPathExtension().lastPathComponent
-
-        rcLog("LOADVIDEO", "Loading WebDAV video: \(title)", details: "source=\(source.name), path=\(path), startTime=\(startTime ?? 0), awaitPlay=\(awaitPlayCommand)")
-
-        // Create Video with correct ContentSource
-        let video = Video(
-            id: VideoID(
-                source: .extracted(extractor: MediaFile.webdavProvider, originalURL: url),
-                videoID: videoID
-            ),
-            title: title,
-            description: nil,
-            author: Author(id: source.id.uuidString, name: source.name),
-            duration: 0,
-            publishedAt: nil,
-            publishedText: nil,
-            viewCount: nil,
-            likeCount: nil,
-            thumbnails: [],
-            isLive: false,
-            isUpcoming: false,
-            scheduledStartTime: nil
-        )
-
-        if awaitPlayCommand {
-            // Handshake protocol: load video, then pause and notify sender we're ready
-            rcLog("LOADVIDEO", "Handshake mode: loading WebDAV video, will pause when ready")
-            playerService?.openVideo(video, startTime: startTime)
-
-            // Wait for video to start playing, then pause
-            try? await Task.sleep(for: .milliseconds(1000))
-
-            // Pause playback - video is loaded and at correct position but not playing
-            playerService?.pause()
-            rcLog("LOADVIDEO", "WebDAV video loaded and paused, ready for handoff")
-
-            // Send state update to let sender know we're ready (isPlaying will be false)
-            let state = currentRemoteState()
-            rcLog("LOADVIDEO", "Sending ready state to sender", details: "videoID=\(state.videoID ?? "nil"), playing=\(state.isPlaying)")
-            if let senderID = senderDeviceID {
-                try? await networkService.send(command: .stateUpdate(state), to: senderID)
-            } else {
-                await networkService.broadcast(command: .stateUpdate(state))
-            }
-        } else {
-            // Normal mode: start playing immediately
-            playerService?.openVideo(video, startTime: startTime)
-            rcLog("LOADVIDEO", "WebDAV video opened: \(title)", details: "startTime=\(startTime ?? 0)")
-        }
-    }
-
     /// Loads an extracted video (Twitch stream, other yt-dlp sites) received from a remote device.
     /// Builds a placeholder Video carrying the original ContentSource - the player re-extracts
     /// streams and full metadata from the original URL when opening it.
-    private func handleLoadExtractedVideo(videoID: String, source: ContentSource, originalURL: URL, title: String?, startTime: TimeInterval? = nil, awaitPlayCommand: Bool = false, senderDeviceID: String? = nil) async {
-        let video = Video(
-            id: VideoID(source: source, videoID: videoID),
-            title: title ?? originalURL.absoluteString,
-            description: nil,
-            author: Author(id: "", name: originalURL.host ?? "", hasRealChannelInfo: false),
-            duration: 0,
-            publishedAt: nil,
-            publishedText: nil,
-            viewCount: nil,
-            likeCount: nil,
-            thumbnails: [],
-            isLive: false,
-            isUpcoming: false,
-            scheduledStartTime: nil
-        )
-
-        if awaitPlayCommand {
-            // Handshake protocol: load video, then pause and notify sender we're ready
-            rcLog("LOADVIDEO", "Handshake mode: loading extracted video, will pause when ready")
-            playerService?.openVideo(video, startTime: startTime)
-
-            // Wait for video to start playing, then pause
-            try? await Task.sleep(for: .milliseconds(1000))
-
-            // Pause playback - video is loaded and at correct position but not playing
-            playerService?.pause()
-            rcLog("LOADVIDEO", "Extracted video loaded and paused, ready for handoff")
-
-            // Send state update to let sender know we're ready (isPlaying will be false)
-            let state = currentRemoteState()
-            rcLog("LOADVIDEO", "Sending ready state to sender", details: "videoID=\(state.videoID ?? "nil"), playing=\(state.isPlaying)")
-            if let senderID = senderDeviceID {
-                try? await networkService.send(command: .stateUpdate(state), to: senderID)
-            } else {
-                await networkService.broadcast(command: .stateUpdate(state))
-            }
-        } else {
-            // Normal mode: start playing immediately
-            playerService?.openVideo(video, startTime: startTime)
-            rcLog("LOADVIDEO", "Extracted video opened: \(video.title)", details: "startTime=\(startTime ?? 0)")
-        }
-    }
 
     // MARK: - State Broadcasting
 

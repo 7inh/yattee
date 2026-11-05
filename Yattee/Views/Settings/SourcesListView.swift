@@ -15,25 +15,16 @@ struct SourcesListView: View {
     // Delete confirmation state
     @State private var showingDeleteConfirmation = false
     @State private var pendingDeleteInstance: Instance?
-    @State private var pendingDeleteSource: MediaSource?
-
 
     private var instancesManager: InstancesManager? {
         appEnvironment?.instancesManager
-    }
-
-    private var mediaSourcesManager: MediaSourcesManager? {
-        appEnvironment?.mediaSourcesManager
     }
 
     private var listStyle: VideoListStyle {
         appEnvironment?.settingsManager.listStyle ?? .inset
     }
 
-    private var isEmpty: Bool {
-        (instancesManager?.instances.isEmpty ?? true) &&
-        (mediaSourcesManager?.isEmpty ?? true)
-    }
+    private var isEmpty: Bool { instancesManager?.instances.isEmpty ?? true }
 
     var body: some View {
         Group {
@@ -69,7 +60,6 @@ struct SourcesListView: View {
             }
             Button(String(localized: "common.cancel"), role: .cancel) {
                 pendingDeleteInstance = nil
-                pendingDeleteSource = nil
             }
         } message: {
             // Deleting a source has always taken its logins with it; only the
@@ -87,7 +77,6 @@ struct SourcesListView: View {
     private var showAddButtonInToolbar: Bool {
         return true
     }
-
 
     @ViewBuilder
     private var sourcesInner: some View {
@@ -124,7 +113,6 @@ struct SourcesListView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         remoteServersSection
-                        fileSourcesSection
                     }
                 }
             )
@@ -236,7 +224,7 @@ struct SourcesListView: View {
                         .foregroundStyle(.primary)
 
                     if !instance.isEnabled {
-                        disabledBadge
+                        Text("Disabled").font(.caption).foregroundStyle(.secondary)
                     }
                 }
 
@@ -290,126 +278,6 @@ struct SourcesListView: View {
         }
     }
 
-    // MARK: - File Sources Section
-
-    @ViewBuilder
-    private var fileSourcesSection: some View {
-        let allFileSources = allMediaSources
-        let noRemoteServers = instancesManager?.instances.isEmpty ?? true
-        if !allFileSources.isEmpty {
-            sectionHeader(String(localized: "sources.section.fileSources"))
-
-            sectionCard {
-                ForEach(Array(allFileSources.enumerated()), id: \.element.id) { index, source in
-                    let isLast = index == allFileSources.count - 1
-                    fileSourceRowView(source, isLast: isLast, isFirst: noRemoteServers && index == 0)
-                }
-            }
-        }
-    }
-
-    private var allMediaSources: [MediaSource] {
-        guard let manager = mediaSourcesManager else { return [] }
-        var sources: [MediaSource] = []
-        sources.append(contentsOf: manager.webdavSources)
-        sources.append(contentsOf: manager.smbSources)
-        sources.append(contentsOf: manager.localFolderSources)
-        return sources.sorted { $0.dateAdded < $1.dateAdded }
-    }
-
-    @ViewBuilder
-    private func fileSourceRowView(_ source: MediaSource, isLast: Bool, isFirst: Bool = false) -> some View {
-        let needsPassword = mediaSourcesManager?.needsPassword(for: source) ?? false
-
-        SourceListRow(isLast: isLast, listStyle: listStyle) {
-            Button {
-                sourceToEdit = .fileSource(source)
-            } label: {
-                mediaSourceRow(source, needsPassword: needsPassword)
-            }
-            .foregroundStyle(.primary)
-        }
-        .swipeActions {
-            SwipeAction(symbolImage: "pencil", tint: .white, background: .orange) { reset in
-                sourceToEdit = .fileSource(source)
-                reset()
-            }
-            SwipeAction(symbolImage: "trash", tint: .white, background: .red) { reset in
-                pendingDeleteSource = source
-                showingDeleteConfirmation = true
-                reset()
-            }
-        }
-        .contextMenu {
-            Button {
-                sourceToEdit = .fileSource(source)
-            } label: {
-                Label(String(localized: "common.edit"), systemImage: "pencil")
-            }
-
-            Button(role: .destructive) {
-                pendingDeleteSource = source
-                showingDeleteConfirmation = true
-            } label: {
-                Label(String(localized: "common.delete"), systemImage: "trash")
-            }
-        }
-    }
-
-    private func mediaSourceRow(_ source: MediaSource, needsPassword: Bool) -> some View {
-        let rowSpacing: CGFloat = 12
-        let iconFont: Font = .title2
-        let iconFrameWidth: CGFloat = 32
-        let titleFont: Font = .headline
-        return HStack(spacing: rowSpacing) {
-            Image(systemName: source.type.systemImage)
-                .font(iconFont)
-                .foregroundStyle(.tint)
-                .frame(width: iconFrameWidth)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(source.name)
-                        .font(titleFont)
-                        .foregroundStyle(.primary)
-
-                    if !source.isEnabled {
-                        disabledBadge
-                    }
-                }
-
-                Text("\(source.type.displayName) - \(source.urlDisplayString)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if needsPassword {
-                    Label(String(localized: "sources.status.authRequired"), systemImage: "key.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .contentShape(Rectangle())
-    }
-
-    // MARK: - Disabled Badge
-
-    private var disabledBadge: some View {
-        Text(String(localized: "sources.status.disabled"))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.quaternary)
-            .clipShape(Capsule())
-    }
-
     // MARK: - Actions
 
     private func confirmDelete() {
@@ -418,17 +286,11 @@ struct SourcesListView: View {
             pendingDeleteInstance = nil
         }
 
-        if let source = pendingDeleteSource, let manager = mediaSourcesManager {
-            manager.remove(source)
-            pendingDeleteSource = nil
-        }
     }
 
     private var deleteConfirmationMessage: String {
         if let instance = pendingDeleteInstance {
             return String(localized: "sources.delete.confirmation.single \(instance.displayName)")
-        } else if let source = pendingDeleteSource {
-            return String(localized: "sources.delete.confirmation.single \(source.name)")
         }
         return String(localized: "sources.delete.confirmation")
     }
@@ -438,7 +300,6 @@ struct SourcesListView: View {
         return InstanceDeletionDisclosure.message(for: instance, in: appEnvironment)
     }
 }
-
 
 // MARK: - Preview
 

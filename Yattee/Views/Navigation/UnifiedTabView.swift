@@ -54,7 +54,6 @@ extension MiniPlayerMinimizeBehavior {
     }
 }
 
-
 // MARK: - iOS and macOS Implementation
 
 /// Sidebar layout for iPad, the iPhone Duo inner screen and macOS: a
@@ -68,10 +67,7 @@ struct UnifiedTabView: View {
     // Zoom transition namespace (local to this tab view)
     @Namespace private var zoomTransition
 
-    private var yatteeServerAuthHeader: String? {
-        guard let server = appEnvironment?.instancesManager.enabledYatteeServerInstances.first else { return nil }
-        return appEnvironment?.basicAuthCredentialsManager.basicAuthHeader(for: server)
-    }
+    private var yatteeServerAuthHeader: String? { nil }
 
     private var zoomTransitionsEnabled: Bool {
         appEnvironment?.settingsManager.zoomTransitionsEnabled ?? true
@@ -238,7 +234,7 @@ struct UnifiedTabView: View {
             }
         case .sources:
             NavigationStack(path: router.path(for: .sources)) {
-                MediaSourcesView().withNavigationDestinations()
+                SourcesListView().withNavigationDestinations()
             }
         case .settings:
             NavigationStack(path: router.path(for: .settings)) {
@@ -246,7 +242,7 @@ struct UnifiedTabView: View {
             }
         case .openURL:
             NavigationStack(path: router.path(for: .openURL)) {
-                OpenLinkView().withNavigationDestinations()
+                OpenLinkSheet().withNavigationDestinations()
             }
         case .remoteControl:
             NavigationStack(path: router.path(for: .remoteControl)) {
@@ -263,7 +259,7 @@ struct UnifiedTabView: View {
             channelContent(for: selection)
         case .playlist, .remotePlaylist:
             playlistContent(for: selection)
-        case .mediaSource, .instance:
+        case .instance:
             sourceContent(for: selection)
         case .nowPlaying:
             EmptyView()
@@ -309,7 +305,6 @@ struct UnifiedTabView: View {
 
 // MARK: - tvOS Implementation
 
-
 // MARK: - Shared Helpers
 
 extension UnifiedTabView {
@@ -336,7 +331,7 @@ extension UnifiedTabView {
         router.ensureSelectionIsAvailable(
             isAvailable: { item in
                 switch item {
-                case .channel, .playlist, .remotePlaylist, .mediaSource, .instance, .nowPlaying:
+                case .channel, .playlist, .remotePlaylist, .instance, .nowPlaying:
                     return true
                 default:
                     return available.contains(item)
@@ -350,7 +345,7 @@ extension UnifiedTabView {
     /// nothing to render, so the user lands on Home instead of a blank page.
     func leaveRemovedSource(remaining items: [SidebarItem]) {
         let current = router.selection
-        guard current.isMediaSource || current.isInstance,
+        guard current.isInstance,
               !items.contains(where: { $0.id == current.id }) else { return }
         router.popToRoot(current)
         router.select(.home)
@@ -421,19 +416,7 @@ extension UnifiedTabView {
 
     // MARK: - Media Source Content
 
-    @ViewBuilder
-    func mediaSourceContent(for item: SidebarItem) -> some View {
-        if case .mediaSource(let id, _, _) = item,
-           let source = appEnvironment?.mediaSourcesManager.source(byID: id) {
-            NavigationStack(path: router.path(for: item)) {
-                MediaBrowserView(source: source, path: "/")
-                    .withNavigationDestinations()
-            }
-            .id(item.id)
-        }
-    }
-
-    // MARK: - Instance Content
+// MARK: - Instance Content
 
     @ViewBuilder
     func instanceContent(for item: SidebarItem) -> some View {
@@ -455,8 +438,6 @@ extension UnifiedTabView {
         switch item {
         case .instance:
             instanceContent(for: item)
-        case .mediaSource:
-            mediaSourceContent(for: item)
         default:
             EmptyView()
         }

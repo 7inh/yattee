@@ -31,17 +31,12 @@ enum NavigationDestination: Hashable {
     case manageChannels
     case search(String)
     /// External video URL to be extracted via Yattee Server.
-    case externalVideo(URL)
     /// External channel URL to be extracted via Yattee Server.
-    case externalChannel(URL)
     /// Direct media URL (mp4, m3u8, etc.) to play without extraction.
-    case directMedia(URL)
     /// Media sources list.
     case mediaSources
     /// Browse a specific media source by ID (for sidebar navigation).
-    case mediaSource(UUID)
     /// Browse a specific media source at a path.
-    case mediaBrowser(MediaSource, path: String, showOnlyPlayable: Bool = false)
     /// Browse a specific instance (Popular/Trending).
     case instanceBrowse(Instance, initialTab: InstanceBrowseView.BrowseTab? = nil)
     /// Import subscriptions from an instance.
@@ -110,25 +105,8 @@ extension NavigationDestination {
             ManageChannelsView()
         case .search(let query):
             SearchView(initialQuery: query)
-        case .externalVideo(let url):
-            ExternalVideoView(url: url)
-        case .directMedia(let url):
-            // Direct media URLs are typically handled inline by OpenLinkSheet,
-            // but if navigated to directly, show video info with the created video
-            VideoInfoView(video: DirectMediaHelper.createVideo(from: url))
-        case .externalChannel(let url):
-            // Use unified ChannelView with external channel URL
-            ChannelView(
-                channelID: url.absoluteString,
-                source: .extracted(extractor: "external", originalURL: url),
-                channelURL: url
-            )
         case .mediaSources:
-            MediaSourcesView()
-        case .mediaSource(let id):
-            MediaSourceByIDView(sourceID: id)
-        case .mediaBrowser(let source, let path, let showOnlyPlayable):
-            MediaBrowserView(source: source, path: path, showOnlyPlayable: showOnlyPlayable)
+            SourcesListView()
         case .instanceBrowse(let instance, let initialTab):
             InstanceBrowseView(instance: instance, initialTab: initialTab)
         case .importSubscriptions(let instance):
@@ -141,27 +119,9 @@ extension NavigationDestination {
     }
 }
 
-
 // MARK: - Media Source by ID View
 
 /// Helper view that looks up a MediaSource by ID and shows MediaBrowserView.
-private struct MediaSourceByIDView: View {
-    let sourceID: UUID
-    @Environment(\.appEnvironment) private var appEnvironment
-
-    var body: some View {
-        if let source = appEnvironment?.mediaSourcesManager.source(byID: sourceID) {
-            MediaBrowserView(source: source, path: "/")
-        } else {
-            ContentUnavailableView {
-                Label(String(localized: "navigation.sourceNotFound"), systemImage: "externaldrive.badge.exclamationmark")
-            } description: {
-                Text(String(localized: "navigation.sourceNotFound.description"))
-            } actions: {
-            }
-        }
-    }
-}
 
 // MARK: - Navigation Destination Modifier
 

@@ -54,8 +54,8 @@ private func checkedLink(_ url: URL) throws -> URL {
 // MARK: - Video Actions
 
 struct PlayVideoIntent: AppIntent {
-    static let title: LocalizedStringResource = "Play Video"
-    static let description = IntentDescription("Plays a YouTube, PeerTube or direct media link in Yattee.")
+    static let title: LocalizedStringResource = "Play Audio"
+    static let description = IntentDescription("Plays audio from a YouTube or Invidious link in Yattee.")
     static let openAppWhenRun = true
 
     @Parameter(title: "Link")
@@ -112,8 +112,8 @@ struct AddToQueueIntent: AppIntent {
 }
 
 struct DownloadVideoIntent: AppIntent {
-    static let title: LocalizedStringResource = "Download Video"
-    static let description = IntentDescription("Downloads a video in Yattee at your preferred download quality.")
+    static let title: LocalizedStringResource = "Download Audio"
+    static let description = IntentDescription("Downloads a complete M4A audio file for offline listening.")
     // The quality picker may need to show
     static let openAppWhenRun = true
 

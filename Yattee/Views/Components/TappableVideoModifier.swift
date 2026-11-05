@@ -34,19 +34,10 @@ struct TappableVideoModifier: ViewModifier {
     /// Explicit timestamp from an opened link, honored over saved progress.
     var linkStartTime: TimeInterval? = nil
 
-    // Password alert state (for WebDAV sources)
-    @State private var showingPasswordAlert = false
-    @State private var sourceNeedingPassword: MediaSource?
-    @State private var passwordInput = ""
-
-    /// Whether queue feature is enabled and something is playing or queued,
-    /// so "Play Next" / "Add to Queue" are meaningful alternatives to replacing playback.
-
-
     func body(content: Content) -> some View {
         Button {
             dismissKeyboard()
-            checkPasswordAndPlay()
+            playVideoAndQueueRest()
         } label: {
             content
                 .contentShape(Rectangle())
@@ -60,23 +51,9 @@ struct TappableVideoModifier: ViewModifier {
                 startTime: startTime
             )
         }
-        .alert(String(localized: "common.authenticationRequired"), isPresented: $showingPasswordAlert) {
-            SecureField(String(localized: "common.password"), text: $passwordInput)
-            Button(String(localized: "common.cancel"), role: .cancel) {
-                passwordInput = ""
-                sourceNeedingPassword = nil
-            }
-            Button(String(localized: "common.connect")) {
-                savePasswordAndContinue()
-            }
-        } message: {
-            if let source = sourceNeedingPassword {
-                Text(String(localized: "common.enterPassword \(source.name)"))
-            }
-        }
-        .videoQueueContext(queueContext)
+
     }
-    
+
     /// Creates a VideoQueueContext from the modifier's parameters
     private var queueContext: VideoQueueContext {
         VideoQueueContext(
@@ -92,38 +69,12 @@ struct TappableVideoModifier: ViewModifier {
     }
 
     // MARK: - Keyboard Handling
-    
+
     /// Dismisses the iOS software keyboard before playing video
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
-    
-    // MARK: - Password Check & Playback
-    
-    /// Checks if video is from WebDAV source needing password, shows alert or plays directly
-    private func checkPasswordAndPlay() {
-        // Check if video is from WebDAV source needing password
-        if let sourceID = video.mediaSourceID,
-           let source = appEnvironment?.mediaSourcesManager.source(byID: sourceID),
-           appEnvironment?.mediaSourcesManager.needsPassword(for: source) == true {
-            sourceNeedingPassword = source
-            showingPasswordAlert = true
-        } else {
-            playVideoAndQueueRest()
-        }
-    }
-    
-    /// Saves password for WebDAV source and continues with playback
-    private func savePasswordAndContinue() {
-        guard let source = sourceNeedingPassword, !passwordInput.isEmpty else { return }
-        appEnvironment?.mediaSourcesManager.setPassword(passwordInput, for: source)
-        passwordInput = ""
-        sourceNeedingPassword = nil
-        
-        // Now check if we should show queue sheet or play directly
-        playVideoAndQueueRest()
-    }
-    
+
     /// Plays the tapped video and queues all subsequent videos from the list.
     /// Checks resume action setting for partially watched videos.
     private func playVideoAndQueueRest() {

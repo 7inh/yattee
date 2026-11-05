@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum DownloadError: LocalizedError {
+enum DownloadError: Error, LocalizedError, Equatable, Sendable {
     case notSupported
     case alreadyDownloading
     case alreadyDownloaded

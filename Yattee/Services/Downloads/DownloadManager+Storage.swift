@@ -150,6 +150,9 @@ extension DownloadManager {
 
         // From active downloads (in progress)
         for download in activeDownloads {
+            let partialPath = "\(download.id.uuidString).partial"
+            trackedPaths.insert(partialPath)
+            trackedSize += fileSize(at: downloadsDir.appendingPathComponent(partialPath).path)
             if let videoPath = download.localVideoPath {
                 trackedPaths.insert(videoPath)
                 trackedSize += fileSize(at: downloadsDir.appendingPathComponent(videoPath).path)

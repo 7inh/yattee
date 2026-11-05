@@ -31,21 +31,14 @@ final class AppEnvironment {
     let deArrowBrandingProvider: DeArrowBrandingProvider
     let notificationManager: NotificationManager
     let backgroundRefreshManager: BackgroundRefreshManager
-    let mediaSourcesManager: MediaSourcesManager
-    let webDAVClient: WebDAVClient
-    let webDAVClientFactory: WebDAVClientFactory
-    let smbClient: SMBClient
-    let localFileClient: LocalFileClient
     let httpClientFactory: HTTPClientFactory
     let localNetworkService: LocalNetworkService
     let remoteControlCoordinator: RemoteControlCoordinator
-    let networkShareDiscoveryService: NetworkShareDiscoveryService
     let connectivityMonitor: ConnectivityMonitor
     let httpClient: HTTPClient
     let toastManager: ToastManager
     let handoffManager: HandoffManager
     let invidiousCredentialsManager: InvidiousCredentialsManager
-    let pipedCredentialsManager: PipedCredentialsManager
     let basicAuthCredentialsManager: BasicAuthCredentialsManager
     /// Shared by both account credential managers so a single CloudKit lookup
     /// resolves the scope for all of them.
@@ -214,9 +207,6 @@ final class AppEnvironment {
         self.invidiousCredentialsManager = invidiousCreds
 
         // Initialize Piped Credentials Manager
-        let pipedCreds = PipedCredentialsManager(identityScope: identityScope)
-        pipedCreds.settingsManager = settings
-        self.pipedCredentialsManager = pipedCreds
 
         // Accounts share the credential identity namespace: the account list and
         // the credentials it points at must always describe the same Apple account
@@ -230,7 +220,7 @@ final class AppEnvironment {
         self.localNamespaceImporter = LocalNamespaceImporter(
             accountsManager: accounts,
             identityScope: identityScope,
-            credentialStores: { [weak accounts, weak invidiousCreds, weak pipedCreds] account in
+            credentialStores: { [weak accounts, weak invidiousCreds] account in
                 // Same resolution as `accountCredentialsManager(for:)`, except
                 // that an instance which has not synced yet is not an answer:
                 // the scoped key is the account ID either way, so both stores
@@ -239,15 +229,11 @@ final class AppEnvironment {
 
                 guard let type = accounts?.instance(for: account)?.type else {
                     if let invidiousCreds { stores.append(invidiousCreds) }
-                    if let pipedCreds { stores.append(pipedCreds) }
                     return stores
                 }
 
                 switch type {
                 case .invidious: if let invidiousCreds { stores.append(invidiousCreds) }
-                case .piped: if let pipedCreds { stores.append(pipedCreds) }
-                // The slot a future account-keyed store lands in, exactly as in
-                // `accountCredentialsManager(for:)`.
                 default: break
                 }
                 return stores
@@ -259,18 +245,16 @@ final class AppEnvironment {
         self.invidiousAPI = invidiousAPI
 
         // Initialize Piped API (used by SubscriptionService and SubscriptionFeedCache)
-        let pipedAPI = PipedAPI(httpClient: client)
 
         // A 401 or 403 from an ordinary request is never allowed to reject a
         // login on its own — it is re-asked here against an endpoint that
         // exists to be authenticated, and only that answer marks the account.
         let probeService = CredentialProbeService(
             accountsManager: accounts,
-            credentialReader: { [weak accounts, weak invidiousCreds, weak pipedCreds] account in
+            credentialReader: { [weak accounts, weak invidiousCreds] account in
                 guard let type = accounts?.instance(for: account)?.type else { return nil }
                 switch type {
                 case .invidious: return invidiousCreds?.credential(for: account)
-                case .piped: return pipedCreds?.credential(for: account)
                 default: return nil
                 }
             },
@@ -281,8 +265,6 @@ final class AppEnvironment {
                         // GET /api/v1/auth/subscriptions — the cheapest call
                         // that does nothing except require a session.
                         _ = try await invidiousAPI.subscriptions(instance: instance, sid: credential)
-                    case .piped:
-                        _ = try await pipedAPI.subscriptions(instance: instance, authToken: credential)
                     default:
                         return .indeterminate
                     }
@@ -305,11 +287,10 @@ final class AppEnvironment {
         // backend it belongs to — so neither can read a login the other cannot.
         let accountSvc = AccountService(
             accountsManager: accounts,
-            credentialReader: { [weak accounts, weak invidiousCreds, weak pipedCreds] account in
+            credentialReader: { [weak accounts, weak invidiousCreds] account in
                 guard let type = accounts?.instance(for: account)?.type else { return nil }
                 switch type {
                 case .invidious: return invidiousCreds?.credential(for: account)
-                case .piped: return pipedCreds?.credential(for: account)
                 default: return nil
                 }
             },
@@ -324,9 +305,7 @@ final class AppEnvironment {
             dataManager: dm,
             providerFactory: DefaultSubscriptionProviderFactory(
                 invidiousAPI: invidiousAPI,
-                pipedAPI: pipedAPI,
                 invidiousCredentialsManager: invidiousCreds,
-                pipedCredentialsManager: pipedCreds,
                 settingsManager: settings
             )
         )
@@ -395,44 +374,14 @@ final class AppEnvironment {
         // Initialize URL Session and Client Factories
         let sessionFactory = URLSessionFactory.shared
         self.httpClientFactory = HTTPClientFactory(sessionFactory: sessionFactory)
-        self.webDAVClientFactory = WebDAVClientFactory(sessionFactory: sessionFactory)
-
-        // Initialize Media Sources components
-        let mediaSources = MediaSourcesManager(settingsManager: settings)
-        self.mediaSourcesManager = mediaSources
-        mediaSources.setDataManager(dm)
-        
-        // Initialize media clients
-        self.webDAVClient = WebDAVClient()
-        self.smbClient = SMBClient()
-        self.localFileClient = LocalFileClient()
-        
-        // Wire up media services to player
-        player.setMediaSourcesManager(mediaSources)
-        self.navigationCoordinator.setMediaSourcesManager(mediaSources)
-        player.setSMBClient(self.smbClient)
-        player.setWebDAVClient(self.webDAVClient)
-        player.setLocalFileClient(self.localFileClient)
-        
-        // Wire up SMB client to check if SMB playback is active
-        // This prevents crashes from concurrent libsmbclient usage
-        let smbClientRef = self.smbClient
-        Task { [weak player] in
-            await smbClientRef.setPlaybackActiveCallback { [weak player] in
-                player?.state.isSMBPlaybackActive ?? false
-            }
-        }
-
         // Initialize Remote Control components
         let networkService = LocalNetworkService()
         self.localNetworkService = networkService
-        self.networkShareDiscoveryService = NetworkShareDiscoveryService()
         let remoteControl = RemoteControlCoordinator(networkService: networkService)
         remoteControl.setPlayerService(player)
         remoteControl.setContentService(contentSvc)
         remoteControl.setInstancesManager(instances)
         remoteControl.setNavigationCoordinator(self.navigationCoordinator)
-        remoteControl.setMediaSourcesManager(mediaSources)
         remoteControl.setSettingsManager(settings)
         self.remoteControlCoordinator = remoteControl
 
@@ -450,6 +399,7 @@ final class AppEnvironment {
         toast.setNavigationCoordinator(self.navigationCoordinator)
         remoteControl.setToastManager(toast)
         player.setToastManager(toast)
+        self.downloadManager.setAudioSources(contentService: contentSvc, instancesManager: instances)
         self.downloadManager.setToastManager(toast)
         self.downloadManager.setDownloadSettings(self.downloadSettings)
 
@@ -492,9 +442,7 @@ final class AppEnvironment {
             instancesManager: instances,
             basicAuthCredentialsManager: basicAuthCreds,
             invidiousCredentialsManager: invidiousCreds,
-            pipedCredentialsManager: pipedCreds,
-            invidiousAPI: invidiousAPI,
-            pipedAPI: pipedAPI
+            invidiousAPI: invidiousAPI
         )
 
         // Initialize Sources Settings
@@ -580,7 +528,6 @@ final class AppEnvironment {
 
             guard let account, let credentials = self.accountCredentialsManager(for: account) else {
                 self.invidiousCredentialsManager.deleteCredential(forAccountID: accountID)
-                self.pipedCredentialsManager.deleteCredential(forAccountID: accountID)
 
                 // The unscoped legacy item needs the instance to be identified,
                 // but not to be *checked*: the adoption marker is specific to
@@ -590,7 +537,6 @@ final class AppEnvironment {
                 // and the instance may simply have gone first.
                 if let account {
                     self.invidiousCredentialsManager.deleteLegacyCredentialIfOwned(for: account)
-                    self.pipedCredentialsManager.deleteLegacyCredentialIfOwned(for: account)
                 }
                 return
             }
@@ -707,13 +653,13 @@ final class AppEnvironment {
             self.downloadManager.logOrphanDiagnostics()
         }
     }
-    
+
     /// Cleans up all temporary subtitle files from previous sessions.
     /// Call this on app launch to ensure temp directory doesn't accumulate old files.
     private func cleanupAllTempSubtitles() {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("yattee-subtitles", isDirectory: true)
-        
+
         do {
             if FileManager.default.fileExists(atPath: tempDir.path) {
                 try FileManager.default.removeItem(at: tempDir)
@@ -1044,7 +990,7 @@ final class AppEnvironment {
     func removeOrphanedAccount(_ accountID: UUID) {
         AccountRemoval.removeOrphan(
             accountID,
-            stores: [invidiousCredentialsManager, pipedCredentialsManager],
+            stores: [invidiousCredentialsManager],
             accountsManager: accountsManager,
             discardData: { discardAccountData(for: $0) }
         )
@@ -1056,10 +1002,6 @@ final class AppEnvironment {
         guard let instance = accountsManager.instance(for: account) else { return nil }
         switch instance.type {
         case .invidious: return invidiousCredentialsManager
-        case .piped: return pipedCredentialsManager
-        // The slot a future account-keyed store lands in. What a backend's
-        // accounts can do is `InstanceType.accountCapabilities`; which store
-        // holds their secrets is this switch, and the two move together.
         default: return nil
         }
     }
@@ -1091,7 +1033,7 @@ final class AppEnvironment {
     ///
     /// `.local` covers both the local data set and any account whose instance
     /// or type cannot supply a feed — those fall back rather than failing.
-    enum FeedBackend { case local, invidious, piped }
+    enum FeedBackend { case local, invidious }
 
     func feedBackend(for context: DataContext) -> FeedBackend {
         guard case let .account(id) = context,
@@ -1101,7 +1043,6 @@ final class AppEnvironment {
 
         switch instance.type {
         case .invidious: return .invidious
-        case .piped: return .piped
         default: return .local
         }
     }
@@ -1330,10 +1271,6 @@ final class AppEnvironment {
         switch instance.type {
         case .invidious:
             return invidiousCredentialsManager
-        case .piped:
-            return pipedCredentialsManager
-        case .yatteeServer:
-            return basicAuthCredentialsManager
         default:
             return nil
         }
@@ -1373,7 +1310,7 @@ final class AppEnvironment {
     ///   `usesBasicAuth` was recorded.
     /// - Invidious/Piped account logins are checked when `usesAccountLogin` was recorded.
     func needsCredentials(for instance: Instance) -> Bool {
-        if instance.type == .yatteeServer || instance.usesBasicAuth,
+        if instance.usesBasicAuth,
            !basicAuthCredentialsManager.hasCredentials(for: instance) {
             return true
         }

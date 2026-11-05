@@ -9,7 +9,6 @@ import Foundation
 import SwiftUI
 import NukeUI
 
-
 private let onTheGoAccent = Color.red
 
 @MainActor
@@ -452,7 +451,7 @@ struct OnTheGoPanel: View {
             .frame(maxWidth: .infinity)
             .accessibilityLabel(String(localized: "controls.button.queue"))
 
-            if let video = state.currentVideo, !video.isFromMediaSource,
+            if let video = state.currentVideo,
                appEnvironment?.downloadManager.isDownloaded(video.id) != true,
                appEnvironment?.downloadManager.isDownloading(video.id) != true {
                 Button {

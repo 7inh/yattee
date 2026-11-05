@@ -37,7 +37,6 @@ final class NavigationCoordinator {
     /// Sheets observe it via `.dismissesOnExternalNavigation(_:)`.
     var dismissPresentationsGeneration = 0
 
-
     /// Whether the mini player is expanded to full screen.
     var isPlayerExpanded = false {
         didSet {
@@ -244,8 +243,6 @@ final class NavigationCoordinator {
     private weak var handoffManager: HandoffManager?
 
     /// Reference to MediaSourcesManager for navigating to media source directories.
-    private weak var mediaSourcesManager: MediaSourcesManager?
-
 
     // MARK: - Handoff Integration
 
@@ -255,10 +252,6 @@ final class NavigationCoordinator {
     }
 
     /// Set the MediaSourcesManager reference for media source navigation.
-    func setMediaSourcesManager(_ manager: MediaSourcesManager) {
-        self.mediaSourcesManager = manager
-    }
-
 
     // MARK: - Navigation Actions
 
@@ -340,24 +333,10 @@ final class NavigationCoordinator {
     /// For extracted videos, navigates to the external channel URL.
     /// For regular videos, navigates to the channel view.
     func navigateToChannel(for video: Video, collapsePlayer: Bool = false) {
-        if collapsePlayer {
-            isPlayerCollapsing = true
-            isPlayerExpanded = false
-        }
-
-        // Handle media source videos (SMB, WebDAV, local folders)
-        if video.isFromMediaSource,
-           let sourceID = video.mediaSourceID,
-           let filePath = video.mediaSourceFilePath,
-           let source = mediaSourcesManager?.source(byID: sourceID) {
-            let directoryPath = (filePath as NSString).deletingLastPathComponent
-            navigate(to: .mediaBrowser(source, path: directoryPath))
-        } else if case .extracted = video.id.source, let authorURL = video.author.url {
-            navigate(to: .externalChannel(authorURL))
-        } else {
-            CachedChannelData.cacheAuthor(video.author)
-            navigate(to: .channel(video.author.id, video.authorSource))
-        }
+        if collapsePlayer { isPlayerExpanded = false }
+        guard case .global = video.id.source else { return }
+        CachedChannelData.cacheAuthor(video.author)
+        navigate(to: .channel(video.author.id, video.authorSource))
     }
 
     // MARK: - Handoff Updates
@@ -379,7 +358,7 @@ final class NavigationCoordinator {
         case .search:
             // Search updates handoff when a search is performed, not on tab selection
             destination = nil
-        case .mediaSource, .instance, .sources:
+        case .instance, .sources:
             destination = nil
         default:
             destination = router.selection.navigationDestination()

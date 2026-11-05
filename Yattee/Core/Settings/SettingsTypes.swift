@@ -170,49 +170,6 @@ enum VideoQuality: String, CaseIterable, Codable {
 // MARK: - Download Quality
 
 /// Download quality preference.
-enum DownloadQuality: String, CaseIterable, Codable, Sendable {
-    case ask           // Show stream selection sheet (current behavior)
-    case best          // Best available quality
-    case hd4k = "4k"
-    case hd1440p = "1440p"
-    case hd1080p = "1080p"
-    case hd720p = "720p"
-    case sd480p = "480p"
-    case sd360p = "360p"
-
-    var displayName: String {
-        switch self {
-        case .ask: return String(localized: "settings.downloads.quality.ask")
-        case .best: return String(localized: "settings.downloads.quality.best")
-        case .hd4k: return "4K"
-        case .hd1440p: return "1440p"
-        case .hd1080p: return "1080p"
-        case .hd720p: return "720p"
-        case .sd480p: return "480p"
-        case .sd360p: return "360p"
-        }
-    }
-
-    /// Returns the maximum resolution for this quality setting.
-    var maxResolution: StreamResolution? {
-        switch self {
-        case .ask, .best:
-            return nil
-        case .hd4k:
-            return .p2160
-        case .hd1440p:
-            return .p1440
-        case .hd1080p:
-            return .p1080
-        case .hd720p:
-            return .p720
-        case .sd480p:
-            return .p480
-        case .sd360p:
-            return .p360
-        }
-    }
-}
 
 // MARK: - Haptic Feedback
 

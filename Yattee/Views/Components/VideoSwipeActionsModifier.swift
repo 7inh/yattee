@@ -206,63 +206,7 @@ struct VideoSwipeActionsModifier: ViewModifier {
     }
 
     private func startDownload() {
-        guard let appEnvironment else {
-            presentAppSheet(.downloadOptions(video))
-            return
-        }
-
-        // Media source videos use direct file URLs
-        if video.isFromMediaSource {
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueueMediaSource(
-                        video,
-                        mediaSourcesManager: appEnvironment.mediaSourcesManager,
-                        webDAVClient: appEnvironment.webDAVClient,
-                        smbClient: appEnvironment.smbClient
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-            }
-            return
-        }
-
-        let downloadSettings = appEnvironment.downloadSettings
-
-        // Check if auto-download mode
-        if downloadSettings.preferredDownloadQuality != .ask,
-           let instance = appEnvironment.instancesManager.instance(for: video) {
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueue(
-                        video,
-                        preferredQuality: downloadSettings.preferredDownloadQuality,
-                        preferredAudioLanguage: appEnvironment.settingsManager.preferredAudioLanguage,
-                        preferredSubtitlesLanguage: appEnvironment.settingsManager.preferredSubtitlesLanguage,
-                        includeSubtitles: downloadSettings.includeSubtitlesInAutoDownload,
-                        contentService: appEnvironment.contentService,
-                        instance: instance
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-            }
-        } else {
-            presentAppSheet(.downloadOptions(video))
-        }
+        presentAppSheet(.downloadOptions(video))
     }
 }
 

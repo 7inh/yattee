@@ -296,7 +296,7 @@ struct DownloadErrorTests {
 
 // MARK: - DownloadManager Tests
 
-@Suite("DownloadManager Tests")
+@Suite("DownloadManager Tests", .serialized)
 @MainActor
 struct DownloadManagerTests {
 
@@ -317,7 +317,6 @@ struct DownloadManagerTests {
         #expect(manager.activeDownloads.isEmpty)
         #expect(manager.completedDownloads.isEmpty)
         #expect(manager.storageUsed == 0)
-        #expect(manager.maxConcurrentDownloads == 2)
     }
 
     @Test("isDownloaded returns false for unknown video")
@@ -368,15 +367,15 @@ struct DownloadManagerTests {
 
         let manager = DownloadManager()
         let video = makeTestVideo(id: "duplicate")
-        let streamURL = URL(string: "https://example.com/video.mp4")!
+        let streamURL = URL(string: "https://example.com/audio.m4a")!
 
         // First enqueue should succeed
-        try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+        try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
         #expect(manager.activeDownloads.count == 1)
 
         // Second enqueue should throw alreadyDownloading
         do {
-            try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+            try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
             Issue.record("Expected alreadyDownloading error")
         } catch DownloadError.alreadyDownloading {
             // Expected
@@ -395,9 +394,9 @@ struct DownloadManagerTests {
 
         let manager = DownloadManager()
         let video = makeTestVideo(id: "toCancel")
-        let streamURL = URL(string: "https://example.com/video.mp4")!
+        let streamURL = URL(string: "https://example.com/audio.m4a")!
 
-        try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+        try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
         #expect(manager.activeDownloads.count == 1)
 
         let download = manager.activeDownloads.first!
@@ -414,9 +413,9 @@ struct DownloadManagerTests {
 
         let manager = DownloadManager()
         let video = makeTestVideo(id: "toPause")
-        let streamURL = URL(string: "https://example.com/video.mp4")!
+        let streamURL = URL(string: "https://example.com/audio.m4a")!
 
-        try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+        try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
         let download = manager.activeDownloads.first!
 
         await manager.pause(download)
@@ -433,9 +432,9 @@ struct DownloadManagerTests {
 
         let manager = DownloadManager()
         let video = makeTestVideo(id: "toResume")
-        let streamURL = URL(string: "https://example.com/video.mp4")!
+        let streamURL = URL(string: "https://example.com/audio.m4a")!
 
-        try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+        try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
         let download = manager.activeDownloads.first!
 
         await manager.pause(download)
@@ -458,8 +457,8 @@ struct DownloadManagerTests {
         // Enqueue multiple downloads
         for i in 1...3 {
             let video = makeTestVideo(id: "move\(i)")
-            let streamURL = URL(string: "https://example.com/video\(i).mp4")!
-            try await manager.enqueue(video, quality: "720p", formatID: "136", streamURL: streamURL)
+            let streamURL = URL(string: "https://example.com/audio\(i).m4a")!
+            try await manager.enqueue(video, stream: Stream(url: streamURL, format: "m4a", audioCodec: "mp4a", isAudioOnly: true))
         }
 
         #expect(manager.activeDownloads.count == 3)

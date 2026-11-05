@@ -168,12 +168,12 @@ struct VideoContextMenuContent: View {
 
     /// Whether to show the bookmark toggle based on context
     private var showBookmarkToggle: Bool {
-        !video.isFromLocalFolder && context != .bookmarks && context != .downloads && context != .mediaBrowser
+        context != .bookmarks && context != .downloads && context != .mediaBrowser
     }
 
     /// Whether to show add to playlist based on context
     private var showAddToPlaylist: Bool {
-        !video.isFromLocalFolder && context != .mediaBrowser
+        context != .mediaBrowser
     }
 
     /// Whether to show the download option based on context
@@ -265,7 +265,7 @@ struct VideoContextMenuContent: View {
         if !customActions.isEmpty {
             Divider()
         }
-        
+
         ControlGroup {
             playDownloadShareButtons
         }
@@ -280,7 +280,7 @@ struct VideoContextMenuContent: View {
         }
 
         // Mark as Watched / Unwatched
-        if !video.isFromLocalFolder {
+
             Button {
                 if isWatched {
                     appEnvironment?.dataManager.markAsUnwatched(videoID: video.id.videoID)
@@ -294,7 +294,6 @@ struct VideoContextMenuContent: View {
                     Label(String(localized: "video.context.markWatched"), systemImage: "eye")
                 }
             }
-        }
 
         // Queue actions (hidden in player context and when queue feature is disabled)
         if showQueueActions {
@@ -397,63 +396,7 @@ struct VideoContextMenuContent: View {
 
     /// Starts a download either automatically or by showing the quality sheet.
     private func startDownload(for video: Video) {
-        guard let appEnvironment else {
-            presentAppSheet(.downloadOptions(video))
-            return
-        }
-
-        // Media source videos (SMB/WebDAV/local) use direct file URLs - no API call needed
-        if video.isFromMediaSource {
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueueMediaSource(
-                        video,
-                        mediaSourcesManager: appEnvironment.mediaSourcesManager,
-                        webDAVClient: appEnvironment.webDAVClient,
-                        smbClient: appEnvironment.smbClient
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-            }
-            return
-        }
-
-        let downloadSettings = appEnvironment.downloadSettings
-
-        // Check if auto-download mode
-        if downloadSettings.preferredDownloadQuality != .ask,
-           let instance = appEnvironment.instancesManager.instance(for: video) {
-            Task {
-                do {
-                    try await appEnvironment.downloadManager.autoEnqueue(
-                        video,
-                        preferredQuality: downloadSettings.preferredDownloadQuality,
-                        preferredAudioLanguage: appEnvironment.settingsManager.preferredAudioLanguage,
-                        preferredSubtitlesLanguage: appEnvironment.settingsManager.preferredSubtitlesLanguage,
-                        includeSubtitles: downloadSettings.includeSubtitlesInAutoDownload,
-                        contentService: appEnvironment.contentService,
-                        instance: instance
-                    )
-                } catch {
-                    appEnvironment.toastManager.show(
-                        category: .error,
-                        title: String(localized: "download.error.title"),
-                        subtitle: error.localizedDescription,
-                        icon: "exclamationmark.triangle",
-                        iconColor: .red
-                    )
-                }
-            }
-        } else {
-            presentAppSheet(.downloadOptions(video))
-        }
+        presentAppSheet(.downloadOptions(video))
     }
 
     // MARK: - Remote Control

@@ -293,13 +293,6 @@ final class PlayerState {
     /// Whether SMB media playback is currently active.
     /// Used to prevent SMB directory browsing while SMB streaming is in progress,
     /// as libsmbclient has internal state conflicts when used concurrently.
-    var isSMBPlaybackActive: Bool {
-        guard let video = currentVideo else { return false }
-        guard playbackState == .playing || playbackState == .paused || playbackState == .buffering else {
-            return false
-        }
-        return video.id.isSMBSource
-    }
 
     /// Progress as a fraction (0-1).
     var progress: Double {
@@ -486,8 +479,6 @@ final class PlayerState {
             isDurationLockedFromAPI = false
             // Reset video details state for new video
             videoDetailsState = .idle
-            // Reset comments for new video
-            // Reset storyboards to prevent previous video's storyboards from appearing
             // Reset chapters so the panel doesn't show the previous video's
             // chapters while the new one loads
             chapters = []

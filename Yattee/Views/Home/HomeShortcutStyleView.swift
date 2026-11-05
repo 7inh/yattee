@@ -311,7 +311,7 @@ struct HomeShortcutStyleView: View {
             return String(localized: "home.subscriptions.subtitle")
         case .mediaSources:
             return sampleCount(for: item) == 1 ? "1 source" : "\(sampleCount(for: item)) sources"
-        case .instanceContent, .mediaSource:
+        case .instanceContent:
             return ""
         }
     }

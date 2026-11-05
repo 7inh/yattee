@@ -16,58 +16,14 @@ struct LinkVideoResolver {
     /// storyboards: YouTube/PeerTube through the matching source, direct media
     /// as-is, anything else through Yattee Server's extraction.
     func resolve(_ url: URL) async throws -> (Video, [Stream], [Caption], [Storyboard]) {
-        let router = URLRouter()
-        let destination = router.route(url)
-
-        switch destination {
-        case .video(let source, _):
-            guard case .id(let videoID) = source else {
-                throw LinkResolveError.notAVideo
-            }
-            // YouTube/PeerTube - use content-aware instance selection
-            guard let instance = appEnvironment.instancesManager.instance(for: videoID.source) else {
-                throw LinkResolveError.noInstanceAvailable
-            }
-            let (video, streams, captions, storyboards) = try await appEnvironment.contentService
-                .videoWithProxyStreamsAndCaptionsAndStoryboards(
-                    id: videoID.videoID,
-                    instance: instance
-                )
-            return (video, streams, captions, storyboards)
-
-        case .directMedia(let mediaURL):
-            // Direct media URL - no extraction needed, no captions/storyboards
-            let video = DirectMediaHelper.createVideo(from: mediaURL)
-            let stream = DirectMediaHelper.createStream(from: mediaURL)
-            return (video, [stream], [], [])
-
-        case .externalVideo, nil:
-            // YouTube pages that hold no video route nowhere; say so instead
-            // of asking for an extraction that can only fail
-            if destination == nil, router.isYouTubeHost(url.host) {
-                throw LinkResolveError.unsupportedYouTubeLink
-            }
-            // A file player plays as-is needs no extraction, no captions/storyboards
-            if let probe = await DirectMediaProbe.probe(url) {
-                let video = DirectMediaHelper.createVideo(from: url, probe: probe)
-                let stream = DirectMediaHelper.createStream(from: url, probe: probe)
-                return (video, [stream], [], [])
-            }
-            // External URL - use Yattee Server (doesn't support storyboards).
-            // Without one, a YouTube link Yattee can't parse (clips, posts) is
-            // simply unsupported - asking for a server would mislead.
-            guard let instance = appEnvironment.instancesManager.yatteeServerInstance else {
-                throw router.isYouTubeHost(url.host)
-                    ? LinkResolveError.unsupportedYouTubeLink
-                    : LinkResolveError.noYatteeServer
-            }
-            let (video, streams, captions) = try await appEnvironment.contentService
-                .extractURL(url, instance: instance)
-            return (video, streams, captions, [])
-
-        default:
-            throw LinkResolveError.notAVideo
+        guard case .video(.id(let videoID), _) = URLRouter().route(url),
+              case .global(let provider) = videoID.source, provider == ContentSource.youtubeProvider else {
+            throw LinkResolveError.unsupportedYouTubeLink
         }
+        guard let instance = appEnvironment.instancesManager.instance(for: videoID.source) else {
+            throw LinkResolveError.noInstanceAvailable
+        }
+        return try await appEnvironment.contentService.videoWithProxyStreamsAndCaptionsAndStoryboards(id: videoID.videoID, instance: instance)
     }
 
     /// Resolves a link to the screen that shows it: a video's details page
@@ -96,10 +52,8 @@ struct LinkVideoResolver {
         case .video(.loaded(let video), _):
             return await details(video)
 
-        case .directMedia, .externalVideo, nil:
-            let (video, _, _, _) = try await resolve(url)
-            return await details(video)
-
+        case nil:
+            throw LinkResolveError.unsupportedYouTubeLink
         case .some(let destination):
             return destination
         }
@@ -164,153 +118,31 @@ struct LinkVideoResolver {
     }
 
     /// Enqueues a single video for download with already-fetched streams.
-    func enqueueDownload(
-        video: Video,
-        streams: [Stream],
-        captions: [Caption],
-        storyboards: [Storyboard],
-        quality: DownloadQuality,
-        includeSubtitles: Bool
-    ) async throws {
-        // Select best video stream
-        let videoStream = selectBestVideoStream(from: streams, maxQuality: quality)
-        guard let videoStream else {
+    func enqueueDownload(video: Video, streams: [Stream]) async throws {
+        guard let stream = AudioStreamSelector.downloadStream(from: streams, preferredLanguage: appEnvironment.settingsManager.preferredAudioLanguage) else {
             throw DownloadError.noStreamAvailable
         }
-
-        // Select audio stream if needed
-        var audioStream: Stream?
-        if videoStream.isVideoOnly {
-            audioStream = selectBestAudioStream(
-                from: streams,
-                preferredLanguage: appEnvironment.settingsManager.preferredAudioLanguage
-            )
-        }
-
-        // Select caption if enabled
-        var caption: Caption?
-        if includeSubtitles, let preferredLang = appEnvironment.settingsManager.preferredSubtitlesLanguage {
-            caption = selectBestCaption(from: captions, preferredLanguage: preferredLang)
-        }
-
-        let audioCodec = videoStream.isMuxed ? videoStream.audioCodec : audioStream?.audioCodec
-        let audioBitrate = videoStream.isMuxed ? nil : audioStream?.bitrate
-
-        try await appEnvironment.downloadManager.enqueue(
-            video,
-            quality: videoStream.qualityLabel,
-            formatID: videoStream.format,
-            streamURL: videoStream.url,
-            audioStreamURL: videoStream.isVideoOnly ? audioStream?.url : nil,
-            captionURL: caption?.url,
-            audioLanguage: audioStream?.audioLanguage,
-            captionLanguage: caption?.languageCode,
-            httpHeaders: videoStream.httpHeaders,
-            storyboard: storyboards.highest(),
-            dislikeCount: nil,
-            videoCodec: videoStream.videoCodec,
-            audioCodec: audioCodec,
-            videoBitrate: videoStream.bitrate,
-            audioBitrate: audioBitrate
-        )
+        try await appEnvironment.downloadManager.enqueue(video, stream: stream)
     }
 
-    /// Resolves each link's streams and enqueues it for download.
-    /// - Returns: How many links were queued and how many failed.
-    func downloadLinks(
-        _ urls: [URL],
-        quality: DownloadQuality,
-        includeSubtitles: Bool
-    ) async -> (succeeded: Int, failed: Int) {
+    func downloadLinks(_ urls: [URL]) async -> (succeeded: Int, failed: Int) {
         var succeeded = 0
         var failed = 0
         for url in urls {
             do {
-                let (video, streams, captions, storyboards) = try await resolve(url)
-                try await enqueueDownload(
-                    video: video,
-                    streams: streams,
-                    captions: captions,
-                    storyboards: storyboards,
-                    quality: quality,
-                    includeSubtitles: includeSubtitles
-                )
+                let (video, streams, _, _) = try await resolve(url)
+                try await enqueueDownload(video: video, streams: streams)
                 succeeded += 1
-            } catch {
-                LoggingService.shared.warning(
-                    "Open link download failed for \(url.absoluteString): \(error.localizedDescription)",
-                    category: .downloads
-                )
-                failed += 1
-            }
+            } catch { failed += 1 }
         }
         return (succeeded, failed)
     }
 
-    // MARK: - Stream Selection Helpers
-
-    private func selectBestVideoStream(from streams: [Stream], maxQuality: DownloadQuality) -> Stream? {
-        let maxRes = maxQuality.maxResolution
-
-        let videoStreams = streams
-            .filter { !$0.isAudioOnly && $0.resolution != nil }
-            .filter {
-                let format = StreamFormat.detect(from: $0)
-                return format != .hls && format != .dash
-            }
-            .sorted { s1, s2 in
-                let res1 = s1.resolution ?? .p360
-                let res2 = s2.resolution ?? .p360
-                if res1 != res2 { return res1 > res2 }
-                if s1.isMuxed != s2.isMuxed { return s1.isMuxed }
-                return HardwareCapabilities.shared.codecPriority(for: s1.videoCodec) >
-                       HardwareCapabilities.shared.codecPriority(for: s2.videoCodec)
-            }
-
-        guard let maxRes else {
-            return videoStreams.first
-        }
-
-        if let stream = videoStreams.first(where: { ($0.resolution ?? .p360) <= maxRes }) {
-            return stream
-        }
-
-        return videoStreams.last
-    }
-
-    private func selectBestAudioStream(from streams: [Stream], preferredLanguage: String?) -> Stream? {
-        let audioStreams = streams.filter { $0.isAudioOnly }
-
-        if let preferred = preferredLanguage {
-            if let match = audioStreams.first(where: { ($0.audioLanguage ?? "").hasPrefix(preferred) }) {
-                return match
-            }
-        }
-
-        if let original = audioStreams.first(where: { $0.isOriginalAudio }) {
-            return original
-        }
-
-        return audioStreams.first
-    }
-
-    private func selectBestCaption(from captions: [Caption], preferredLanguage: String) -> Caption? {
-        if let exact = captions.first(where: { $0.languageCode == preferredLanguage }) {
-            return exact
-        }
-        if let prefix = captions.first(where: {
-            $0.languageCode.hasPrefix(preferredLanguage) || $0.baseLanguageCode == preferredLanguage
-        }) {
-            return prefix
-        }
-        return nil
-    }
 }
 
 // MARK: - Errors
 enum LinkResolveError: LocalizedError {
     case noInstanceAvailable
-    case noYatteeServer
     case notAVideo
     case unsupportedYouTubeLink
 
@@ -318,8 +150,6 @@ enum LinkResolveError: LocalizedError {
         switch self {
         case .noInstanceAvailable:
             return String(localized: "openLink.noInstance")
-        case .noYatteeServer:
-            return String(localized: "openLink.noYatteeServer")
         case .notAVideo:
             return String(localized: "openLink.notAVideo")
         case .unsupportedYouTubeLink:

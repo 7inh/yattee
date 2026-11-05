@@ -36,7 +36,6 @@ enum LogCategory: String, Codable, CaseIterable, Sendable {
     case remoteControl = "RemoteControl"
     case keychain = "Keychain"
     case imageLoading = "ImageLoading"
-    case mediaSources = "MediaSources"
     case subscriptions = "Subscriptions"
     case diagnostics = "Diagnostics"
     case performance = "Performance"
@@ -53,7 +52,6 @@ enum LogCategory: String, Codable, CaseIterable, Sendable {
         case .remoteControl: return "appletvremote.gen4"
         case .keychain: return "key.fill"
         case .imageLoading: return "photo"
-        case .mediaSources: return "externaldrive.connected.to.line.below"
         case .subscriptions: return "person.2"
         case .diagnostics: return "stethoscope"
         case .performance: return "gauge.with.dots.needle.67percent"
@@ -359,24 +357,12 @@ extension LoggingService {
     // MARK: - Media Sources Logging
 
     /// Log a media sources event.
-    nonisolated func logMediaSources(_ message: String, details: String? = nil) {
-        info(message, category: .mediaSources, details: details)
-    }
 
     /// Log a media sources error.
-    nonisolated func logMediaSourcesError(_ message: String, error: Error? = nil) {
-        self.error(message, category: .mediaSources, details: error?.localizedDescription)
-    }
 
     /// Log a media sources debug message.
-    nonisolated func logMediaSourcesDebug(_ message: String, details: String? = nil) {
-        debug(message, category: .mediaSources, details: details)
-    }
 
     /// Log a media sources warning.
-    nonisolated func logMediaSourcesWarning(_ message: String, details: String? = nil) {
-        warning(message, category: .mediaSources, details: details)
-    }
 
     // MARK: - Subscriptions Logging
 

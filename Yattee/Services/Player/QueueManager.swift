@@ -9,11 +9,6 @@ import Foundation
 
 /// Context for media browser queue playback.
 /// Stores folder info needed for on-demand stream/caption resolution.
-struct MediaBrowserQueueContext: Sendable {
-    let source: MediaSource
-    let allFilesInFolder: [MediaFile]
-    let folderPath: String
-}
 
 /// Manages the player queue with advanced features like continuation loading.
 @MainActor
@@ -44,7 +39,6 @@ final class QueueManager {
     private let continuationThreshold = 2
 
     /// Context for media browser queue playback (if playing from media browser).
-    private(set) var mediaBrowserContext: MediaBrowserQueueContext?
 
     // MARK: - Initialization
 
@@ -137,7 +131,6 @@ final class QueueManager {
         playerState?.clearQueue()
         currentQueueSource = nil
         currentQueueSourceLabel = nil
-        mediaBrowserContext = nil
     }
 
     // MARK: - Play from List
@@ -231,59 +224,6 @@ final class QueueManager {
     ///   - index: Index of the video to play
     ///   - source: The media source (WebDAV/SMB/local folder)
     ///   - allFilesInFolder: All files including subtitles (for subtitle discovery)
-    func playFromMediaBrowser(
-        files: [MediaFile],
-        index: Int,
-        source: MediaSource,
-        allFilesInFolder: [MediaFile]
-    ) {
-        guard !files.isEmpty, index >= 0, index < files.count else { return }
-
-        let folderPath = (files[index].path as NSString).deletingLastPathComponent
-        let queueSource = QueueSource.mediaBrowser(sourceID: source.id, folderPath: folderPath)
-
-        // If queue is disabled, just play the single video
-        guard isQueueEnabled else {
-            let video = files[index].toVideo()
-            playerService?.openVideo(video)
-            return
-        }
-
-        // 1. Clear queue
-        clearQueue()
-
-        // 2. Store media browser context for on-demand stream/caption resolution
-        mediaBrowserContext = MediaBrowserQueueContext(
-            source: source,
-            allFilesInFolder: allFilesInFolder,
-            folderPath: folderPath
-        )
-
-        // 3. Populate history with preceding files (skip if incognito or history disabled)
-        if index > 0, settingsManager?.incognitoModeEnabled != true, settingsManager?.saveWatchHistory != false {
-            playerState?.clearHistory()
-            for i in 0..<index {
-                let video = files[i].toVideo()
-                let item = QueuedVideo(video: video, queueSource: queueSource)
-                playerState?.pushToHistory(item)
-            }
-        }
-
-        // 4. Queue subsequent files (without resolving streams yet - done on-demand)
-        for file in files.dropFirst(index + 1) {
-            let video = file.toVideo()
-            playerState?.addToQueue(video, queueSource: queueSource)
-        }
-
-        // 5. Set queue source and label (just folder name)
-        currentQueueSource = queueSource
-        currentQueueSourceLabel = (folderPath as NSString).lastPathComponent
-
-        // 6. Play the selected video
-        // PlayerService will detect media browser context and resolve stream/captions on-demand
-        let videoToPlay = files[index].toVideo()
-        playerService?.openVideo(videoToPlay)
-    }
 
     /// Whether there are more items that can be loaded from the queue source.
     func hasMoreItems() -> Bool {
@@ -351,7 +291,6 @@ final class QueueManager {
         guard nextItem.stream == nil else { return }
 
         // Skip preloading for media source videos (SMB, etc.) - streams are resolved locally
-        guard !nextItem.video.isFromMediaSource else { return }
 
         // Skip preloading if video is downloaded - will use local file
         if let downloadManager,
@@ -435,9 +374,6 @@ final class QueueManager {
             // Manual entries don't have continuation
             return ([], nil)
 
-        case .mediaBrowser:
-            // Media browser folders are fully loaded, no continuation needed
-            return ([], nil)
         }
     }
 

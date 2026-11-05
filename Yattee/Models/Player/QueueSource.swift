@@ -26,7 +26,6 @@ enum QueueSource: Codable, Equatable, Hashable, Sendable {
 
     /// Videos from a media browser folder (WebDAV/SMB/local folder).
     /// Folder contents are loaded upfront, so no continuation is needed.
-    case mediaBrowser(sourceID: UUID, folderPath: String)
 
     /// Whether this source supports loading more items.
     var supportsContinuation: Bool {
@@ -36,7 +35,7 @@ enum QueueSource: Codable, Equatable, Hashable, Sendable {
              .search(_, let continuation),
              .subscriptions(let continuation):
             return continuation != nil
-        case .manual, .mediaBrowser:
+        case .manual:
             return false
         }
     }
@@ -49,7 +48,7 @@ enum QueueSource: Codable, Equatable, Hashable, Sendable {
              .search(_, let continuation),
              .subscriptions(let continuation):
             return continuation
-        case .manual, .mediaBrowser:
+        case .manual:
             return nil
         }
     }
@@ -67,8 +66,6 @@ enum QueueSource: Codable, Equatable, Hashable, Sendable {
             return .subscriptions(continuation: newContinuation)
         case .manual:
             return .manual
-        case .mediaBrowser:
-            return self // No continuation for media browser
         }
     }
 
@@ -81,7 +78,7 @@ enum QueueSource: Codable, Equatable, Hashable, Sendable {
         case .playlist, .search, .subscriptions:
             // Playlists, search, and subscriptions are YouTube content
             return .global(provider: ContentSource.youtubeProvider)
-        case .manual, .mediaBrowser:
+        case .manual:
             return nil
         }
     }

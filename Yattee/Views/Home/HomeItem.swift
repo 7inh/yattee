@@ -210,7 +210,6 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
     case subscriptions
     case mediaSources
     case instanceContent(instanceID: UUID, contentType: InstanceContentType)
-    case mediaSource(sourceID: UUID)
 
     var id: String {
         switch self {
@@ -226,8 +225,6 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
         case .mediaSources: return "mediaSources"
         case .instanceContent(let instanceID, let contentType):
             return "instance_\(instanceID.uuidString)_\(contentType.rawValue)"
-        case .mediaSource(let sourceID):
-            return "mediaSource_\(sourceID.uuidString)"
         }
     }
 
@@ -257,8 +254,6 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
         case .mediaSources: return "externaldrive.connected.to.line.below"
         case .instanceContent(_, let contentType):
             return contentType.icon
-        case .mediaSource:
-            return "externaldrive.connected.to.line.below"
         }
     }
 
@@ -275,11 +270,9 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
         case .downloads: return String(localized: "home.shortcut.downloads")
         case .channels: return String(localized: "home.shortcut.channels")
         case .subscriptions: return String(localized: "home.shortcut.subscriptions")
-        case .mediaSources: return "Media Sources"
+        case .mediaSources: return "Invidious"
         case .instanceContent(_, let contentType):
             return contentType.localizedTitle
-        case .mediaSource:
-            return "Media Source"
         }
     }
 
@@ -300,8 +293,6 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
         case .mediaSources: return .brown
         case .instanceContent(let instanceID, _):
             return Self.colorfulPalette[Self.stableIndex(for: instanceID.uuidString, count: Self.colorfulPalette.count)]
-        case .mediaSource(let sourceID):
-            return Self.colorfulPalette[Self.stableIndex(for: sourceID.uuidString, count: Self.colorfulPalette.count)]
         }
     }
 
@@ -371,9 +362,6 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
             try container.encode(CardType.instanceContent, forKey: .type)
             try container.encode(instanceID, forKey: .instanceID)
             try container.encode(contentType, forKey: .contentType)
-        case .mediaSource(let sourceID):
-            try container.encode(CardType.mediaSource, forKey: .type)
-            try container.encode(sourceID, forKey: .sourceID)
         }
     }
 
@@ -406,9 +394,8 @@ enum HomeShortcutItem: Codable, Hashable, Identifiable, Sendable {
             let instanceID = try container.decode(UUID.self, forKey: .instanceID)
             let contentType = try container.decode(InstanceContentType.self, forKey: .contentType)
             self = .instanceContent(instanceID: instanceID, contentType: contentType)
-        case .mediaSource:
-            let sourceID = try container.decode(UUID.self, forKey: .sourceID)
-            self = .mediaSource(sourceID: sourceID)
+                default:
+            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Removed source shortcut")
         }
     }
 }
@@ -427,14 +414,12 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
     case remoteServers
     /// All enabled file sources (WebDAV, SMB, local folders), listed like the
     /// Sources screen; tapping one opens its file browser.
-    case fileSources
     case instanceContent(instanceID: UUID, contentType: InstanceContentType)
     /// Legacy, decode-only. Media sources are shortcuts-only now — a media-source
     /// "section" was just a browse link. Kept so existing saved `homeSectionOrder`
     /// data still decodes (the array decodes all-or-nothing); any such items are
     /// stripped on load by `SettingsManager.removeAllHomeMediaSourceSections()`.
     /// No longer user-addable and not rendered.
-    case mediaSource(sourceID: UUID)
 
     var id: String {
         switch self {
@@ -444,22 +429,19 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
         case .history: return "history"
         case .downloads: return "downloads"
         case .remoteServers: return "remoteServers"
-        case .fileSources: return "fileSources"
         case .instanceContent(let instanceID, let contentType):
             return "instance_\(instanceID.uuidString)_\(contentType.rawValue)"
-        case .mediaSource(let sourceID):
-            return "mediaSource_\(sourceID.uuidString)"
         }
     }
 
     /// Default order for sections.
     static var defaultOrder: [HomeSectionItem] {
-        [.continueWatching, .feed, .bookmarks, .history, .downloads, .remoteServers, .fileSources]
+        [.continueWatching, .feed, .bookmarks, .history, .downloads, .remoteServers ]
     }
 
     /// Default visibility for sections (only continue watching on by default).
     static var defaultVisibility: [HomeSectionItem: Bool] {
-        [.continueWatching: true, .feed: false, .bookmarks: false, .history: false, .downloads: false, .remoteServers: false, .fileSources: false]
+        [.continueWatching: true, .feed: false, .bookmarks: false, .history: false, .downloads: false, .remoteServers: false ]
     }
 
     /// SF Symbol icon name.
@@ -472,11 +454,8 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
         case .history: return "clock.arrow.circlepath"
         case .downloads: return "arrow.down.circle.fill"
         case .remoteServers: return "server.rack"
-        case .fileSources: return "externaldrive.connected.to.line.below"
         case .instanceContent(_, let contentType):
             return contentType.icon
-        case .mediaSource:
-            return "externaldrive.connected.to.line.below"
         }
     }
 
@@ -490,11 +469,8 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
         case .history: return String(localized: "home.section.history")
         case .downloads: return String(localized: "home.section.downloads")
         case .remoteServers: return String(localized: "sources.section.remoteServers")
-        case .fileSources: return String(localized: "sources.section.fileSources")
         case .instanceContent(_, let contentType):
             return contentType.localizedTitle
-        case .mediaSource:
-            return "Media Source"
         }
     }
 
@@ -514,8 +490,7 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
         case history
         case downloads
         case remoteServers
-        case fileSources
-        case instanceContent
+            case instanceContent
         case mediaSource
     }
 
@@ -535,15 +510,10 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
             try container.encode(SectionType.downloads, forKey: .type)
         case .remoteServers:
             try container.encode(SectionType.remoteServers, forKey: .type)
-        case .fileSources:
-            try container.encode(SectionType.fileSources, forKey: .type)
         case .instanceContent(let instanceID, let contentType):
             try container.encode(SectionType.instanceContent, forKey: .type)
             try container.encode(instanceID, forKey: .instanceID)
             try container.encode(contentType, forKey: .contentType)
-        case .mediaSource(let sourceID):
-            try container.encode(SectionType.mediaSource, forKey: .type)
-            try container.encode(sourceID, forKey: .sourceID)
         }
     }
 
@@ -564,15 +534,12 @@ enum HomeSectionItem: Codable, Hashable, Identifiable, Sendable {
             self = .downloads
         case .remoteServers:
             self = .remoteServers
-        case .fileSources:
-            self = .fileSources
         case .instanceContent:
             let instanceID = try container.decode(UUID.self, forKey: .instanceID)
             let contentType = try container.decode(InstanceContentType.self, forKey: .contentType)
             self = .instanceContent(instanceID: instanceID, contentType: contentType)
-        case .mediaSource:
-            let sourceID = try container.decode(UUID.self, forKey: .sourceID)
-            self = .mediaSource(sourceID: sourceID)
+                default:
+            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Removed source shortcut")
         }
     }
 }

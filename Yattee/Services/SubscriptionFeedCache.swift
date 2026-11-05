@@ -35,7 +35,7 @@ enum FeedLoadState: Equatable {
 
     /// Whether a feed left in this state should keep asking again on its own.
     ///
-    /// A network failure is its own reason to try again. `yatteeServerRequired`
+    /// A network failure is its own reason to try again. `invidiousRequired`
     /// usually is not — an account that genuinely needs a Yattee Server goes on
     /// needing one, and a timer there would never end and never change
     /// anything. The exception is the local fallback standing in for a server
@@ -51,7 +51,7 @@ enum FeedLoadState: Equatable {
         switch self {
         case .error(.networkError):
             return true
-        case .error(.yatteeServerRequired):
+        case .error(.invidiousRequired):
             return unavailability == .unreachable
         default:
             return false
@@ -60,7 +60,7 @@ enum FeedLoadState: Equatable {
 
     /// Specific error types for feed loading.
     enum FeedLoadError: Equatable {
-        case yatteeServerRequired
+        case invidiousRequired
         case notAuthenticated
         case networkError(String)
 
@@ -75,7 +75,7 @@ enum FeedLoadState: Equatable {
         /// worth offering.
         var isAnsweredByContextBanner: Bool {
             switch self {
-            case .yatteeServerRequired, .notAuthenticated:
+            case .invidiousRequired, .notAuthenticated:
                 return true
             case .networkError:
                 return false
@@ -289,7 +289,7 @@ final class SubscriptionFeedCache {
     /// during a feed-only refresh would keep looking signed in and the local
     /// fallback would never engage.
     private func recordOutcome(_ error: Error?, backend: AppEnvironment.FeedBackend, using appEnvironment: AppEnvironment) {
-        let type: InstanceType = backend == .invidious ? .invidious : .piped
+        let type: InstanceType = .invidious
         guard let account = appEnvironment.account(forSelectedContext: type) else { return }
 
         appEnvironment.accountsManager.recordServerOutcome(error, for: account)
@@ -402,26 +402,41 @@ final class SubscriptionFeedCache {
                 await self.refreshLocalAccount(using: appEnvironment, generation: generation)
             case .invidious:
                 await self.refreshInvidiousAccount(using: appEnvironment, generation: generation)
-            case .piped:
-                await self.refreshPipedAccount(using: appEnvironment, generation: generation)
             }
         }.value
     }
 
     /// Refreshes feed for local account using Yattee Server.
     private func refreshLocalAccount(using appEnvironment: AppEnvironment, generation: Int) async {
-        // Require Yattee Server for local accounts
-        guard let serverInstance = appEnvironment.instancesManager.instances.first(where: {
-            $0.type == .yatteeServer && $0.isEnabled
-        }) else {
-            LoggingService.shared.warning("Local subscriptions require Yattee Server, but none is configured", category: .general)
-            feedLoadState = .error(.yatteeServerRequired)
+        guard let instance = appEnvironment.instancesManager.enabledInstances.first else {
+            feedLoadState = .error(.invidiousRequired)
             isLoading = false
             return
         }
-
-        LoggingService.shared.info("Refreshing feed using Yattee Server: \(serverInstance.url.absoluteString)", category: .general)
-        await refreshFromStatelessServer(instance: serverInstance, using: appEnvironment, generation: generation)
+        let subscriptions = appEnvironment.dataManager.subscriptions()
+        isLoading = true
+        feedLoadState = .loading
+        var fetched: [Video] = []
+        do {
+            for (index, subscription) in subscriptions.enumerated() {
+                try Task.checkCancellation()
+                let page = try await appEnvironment.contentService.channelVideos(id: subscription.channelID, instance: instance)
+                guard isCurrentAccountsResult(generation) else { return }
+                fetched.append(contentsOf: page.videos)
+                loadingProgress = (index + 1, subscriptions.count)
+            }
+            guard isCurrentAccountsResult(generation) else { return }
+            let unique = Dictionary(fetched.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            update(videos: unique.values.sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }, generation: generation)
+            hasMorePages = false
+            feedLoadState = .ready
+            hasLoadedOnce = true
+        } catch {
+            guard isCurrentAccountsResult(generation) else { return }
+            feedLoadState = .error(.networkError(error.localizedDescription))
+        }
+        isLoading = false
+        loadingProgress = nil
     }
 
     /// Refreshes feed for Invidious account using authenticated feed endpoint.
@@ -434,10 +449,10 @@ final class SubscriptionFeedCache {
         }
 
         LoggingService.shared.info("Refreshing feed using Invidious account: \(instance.url.absoluteString)", category: .general)
-        
+
         // Reset pagination for fresh refresh
         currentPage = 1
-        
+
         await refreshFromInvidiousFeed(instance: instance, sid: sid, using: appEnvironment, generation: generation)
     }
 
@@ -460,56 +475,8 @@ final class SubscriptionFeedCache {
     // MARK: - Piped Account
 
     /// Refreshes feed for Piped account using authenticated feed endpoint.
-    private func refreshPipedAccount(using appEnvironment: AppEnvironment, generation: Int) async {
-        guard let (instance, authToken) = getPipedAuth(using: appEnvironment) else {
-            LoggingService.shared.warning("Piped account not authenticated", category: .general)
-            feedLoadState = .error(.notAuthenticated)
-            isLoading = false
-            return
-        }
-
-        LoggingService.shared.info("Refreshing feed using Piped account: \(instance.url.absoluteString)", category: .general)
-
-        isLoading = true
-        feedLoadState = .loading
-        loadingProgress = nil
-        hasMorePages = false // Piped doesn't support pagination
-
-        do {
-            let feedVideos = try await appEnvironment.contentService.feed(
-                for: instance,
-                credential: authToken
-            )
-            guard isCurrentAccountsResult(generation) else { return }
-
-            LoggingService.shared.info("Piped feed: Received \(feedVideos.count) videos", category: .general)
-            recordOutcome(nil, backend: .piped, using: appEnvironment)
-
-            update(videos: feedVideos, generation: generation)
-            appEnvironment.dataManager.updateLastVideoPublishedDates(from: feedVideos)
-            prefetchDeArrow(for: feedVideos, using: appEnvironment)
-            feedLoadState = .ready
-        } catch {
-            LoggingService.shared.error("Failed to fetch Piped feed: \(error.localizedDescription)", category: .general)
-            guard isCurrentAccountsResult(generation) else { return }
-            recordOutcome(error, backend: .piped, using: appEnvironment)
-            feedLoadState = .error(.networkError(error.localizedDescription))
-        }
-
-        isLoading = false
-    }
 
     /// Gets the authenticated Piped instance and auth token.
-    private func getPipedAuth(using appEnvironment: AppEnvironment) -> (Instance, String)? {
-        guard let account = appEnvironment.account(forSelectedContext: .piped),
-              let instance = appEnvironment.accountsManager.instance(for: account),
-              let token = appEnvironment.accountCredentialsManager(for: account)?.credential(for: account) else {
-            LoggingService.shared.debug("No Piped account resolved for the selected context", category: .general)
-            return nil
-        }
-
-        return (instance, token)
-    }
 
     // MARK: - Invidious Feed
 
@@ -625,203 +592,9 @@ final class SubscriptionFeedCache {
     // MARK: - Yattee Server Feed
 
     /// Refreshes feed from Yattee Server's stateless POST feed API.
-    private func refreshFromStatelessServer(instance: Instance, using appEnvironment: AppEnvironment, generation: Int) async {
-        let subscriptions = appEnvironment.dataManager.subscriptions()
-        LoggingService.shared.debug("refreshFromStatelessServer: Found \(subscriptions.count) subscriptions", category: .general)
-        guard !subscriptions.isEmpty else {
-            videos = []
-            isLoading = false
-            hasLoadedOnce = true
-            feedLoadState = .ready
-            LoggingService.shared.debug("refreshFromStatelessServer: No subscriptions, clearing feed", category: .general)
-            return
-        }
-
-        isLoading = true
-        feedLoadState = .loading
-        loadingProgress = nil
-
-        let channelRequests = subscriptions.map { subscription in
-            StatelessChannelRequest(
-                channelId: subscription.channelID,
-                site: subscription.site,
-                channelName: subscription.name,
-                channelUrl: subscription.channelURLString,
-                avatarUrl: subscription.avatarURLString
-            )
-        }
-
-        do {
-            let httpClient = HTTPClient()
-            if let authHeader = appEnvironment.basicAuthCredentialsManager.basicAuthHeader(for: instance) {
-                await httpClient.setDefaultHeaders(["Authorization": authHeader])
-            }
-            let yatteeServerAPI = YatteeServerAPI(httpClient: httpClient)
-            LoggingService.shared.debug("refreshFromStatelessServer: Calling postFeed for \(channelRequests.count) channels", category: .general)
-            let response = try await yatteeServerAPI.postFeed(
-                channels: channelRequests,
-                limit: 100,
-                offset: 0,
-                instance: instance
-            )
-
-            guard isCurrentAccountsResult(generation) else { return }
-
-            let serverVideos = response.toVideos()
-            LoggingService.shared.info(
-                "refreshFromStatelessServer: Received \(serverVideos.count) videos from server, status: \(response.status), ready: \(response.isReady)",
-                category: .general
-            )
-            update(videos: serverVideos, generation: generation)
-            appEnvironment.dataManager.updateLastVideoPublishedDates(from: serverVideos)
-
-            // Prefetch DeArrow branding
-            prefetchDeArrow(for: serverVideos, using: appEnvironment)
-
-            if response.isReady {
-                feedLoadState = .ready
-                isLoading = false
-            } else {
-                // Show partial results and poll for completion
-                feedLoadState = .partiallyLoaded(
-                    readyCount: response.readyCount ?? 0,
-                    pendingCount: response.pendingCount ?? 0,
-                    errorCount: response.errorCount ?? 0
-                )
-                // Reset foreground flag since this is a user-initiated action
-                isAppInForeground = true
-                pollingTask = Task {
-                    await pollUntilReady(
-                        channels: channelRequests,
-                        instance: instance,
-                        appEnvironment: appEnvironment,
-                        generation: generation
-                    )
-                }
-                await pollingTask?.value
-                pollingTask = nil
-            }
-        } catch {
-            LoggingService.shared.error(
-                "Yattee Server feed failed: \(error.localizedDescription)",
-                category: .general
-            )
-            guard generation == accountGeneration else { return }
-            feedLoadState = .error(.networkError(error.localizedDescription))
-            isLoading = false
-        }
-    }
 
     /// Polls server until all channels are cached, then refreshes.
     /// Stops polling after max retries, consecutive errors, or when app is backgrounded.
-    private func pollUntilReady(
-        channels: [StatelessChannelRequest],
-        instance: Instance,
-        appEnvironment: AppEnvironment,
-        generation: Int
-    ) async {
-        let statusChannels = channels.map {
-            StatelessChannelStatusRequest(channelId: $0.channelId, site: $0.site)
-        }
-        let httpClient = HTTPClient()
-        if let authHeader = appEnvironment.basicAuthCredentialsManager.basicAuthHeader(for: instance) {
-            await httpClient.setDefaultHeaders(["Authorization": authHeader])
-        }
-        let yatteeServerAPI = YatteeServerAPI(httpClient: httpClient)
-
-        let maxRetries = 5
-        var retryCount = 0
-        let maxConsecutiveErrors = 3
-        var consecutiveErrors = 0
-
-        while retryCount < maxRetries {
-            // Check for cancellation before sleep
-            guard !Task.isCancelled else {
-                LoggingService.shared.debug("Feed status polling cancelled", category: .general)
-                break
-            }
-
-            // Check if app is still in foreground
-            guard isAppInForeground else {
-                LoggingService.shared.debug("Feed status polling stopped - app backgrounded", category: .general)
-                break
-            }
-
-            try? await Task.sleep(for: .seconds(5))
-
-            // Check again after sleep
-            guard !Task.isCancelled, isAppInForeground else {
-                LoggingService.shared.debug("Feed status polling cancelled during sleep", category: .general)
-                break
-            }
-
-            retryCount += 1
-
-            do {
-                let status = try await yatteeServerAPI.postFeedStatus(
-                    channels: statusChannels,
-                    instance: instance
-                )
-                consecutiveErrors = 0 // Reset on success
-
-                if status.isReady {
-                    // Fetch full feed now that all channels are cached
-                    if let response = try? await yatteeServerAPI.postFeed(
-                        channels: channels,
-                        limit: 100,
-                        offset: 0,
-                        instance: instance
-                    ) {
-                        let serverVideos = response.toVideos()
-                        update(videos: serverVideos, generation: generation)
-                        appEnvironment.dataManager.updateLastVideoPublishedDates(from: serverVideos)
-                        prefetchDeArrow(for: serverVideos, using: appEnvironment)
-                    }
-                    guard generation == accountGeneration else { return }
-                    feedLoadState = .ready
-                    isLoading = false
-                    return
-                }
-
-                // Update progress UI
-                guard generation == accountGeneration else { return }
-                feedLoadState = .partiallyLoaded(
-                    readyCount: status.readyCount,
-                    pendingCount: status.pendingCount,
-                    errorCount: status.errorCount
-                )
-            } catch {
-                consecutiveErrors += 1
-                LoggingService.shared.debug(
-                    "Feed status poll error (\(consecutiveErrors)/\(maxConsecutiveErrors)): \(error.localizedDescription)",
-                    category: .general
-                )
-
-                if consecutiveErrors >= maxConsecutiveErrors {
-                    LoggingService.shared.warning(
-                        "Feed status polling stopped after \(maxConsecutiveErrors) consecutive errors",
-                        category: .general
-                    )
-                    break
-                }
-            }
-        }
-
-        if retryCount >= maxRetries {
-            LoggingService.shared.warning(
-                "Feed status polling timed out after \(retryCount) attempts",
-                category: .general
-            )
-        }
-
-        // Show whatever we have — unless the login this poller was working for
-        // has been fenced out meanwhile: then the state belongs to whatever
-        // request the switch started, and a stale ".ready" here would end its
-        // spinner early or let a duplicate refresh through.
-        guard generation == accountGeneration else { return }
-        feedLoadState = .ready
-        isLoading = false
-    }
 
     // MARK: - Cache Warming
 

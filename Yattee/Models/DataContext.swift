@@ -85,7 +85,7 @@ extension DataContext {
         switch legacy.type {
         case .local:
             self = .local
-        case .invidious, .piped:
+        case .invidious:
             if let instanceID = legacy.instanceID {
                 self = .account(instanceID)
             } else {

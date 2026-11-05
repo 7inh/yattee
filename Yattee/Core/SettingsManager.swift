@@ -94,7 +94,6 @@ final class SettingsManager {
     var _syncPlaybackHistory: Bool?
     var _syncPlaylists: Bool?
     var _syncSettings: Bool?
-    var _syncMediaSources: Bool?
     var _syncSearchHistory: Bool?
 
     // Search history
@@ -222,10 +221,10 @@ final class SettingsManager {
         default:
             reasonDescription = "Unknown(\(reason))"
         }
-        
+
         LoggingService.shared.logCloudKit("SettingsManager KVStore change: \(reasonDescription)")
     }
-    
+
     init() {
         // Listen for external changes from iCloud
         NotificationCenter.default.addObserver(
@@ -430,7 +429,6 @@ final class SettingsManager {
         _syncPlaybackHistory = nil
         _syncPlaylists = nil
         _syncSettings = nil
-        _syncMediaSources = nil
         _syncSearchHistory = nil
         _searchHistoryLimit = nil
         // miniPlayerShowVideo and miniPlayerVideoTapAction moved to preset

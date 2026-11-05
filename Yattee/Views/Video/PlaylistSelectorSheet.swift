@@ -76,19 +76,9 @@ struct PlaylistSelectorSheet: View {
         NavigationStack {
             List {
                 // Warning for local folder videos
-                if video.isFromLocalFolder {
-                    Section {
-                        Label {
-                            Text(String(localized: "playlist.localFileWarning"))
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
 
                 // Only show playlist options if not from local folder
-                if !video.isFromLocalFolder {
+
                     // One destination shown at a time, picked at the top. No
                     // picker while local playlists are the only destination
                     // there is.
@@ -103,7 +93,7 @@ struct PlaylistSelectorSheet: View {
                     } else {
                         localSection
                     }
-                }
+
             }
             .navigationTitle(String(localized: "playlist.addTo"))
             .navigationBarTitleDisplayMode(.inline)

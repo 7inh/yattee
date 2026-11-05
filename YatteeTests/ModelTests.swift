@@ -293,26 +293,6 @@ struct InstanceTests {
         #expect(instance.displayName == "invidious.io")
     }
 
-    @Test("Instance isYouTubeInstance for Invidious")
-    func isYouTubeInstanceInvidious() {
-        let instance = Instance(type: .invidious, url: URL(string: "https://example.com")!)
-        #expect(instance.isYouTubeInstance == true)
-        #expect(instance.isPeerTubeInstance == false)
-    }
-
-    @Test("Instance isYouTubeInstance for Piped")
-    func isYouTubeInstancePiped() {
-        let instance = Instance(type: .piped, url: URL(string: "https://example.com")!)
-        #expect(instance.isYouTubeInstance == true)
-        #expect(instance.isPeerTubeInstance == false)
-    }
-
-    @Test("Instance isPeerTubeInstance")
-    func isPeerTubeInstance() {
-        let instance = Instance(type: .peertube, url: URL(string: "https://example.com")!)
-        #expect(instance.isYouTubeInstance == false)
-        #expect(instance.isPeerTubeInstance == true)
-    }
 }
 
 // MARK: - Channel Tests

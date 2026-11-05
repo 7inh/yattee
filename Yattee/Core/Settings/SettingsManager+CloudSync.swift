@@ -9,7 +9,7 @@ import Foundation
 
 extension SettingsManager {
     // MARK: - Home Visibility Sync Protection
-    
+
     /// Keys that require special handling during sync to preserve user customizations.
     /// These settings should not be overwritten by default/stale values from iCloud.
     private static let protectedVisibilityKeys: Set<SettingsKey> = [
@@ -18,59 +18,59 @@ extension SettingsManager {
         .homeShortcutOrder,
         .homeSectionOrder
     ]
-    
+
     /// Checks if the given home shortcut visibility data represents user customization (differs from defaults).
     private func homeShortcutVisibilityHasCustomization(_ data: Data?) -> Bool {
         guard let data,
               let visibility = try? JSONDecoder().decode([HomeShortcutItem: Bool].self, from: data) else {
             return false
         }
-        
+
         let defaults = HomeShortcutItem.defaultVisibility
-        
+
         // Check if any value differs from the default
         for (item, isVisible) in visibility {
             if let defaultValue = defaults[item], defaultValue != isVisible {
                 return true
             }
         }
-        
+
         // Also check if there are items in visibility that aren't in defaults (user added custom items)
         for item in visibility.keys {
             if defaults[item] == nil {
                 return true
             }
         }
-        
+
         return false
     }
-    
+
     /// Checks if the given home section visibility data represents user customization (differs from defaults).
     private func homeSectionVisibilityHasCustomization(_ data: Data?) -> Bool {
         guard let data,
               let visibility = try? JSONDecoder().decode([HomeSectionItem: Bool].self, from: data) else {
             return false
         }
-        
+
         let defaults = HomeSectionItem.defaultVisibility
-        
+
         // Check if any value differs from the default
         for (item, isVisible) in visibility {
             if let defaultValue = defaults[item], defaultValue != isVisible {
                 return true
             }
         }
-        
+
         // Also check if there are items in visibility that aren't in defaults (user added custom items)
         for item in visibility.keys {
             if defaults[item] == nil {
                 return true
             }
         }
-        
+
         return false
     }
-    
+
     /// Determines whether local data should be preserved during iCloud sync using timestamp comparison.
     /// Returns true if the local write is newer than the iCloud write, meaning we should keep local.
     /// Falls back to customization-vs-defaults logic when no timestamps exist (migration path).
@@ -131,7 +131,7 @@ extension SettingsManager {
 
         return false
     }
-    
+
     /// Pushes local protected settings to iCloud when local was preserved.
     /// Also pushes the companion _modifiedAt timestamps to keep them consistent.
     private func pushLocalToiCloudForPreservedKeys(_ keysToPreserve: Set<SettingsKey>) {
@@ -285,19 +285,6 @@ extension SettingsManager {
 
     /// Whether media sources (WebDAV only) should be synced to iCloud. Default is true when iCloud sync is enabled.
     /// Note: Local folder sources are never synced as they are device-specific.
-    var syncMediaSources: Bool {
-        get {
-            if let cached = _syncMediaSources { return cached }
-            if localDefaults.object(forKey: "syncMediaSources") == nil {
-                return true
-            }
-            return localDefaults.bool(forKey: "syncMediaSources")
-        }
-        set {
-            _syncMediaSources = newValue
-            localDefaults.set(newValue, forKey: "syncMediaSources")
-        }
-    }
 
     /// Whether search history should be synced to iCloud. Default is true when iCloud sync is enabled.
     var syncSearchHistory: Bool {
@@ -322,7 +309,6 @@ extension SettingsManager {
         syncPlaybackHistory = true
         syncPlaylists = true
         syncSettings = true
-        syncMediaSources = true
         syncSearchHistory = true
     }
 

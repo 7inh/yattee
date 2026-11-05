@@ -52,3 +52,26 @@ enum AudioStreamSelector {
         }.first
     }
 }
+
+extension AudioStreamSelector {
+    /// Downloads require a complete MP4 audio resource, never HLS, Opus or a muxed file.
+    static func downloadStream(from streams: [Stream], preferredLanguage: String? = nil) -> Stream? {
+        let candidates = streams.filter {
+            $0.isAVPlayerAudioPlayable && $0.isAACAudio
+                && (["m4a", "mp4"].contains($0.format.lowercased()) || ($0.mimeType ?? "").hasPrefix("audio/mp4") || $0.url.pathExtension.lowercased() == "m4a")
+                && !$0.url.isFileURL && !$0.url.pathExtension.lowercased().contains("m3u8")
+                && !(($0.mimeType ?? "").contains("mpegurl")) && $0.format.lowercased() != "hls"
+        }
+        return candidates.sorted { first, second in
+            let first140 = URLComponents(url: first.url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "itag" && $0.value == "140" } == true
+            let second140 = URLComponents(url: second.url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "itag" && $0.value == "140" } == true
+            if first140 != second140 { return first140 }
+            if let language = preferredLanguage {
+                let a = first.audioLanguage?.hasPrefix(language) == true
+                let b = second.audioLanguage?.hasPrefix(language) == true
+                if a != b { return a }
+            }
+            return (first.bitrate ?? 0) > (second.bitrate ?? 0)
+        }.first
+    }
+}

@@ -7,7 +7,9 @@
 
 import Foundation
 
-/// Represents the source of video content by its identity paradigm.
+/// Content identity stored in history, bookmarks and playlists.
+/// Federated/extracted identities remain decode-compatible for existing databases;
+/// InstancesManager only resolves YouTube identities to an Invidious instance.
 ///
 /// Global content has universally unique IDs that work across any mirror instance.
 /// Federated content belongs to a specific instance - the ID is only unique within that instance.

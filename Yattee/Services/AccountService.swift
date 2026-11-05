@@ -320,18 +320,6 @@ final class AccountService {
         case .invidious(let playlistID, _):
             guard playlistID == id else { throw AccountServiceError.entryMismatch }
 
-        case .piped(let playlistID, let position):
-            guard playlistID == id else { throw AccountServiceError.entryMismatch }
-
-            let snapshot = try await tracking(account, credential: credential) {
-                try await transport.userPlaylistSnapshot(id: id, instance: instance, credential: credential)
-            }
-
-            guard let current = snapshot.entries.first(where: { $0.position == position }),
-                  current.video.id.videoID == entry.video.id.videoID
-            else {
-                throw AccountServiceError.entryMismatch
-            }
         }
 
         try requireStillCurrent(credential, for: account)

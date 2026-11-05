@@ -122,7 +122,7 @@ struct CompactTabView: View {
         case .downloads:
             DownloadsView()
         case .sources:
-            MediaSourcesView()
+            SourcesListView()
         case .settings:
             SettingsView(showCloseButton: false)
         case .continueWatching:

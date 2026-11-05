@@ -128,20 +128,6 @@ final class SourcesSettings {
     }
 
     /// Sorts an array of media sources based on current settings.
-    func sorted(_ sources: [MediaSource]) -> [MediaSource] {
-        sources.sorted { first, second in
-            let comparison: Bool
-            switch sortOption {
-            case .name:
-                comparison = first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
-            case .type:
-                comparison = first.type.displayName.localizedCaseInsensitiveCompare(second.type.displayName) == .orderedAscending
-            case .dateAdded:
-                comparison = first.dateAdded < second.dateAdded
-            }
-            return sortDirection == .ascending ? comparison : !comparison
-        }
-    }
 
     /// Returns available sort options based on current grouping state.
     /// When grouped by type, the "type" sort option is hidden.

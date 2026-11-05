@@ -10,7 +10,6 @@ import Foundation
 /// Represents any source type for unified display in the Sources list.
 enum UnifiedSource: Identifiable, Hashable, Sendable {
     case remoteServer(Instance)
-    case fileSource(MediaSource)
 
     // MARK: - Identifiable
 
@@ -18,8 +17,6 @@ enum UnifiedSource: Identifiable, Hashable, Sendable {
         switch self {
         case .remoteServer(let instance):
             return instance.id
-        case .fileSource(let source):
-            return source.id
         }
     }
 
@@ -29,8 +26,6 @@ enum UnifiedSource: Identifiable, Hashable, Sendable {
         switch self {
         case .remoteServer(let instance):
             return instance.displayName
-        case .fileSource(let source):
-            return source.name
         }
     }
 
@@ -38,8 +33,6 @@ enum UnifiedSource: Identifiable, Hashable, Sendable {
         switch self {
         case .remoteServer(let instance):
             return instance.isEnabled
-        case .fileSource(let source):
-            return source.isEnabled
         }
     }
 
@@ -47,8 +40,6 @@ enum UnifiedSource: Identifiable, Hashable, Sendable {
         switch self {
         case .remoteServer(let instance):
             return instance.url.host ?? instance.url.absoluteString
-        case .fileSource(let source):
-            return source.urlDisplayString
         }
     }
 }

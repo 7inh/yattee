@@ -23,7 +23,7 @@ enum DownloadStatus: String, Codable, Sendable {
     case failed
 }
 
-/// Download phase for multi-file downloads (video + audio + caption + storyboard + thumbnail).
+/// Legacy phase values remain decodable for migration. New downloads fetch audio only.
 enum DownloadPhase: String, Codable, Sendable {
     case video      // Downloading video file
     case audio      // Downloading audio file (for video-only streams)

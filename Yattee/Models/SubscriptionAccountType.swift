@@ -21,7 +21,6 @@ enum SubscriptionAccountType: String, Codable, Sendable, Equatable, CaseIterable
     case invidious
 
     /// Subscriptions managed by a Piped instance account.
-    case piped
 }
 
 /// A configured subscription account as the previous release persisted it.

@@ -53,8 +53,8 @@ struct YouTubeHomeFeed: View {
         guard appEnvironment?.subscriptionService.cachedSubscriptionCount != 0,
               case let .error(error) = feedCache.feedLoadState else { return nil }
         switch error {
-        case .yatteeServerRequired:
-            return String(localized: "subscriptions.error.yatteeServerRequired")
+        case .invidiousRequired:
+            return String(localized: "subscriptions.error.invidiousRequired")
         case .notAuthenticated:
             return String(localized: "subscriptions.error.notAuthenticated")
         case .networkError(let message):

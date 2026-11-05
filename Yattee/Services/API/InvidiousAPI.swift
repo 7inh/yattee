@@ -570,14 +570,14 @@ actor InvidiousAPI: InstanceAPI {
             "max_results": String(maxResults),
             "page": String(page)
         ])
-        
+
         // Fetch raw data first for debugging
         let rawData = try await httpClient.fetchData(
             endpoint,
             baseURL: instance.url,
             customHeaders: ["Cookie": "SID=\(sid)"]
         )
-        
+
         // Decode the response
         let response: InvidiousAuthFeedResponse
         do {
@@ -590,16 +590,16 @@ actor InvidiousAPI: InstanceAPI {
             )
             throw error
         }
-        
+
         // Combine notifications and videos arrays - Invidious returns feed items in notifications
         let allVideos = (response.notifications ?? []) + response.videos
         let videos = allVideos.map { $0.toVideo(baseURL: instance.url, isShort: $0.isLikelyFeedShort) }
-        
+
         LoggingService.shared.debug(
             "Invidious feed: \(response.notifications?.count ?? 0) notifications + \(response.videos.count) videos = \(videos.count) total",
             category: .api
         )
-        
+
         // Invidious feed doesn't provide explicit "hasMore", assume there's more until we get empty page
         return InvidiousFeedResponse(videos: videos, hasMore: !videos.isEmpty)
     }
@@ -947,7 +947,6 @@ extension InvidiousAPI {
         // Yattee Server does proxying server-side via the ?proxy=true query
         // on the videos endpoint (the converter mints signed /proxy/relay
         // URLs). Don't second-guess that here by host-rewriting CDN URLs.
-        if instance.type == .yatteeServer { return streams }
 
         let firstCDNURL = streams.first(where: { isYouTubeCDNURL($0.url) })?.url
 
@@ -992,7 +991,6 @@ extension InvidiousAPI {
     /// starts loading so the verdict is ready by the time streams come back.
     static func prewarmProxyDetection(for instance: Instance) async {
         guard instance.supportsVideoProxying,
-              instance.type != .yatteeServer,
               !instance.proxiesVideos else { return }
 
         await ProxyDetectionCache.shared.prewarm(

@@ -393,8 +393,6 @@ private func legacyInstanceIcon(for type: InstanceType) -> String {
     switch type {
     case .invidious:
         return "server.rack"
-    case .piped:
-        return "cloud"
     default:
         return "globe"
     }

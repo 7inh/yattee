@@ -31,10 +31,6 @@ struct iCloudSettingsView: View {
         appEnvironment?.cloudKitSync
     }
 
-    private var mediaSourcesManager: MediaSourcesManager? {
-        appEnvironment?.mediaSourcesManager
-    }
-
     private var lastManualSyncRelative: String? {
         guard let lastSync = lastManualSyncTime else { return nil }
         return RelativeDateFormatter.string(for: lastSync, unitsStyle: .full)
@@ -258,18 +254,6 @@ struct iCloudSettingsView: View {
                 Label(String(localized: "settings.icloud.category.settings"), systemImage: "gearshape")
             }
 
-            Toggle(isOn: Binding(
-                get: { settingsManager?.syncMediaSources ?? true },
-                set: { newValue in
-                    if newValue {
-                        showCategoryConfirmation(for: .mediaSources)
-                    } else {
-                        settingsManager?.syncMediaSources = false
-                    }
-                }
-            )) {
-                Label(String(localized: "settings.icloud.category.mediaSources"), systemImage: "externaldrive.connected.to.line.below")
-            }
         }
     }
 
@@ -289,7 +273,7 @@ struct iCloudSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // Sync Status
             HStack {
                 Label(String(localized: "settings.icloud.status"), systemImage: "arrow.triangle.2.circlepath")
@@ -300,7 +284,7 @@ struct iCloudSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // Pending Changes (if any)
             if let count = cloudKitSync?.pendingChangesCount, count > 0 {
                 HStack {
@@ -310,7 +294,7 @@ struct iCloudSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // Last Sync (automatic)
             if let lastSync = cloudKitSync?.lastSyncDate {
                 HStack {
@@ -320,7 +304,7 @@ struct iCloudSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // Error Row (expandable)
             if case .error(let error) = cloudKitSync?.syncStatus {
                 errorRow(error)
@@ -347,7 +331,7 @@ struct iCloudSettingsView: View {
                     }
                 }
             }
-            
+
             // Sync Now Button
             Button {
                 syncNow()
@@ -361,7 +345,7 @@ struct iCloudSettingsView: View {
     }
 
     // MARK: - Status Icons
-    
+
     private var accountStatusIcon: some View {
         Group {
             switch cloudKitSync?.accountStatus {
@@ -380,7 +364,7 @@ struct iCloudSettingsView: View {
             }
         }
     }
-    
+
     private var syncStatusIcon: some View {
         Group {
             // Show rotating icon for both syncing and receiving changes
@@ -417,9 +401,9 @@ struct iCloudSettingsView: View {
             }
         }
     }
-    
+
     // MARK: - Error Display
-    
+
     @ViewBuilder
     private func errorRow(_ error: Error) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -440,7 +424,7 @@ struct iCloudSettingsView: View {
                         .font(.caption)
                 }
             }
-            
+
             // Expanded view with details
             if expandedError {
                 VStack(alignment: .leading, spacing: 8) {
@@ -448,7 +432,7 @@ struct iCloudSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    
+
                     // Retry button
                     Button {
                         Task {
@@ -520,7 +504,6 @@ struct iCloudSettingsView: View {
         // Keep old sync for non-migrated data
         settingsManager?.replaceWithiCloudData()
         instancesManager?.replaceWithiCloudData()
-        mediaSourcesManager?.replaceWithiCloudData()
 
         resyncStoredLogins()
     }
@@ -540,7 +523,6 @@ struct iCloudSettingsView: View {
     /// from uploading; what is already in iCloud Keychain stays.
     private func resyncStoredLogins() {
         appEnvironment?.invidiousCredentialsManager.resyncCredentialsWithCurrentSetting()
-        appEnvironment?.pipedCredentialsManager.resyncCredentialsWithCurrentSetting()
     }
 
     private func disableiCloudSync() {
@@ -600,9 +582,6 @@ struct iCloudSettingsView: View {
             Task {
                 await cloudKitSync?.uploadAllLocalControlsPresets()
             }
-        case .mediaSources:
-            settingsManager?.syncMediaSources = true
-            mediaSourcesManager?.replaceWithiCloudData()
         }
     }
 
@@ -611,11 +590,10 @@ struct iCloudSettingsView: View {
         Task {
             await cloudKitSync?.refreshSync()
         }
-        
+
         // Push other data to iCloud (non-CloudKit)
         settingsManager?.syncToiCloud()
         instancesManager?.syncToiCloud()
-        mediaSourcesManager?.syncToiCloud()
         lastManualSyncTime = Date()
     }
 }
@@ -629,14 +607,12 @@ private enum SyncCategory {
     case playbackHistory
     case playlists
     case searchHistory
-    case mediaSources
     case settings
-    
 
     /// Categories that replace local data with iCloud data
     var usesReplaceStrategy: Bool {
         switch self {
-        case .instances, .settings, .mediaSources:
+        case .instances, .settings:
             return true
         case .subscriptions, .bookmarks, .playlists, .playbackHistory, .searchHistory:
             return false

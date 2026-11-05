@@ -15,48 +15,6 @@ import Foundation
 @MainActor
 struct InstanceFilteringTests {
 
-    @Test("Filter YouTube instances")
-    func filterYouTubeInstances() {
-        let instances = [
-            Instance(type: .invidious, url: URL(string: "https://inv.example.com")!),
-            Instance(type: .piped, url: URL(string: "https://piped.example.com")!),
-            Instance(type: .peertube, url: URL(string: "https://pt.example.com")!),
-        ]
-
-        let youtubeInstances = instances.filter(\.isYouTubeInstance)
-        #expect(youtubeInstances.count == 2)
-        #expect(youtubeInstances.allSatisfy { $0.type == .invidious || $0.type == .piped })
-    }
-
-    @Test("Account-capable instances come from the capability table")
-    func accountCapableInstancesFollowCapabilities() {
-        let manager = makeTestInstancesManager()
-        #expect(!manager.hasAccountCapableInstances)
-
-        manager.add(Instance(type: .peertube, url: URL(string: "https://pt.example.com")!))
-        manager.add(Instance(type: .yatteeServer, url: URL(string: "https://ys.example.com")!))
-        #expect(manager.accountCapableInstances.isEmpty)
-        #expect(!manager.hasAccountCapableInstances)
-
-        manager.add(Instance(type: .invidious, url: URL(string: "https://inv.example.com")!))
-        manager.add(Instance(type: .piped, url: URL(string: "https://piped.example.com")!))
-        #expect(manager.accountCapableInstances.map(\.type) == [.invidious, .piped])
-        #expect(manager.hasAccountCapableInstances)
-    }
-
-    @Test("Filter PeerTube instances")
-    func filterPeerTubeInstances() {
-        let instances = [
-            Instance(type: .invidious, url: URL(string: "https://inv.example.com")!),
-            Instance(type: .peertube, url: URL(string: "https://pt1.example.com")!),
-            Instance(type: .peertube, url: URL(string: "https://pt2.example.com")!),
-        ]
-
-        let peertubeInstances = instances.filter(\.isPeerTubeInstance)
-        #expect(peertubeInstances.count == 2)
-        #expect(peertubeInstances.allSatisfy { $0.type == .peertube })
-    }
-
     @Test("Filter enabled instances")
     func filterEnabledInstances() {
         var enabled = Instance(type: .invidious, url: URL(string: "https://enabled.example.com")!)
@@ -103,13 +61,6 @@ struct InstanceFilteringTests {
 @MainActor
 struct InstanceTypeTests {
 
-    @Test("InstanceType display names")
-    func displayNames() {
-        #expect(InstanceType.invidious.displayName == "Invidious")
-        #expect(InstanceType.piped.displayName == "Piped")
-        #expect(InstanceType.peertube.displayName == "PeerTube")
-    }
-
     @Test("InstanceType is Codable")
     func codable() throws {
         for type in InstanceType.allCases {
@@ -135,22 +86,6 @@ struct InstanceTypeTests {
         #expect(instance.name == decoded.name)
     }
 
-    @Test("Instance array is Codable")
-    func instanceArrayCodable() throws {
-        let instances = [
-            Instance(type: .invidious, url: URL(string: "https://inv.example.com")!),
-            Instance(type: .piped, url: URL(string: "https://piped.example.com")!),
-            Instance(type: .peertube, url: URL(string: "https://pt.example.com")!, name: "My PeerTube"),
-        ]
-
-        let encoded = try JSONEncoder().encode(instances)
-        let decoded = try JSONDecoder().decode([Instance].self, from: encoded)
-
-        #expect(decoded.count == 3)
-        #expect(decoded[0].type == .invidious)
-        #expect(decoded[1].type == .piped)
-        #expect(decoded[2].name == "My PeerTube")
-    }
 }
 
 // MARK: - Instance Identity Tests

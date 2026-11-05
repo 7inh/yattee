@@ -74,7 +74,7 @@ final class InstancesManager {
         guard instanceSyncEnabled else { return }
 
         guard let iCloudData = ubiquitousStore.data(forKey: instancesKey),
-              let iCloudInstances = try? JSONDecoder().decode([Instance].self, from: iCloudData) else {
+              let iCloudInstances = try? JSONDecoder().decode(LossyDecodableArray<Instance>.self, from: iCloudData).elements else {
             return
         }
 
@@ -112,7 +112,7 @@ final class InstancesManager {
         ubiquitousStore.synchronize()
 
         guard let iCloudData = ubiquitousStore.data(forKey: instancesKey),
-              let iCloudInstances = try? JSONDecoder().decode([Instance].self, from: iCloudData) else {
+              let iCloudInstances = try? JSONDecoder().decode(LossyDecodableArray<Instance>.self, from: iCloudData).elements else {
             // No iCloud data exists, sync local data to iCloud
             syncToiCloud()
             return
@@ -197,24 +197,8 @@ final class InstancesManager {
         instances.filter(\.isEnabled)
     }
 
-    var peertubeInstances: [Instance] {
-        instances.filter(\.isPeerTubeInstance)
-    }
-
-    var yatteeServerInstances: [Instance] {
-        instances.filter(\.isYatteeServerInstance)
-    }
-
     var hasYouTubeInstances: Bool {
         instances.contains { $0.isYouTubeInstance }
-    }
-
-    var hasPeerTubeInstances: Bool {
-        instances.contains { $0.isPeerTubeInstance }
-    }
-
-    var hasYatteeServerInstances: Bool {
-        instances.contains { $0.isYatteeServerInstance }
     }
 
     /// Instances whose backend has accounts at all, asked of the capability
@@ -225,10 +209,6 @@ final class InstancesManager {
 
     var hasAccountCapableInstances: Bool {
         instances.contains { $0.type.accountCapabilities.supportsAccounts }
-    }
-
-    var enabledYatteeServerInstances: [Instance] {
-        yatteeServerInstances.filter(\.isEnabled)
     }
 
     /// Selects an enabled instance appropriate for the given video's content source.
@@ -242,29 +222,8 @@ final class InstancesManager {
     /// YouTube (Invidious playlists are Invidious-specific), the playlist's own
     /// server for federated content, Yattee Server for extracted content.
     func playlistInstance(for source: ContentSource) -> Instance? {
-        switch source {
-        case .global:
-            // For global content (YouTube), prefer Invidious instances over Yattee Server
-            // since Invidious playlists (IVPL*) are Invidious-specific
-            if let invidiousInstance = enabledInstances.first(where: { $0.type == .invidious }) {
-                return invidiousInstance
-            }
-            // Fall back to any YouTube-compatible instance
-            return enabledInstances.first(where: { $0.isYouTubeInstance })
-        case .federated(let provider, let instanceURL):
-            // For federated content, find matching instance by URL
-            if let existingInstance = instances.first(where: { $0.url == instanceURL }) {
-                return existingInstance
-            }
-            // If no configured instance matches, create a temporary one for PeerTube
-            if provider == ContentSource.peertubeProvider {
-                return Instance(type: .peertube, url: instanceURL)
-            }
-            return nil
-        case .extracted:
-            // For extracted content, use Yattee Server
-            return yatteeServerInstances.first
-        }
+        guard case .global(let provider) = source, provider == ContentSource.youtubeProvider else { return nil }
+        return enabledInstances.first
     }
 
     /// Selects an enabled instance appropriate for the given content source.
@@ -272,39 +231,11 @@ final class InstancesManager {
     /// - For extracted content: requires Yattee Server (only backend with yt-dlp)
     /// - For YouTube content: uses YouTube-capable instance (Invidious, Piped, Yattee Server)
     func instance(for contentSource: ContentSource) -> Instance? {
-        switch contentSource {
-        case .federated(let provider, let instanceURL) where provider == ContentSource.peertubeProvider:
-            // PeerTube content - prefer the exact instance, fall back to any PeerTube instance
-            return enabledInstances.first { $0.url.host == instanceURL.host }
-                ?? enabledInstances.first(where: \.isPeerTubeInstance)
-        case .extracted:
-            // Extracted content requires Yattee Server (yt-dlp)
-            return yatteeServerInstances.first
-        case .global, .federated:
-            // YouTube content - prefer Yattee Server (the active one if it is one),
-            // then the active instance, then any other YouTube-capable instance
-            let active = activeInstance
-            if let active, active.isYatteeServerInstance {
-                return active
-            }
-            if let yatteeServer = enabledYatteeServerInstances.first {
-                return yatteeServer
-            }
-            if let active, active.isYouTubeInstance {
-                return active
-            }
-            return enabledInstances.first(where: \.isYouTubeInstance)
-        }
+        guard case .global(let provider) = contentSource, provider == ContentSource.youtubeProvider else { return nil }
+        return activeInstance ?? enabledInstances.first
     }
 
     /// Disables all Yattee Server instances except the specified one.
-    func disableOtherYatteeServerInstances(except instanceID: UUID) {
-        for instance in enabledYatteeServerInstances where instance.id != instanceID {
-            var updated = instance
-            updated.isEnabled = false
-            update(updated)
-        }
-    }
 
     /// The currently active instance for browsing content.
     /// Falls back to the first enabled instance if no active instance is set.
@@ -322,7 +253,7 @@ final class InstancesManager {
         // Only load from local defaults - never automatically pull from iCloud
         // User must explicitly enable iCloud sync to get iCloud data
         if let data = localDefaults.data(forKey: instancesKey),
-           let decoded = try? JSONDecoder().decode([Instance].self, from: data) {
+           let decoded = try? JSONDecoder().decode(LossyDecodableArray<Instance>.self, from: data).elements {
             instances = decoded
         }
     }

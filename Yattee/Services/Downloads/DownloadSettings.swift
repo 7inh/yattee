@@ -67,8 +67,6 @@ final class DownloadSettings {
         static let sortDirection = "downloads.sortDirection"
         static let groupByChannel = "downloads.groupByChannel"
         static let allowCellularDownloads = "downloads.allowCellularDownloads"
-        static let preferredQuality = "downloads.preferredQuality"
-        static let includeSubtitlesInAutoDownload = "downloads.includeSubtitlesInAutoDownload"
         static let maxConcurrentDownloads = "downloads.maxConcurrentDownloads"
     }
 
@@ -82,8 +80,6 @@ final class DownloadSettings {
     private var _sortDirection: SortDirection?
     private var _groupByChannel: Bool?
     private var _allowCellularDownloads: Bool?
-    private var _preferredDownloadQuality: DownloadQuality?
-    private var _includeSubtitlesInAutoDownload: Bool?
     private var _maxConcurrentDownloads: Int?
 
     // MARK: - Properties
@@ -146,33 +142,9 @@ final class DownloadSettings {
 
     /// Preferred download quality. When set to anything other than .ask,
     /// downloads will start automatically without showing the stream selection sheet.
-    var preferredDownloadQuality: DownloadQuality {
-        get {
-            if let cached = _preferredDownloadQuality { return cached }
-            guard let rawValue = defaults.string(forKey: Keys.preferredQuality),
-                  let quality = DownloadQuality(rawValue: rawValue) else {
-                return .hd1080p
-            }
-            return quality
-        }
-        set {
-            _preferredDownloadQuality = newValue
-            defaults.set(newValue.rawValue, forKey: Keys.preferredQuality)
-        }
-    }
 
     /// Whether to include subtitles when auto-downloading (non-Ask mode).
     /// Uses the preferred subtitle language from playback settings.
-    var includeSubtitlesInAutoDownload: Bool {
-        get {
-            if let cached = _includeSubtitlesInAutoDownload { return cached }
-            return defaults.bool(forKey: Keys.includeSubtitlesInAutoDownload)
-        }
-        set {
-            _includeSubtitlesInAutoDownload = newValue
-            defaults.set(newValue, forKey: Keys.includeSubtitlesInAutoDownload)
-        }
-    }
 
     /// Maximum number of concurrent downloads. Default is 2.
     var maxConcurrentDownloads: Int {

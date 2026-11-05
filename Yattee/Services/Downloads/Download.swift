@@ -26,7 +26,7 @@ struct Download: Identifiable, Codable, Sendable, Equatable {
     let dislikeCount: Int?
     let publishedAt: Date?
     let publishedText: String?
-    let streamURL: URL
+    var streamURL: URL
 
     /// Optional separate audio stream URL (for video-only streams)
     let audioStreamURL: URL?
@@ -37,7 +37,7 @@ struct Download: Identifiable, Codable, Sendable, Equatable {
     /// Language code for the caption (e.g., "en", "de")
     let captionLanguage: String?
     /// Custom HTTP headers required for downloading (cookies, referer, etc.)
-    let httpHeaders: [String: String]?
+    var httpHeaders: [String: String]?
     /// Storyboard metadata for offline seek preview
     let storyboard: Storyboard?
 
@@ -250,7 +250,7 @@ struct Download: Identifiable, Codable, Sendable, Equatable {
         self.channelThumbnailURL = video.author.thumbnailURL
         self.channelSubscriberCount = video.author.subscriberCount
         self.channelURL = video.author.url
-        self.thumbnailURL = video.bestThumbnail?.url
+        self.thumbnailURL = video.reliableThumbnailURL
         self.duration = video.duration
         self.description = video.description
         self.viewCount = video.viewCount
@@ -287,7 +287,7 @@ struct Download: Identifiable, Codable, Sendable, Equatable {
         self.audioResumeData = nil
         self.retryCount = 0
         self.warnings = []
-        self.downloadPhase = .video
+        self.downloadPhase = .audio
         self.videoProgress = 0
         self.audioProgress = 0
         self.videoTotalBytes = 0
@@ -347,56 +347,15 @@ struct Download: Identifiable, Codable, Sendable, Equatable {
 // MARK: - Preview Data
 
 extension Download {
-    /// A sample completed download for SwiftUI previews.
     static var preview: Download {
-        var download = Download(
-            video: .preview,
-            quality: "1080p",
-            formatID: "137",
-            streamURL: URL(string: "https://example.com/video.mp4")!,
-            audioStreamURL: URL(string: "https://example.com/audio.m4a")!,
-            captionURL: URL(string: "https://example.com/captions.vtt")!,
-            audioLanguage: "en",
-            captionLanguage: "en",
-            videoCodec: "avc1",
-            audioCodec: "mp4a",
-            videoBitrate: 5_000_000,
-            audioBitrate: 128_000
-        )
+        var download = Download(video: .preview, quality: "Audio", formatID: "m4a",
+                                streamURL: URL(string: "https://example.com/audio.m4a")!,
+                                audioLanguage: "en", audioCodec: "mp4a", audioBitrate: 128_000)
         download.status = .completed
-        download.progress = 1.0
-        download.videoProgress = 1.0
-        download.audioProgress = 1.0
-        download.videoTotalBytes = 150_000_000
-        download.audioTotalBytes = 5_000_000
-        download.totalBytes = 155_000_000
-        download.downloadedBytes = 155_000_000
-        download.localVideoPath = "/Downloads/video.mp4"
-        download.localAudioPath = "/Downloads/audio.m4a"
-        download.localCaptionPath = "/Downloads/captions.vtt"
-        download.completedAt = Date()
-        return download
-    }
-
-    /// A sample muxed download (no separate audio) for SwiftUI previews.
-    static var muxedPreview: Download {
-        var download = Download(
-            video: .preview,
-            quality: "720p",
-            formatID: "22",
-            streamURL: URL(string: "https://example.com/muxed.mp4")!,
-            videoCodec: "avc1",
-            audioCodec: "mp4a",
-            videoBitrate: 2_500_000,
-            audioBitrate: 128_000
-        )
-        download.status = .completed
-        download.progress = 1.0
-        download.videoProgress = 1.0
-        download.videoTotalBytes = 80_000_000
-        download.totalBytes = 80_000_000
-        download.downloadedBytes = 80_000_000
-        download.localVideoPath = "/Downloads/muxed.mp4"
+        download.progress = 1
+        download.totalBytes = 5_000_000
+        download.downloadedBytes = download.totalBytes
+        download.localAudioPath = "audio.m4a"
         download.completedAt = Date()
         return download
     }

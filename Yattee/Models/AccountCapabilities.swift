@@ -73,28 +73,6 @@ extension InstanceType {
                 supportsPlaylistPrivacy: true
             )
 
-        case .piped:
-            // Full CRUD but no privacy setting, removal is positional, and
-            // there is no history endpoint at all.
-            AccountCapabilities(
-                supportsSubscriptions: true,
-                supportsFeed: true,
-                supportsPlaylistReads: true,
-                supportsPlaylistWrites: true,
-                supportsWatchHistory: false,
-                supportsPlaylistPrivacy: false
-            )
-
-        case .peertube:
-            // Yattee has no PeerTube account concept — instances are browsed
-            // anonymously.
-            .none
-
-        case .yatteeServer:
-            // Stateless today: the client posts its own subscription list and
-            // gets a merged feed back, with HTTP Basic as the only auth. Per-user
-            // accounts are planned server-side; this row is where they land.
-            .none
         }
     }
 }

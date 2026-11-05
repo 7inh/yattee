@@ -105,7 +105,6 @@ final class NavigationRouter {
         sidebarManager.configure(
             dataManager: appEnvironment.dataManager,
             settingsManager: appEnvironment.settingsManager,
-            mediaSourcesManager: appEnvironment.mediaSourcesManager,
             instancesManager: appEnvironment.instancesManager,
             accountsManager: appEnvironment.accountsManager,
             subscriptionService: appEnvironment.subscriptionService,
@@ -142,9 +141,6 @@ final class NavigationRouter {
         case .playlist, .remotePlaylist:
             host = isAvailable(.playlistsList) ? .playlistsList : .home
             root = current.navigationDestination()
-        case .mediaSource(let id, _, _):
-            host = isAvailable(.sources) ? .sources : .home
-            root = .mediaSource(id)
         case .instance(let id, _, _):
             host = isAvailable(.sources) ? .sources : .home
             root = instance(id).map { .instanceBrowse($0) }

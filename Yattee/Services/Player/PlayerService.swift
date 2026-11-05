@@ -51,42 +51,6 @@ final class PlayerService {
     /// Original (unproxied) streams from the API, used to re-apply proxy when settings change.
     private var originalStreams: [Stream] = []
 
-    /// Available captions for the current video.
-    private(set) var availableCaptions: [Caption] = []
-
-    /// Currently loaded caption.
-    private(set) var currentCaption: Caption?
-
-    /// Empty compatibility metadata for the existing controls until phase 2.
-    private(set) var embeddedTracks: [MediaTrack] = []
-
-    /// Embedded (in-container) audio tracks of the current file.
-    var embeddedAudioTracks: [MediaTrack] {
-        embeddedTracks.filter { $0.type == .audio && !$0.isExternal }
-    }
-
-    /// Embedded (in-container) subtitle tracks of the current file.
-    var embeddedSubtitleTracks: [MediaTrack] {
-        embeddedTracks.filter { $0.type == .sub && !$0.isExternal }
-    }
-
-    /// The embedded audio track player currently plays, if any.
-    var selectedEmbeddedAudioTrackID: Int? {
-        embeddedAudioTracks.first(where: \.isSelected)?.trackID
-    }
-
-    /// The embedded subtitle track player currently shows, if any.
-    var selectedEmbeddedSubtitleTrackID: Int? {
-        embeddedSubtitleTracks.first(where: \.isSelected)?.trackID
-    }
-
-    /// The video track player currently plays. Used to label local-file streams,
-    /// whose Stream carries no resolution/codec/fps metadata before demux.
-    var primaryEmbeddedVideoTrack: MediaTrack? {
-        let videoTracks = embeddedTracks.filter { $0.type == .video && !$0.isExternal && !$0.isAlbumArt }
-        return videoTracks.first(where: \.isSelected) ?? videoTracks.first
-    }
-
     /// The current download being played, if any.
     private(set) var currentDownload: Download?
 
@@ -232,7 +196,7 @@ final class PlayerService {
         var stream = stream
         var audioStream = audioStream
         if let provided = stream {
-            (stream, audioStream) = applyingAudioModeToLocalStreams(video: video, stream: provided, audioStream: audioStream)
+            (stream, audioStream) = (audioStream ?? provided, nil)
         }
 
         // Set up audio session when playback actually starts (not at app launch)
@@ -271,7 +235,6 @@ final class PlayerService {
         }
 
         // The audio backend does not expose embedded video/subtitle tracks.
-        embeddedTracks = []
 
         // Clear sponsor block state from previous video
         state.sponsorSegments = []
@@ -283,8 +246,6 @@ final class PlayerService {
 
         // Clear caption state from previous video
         // (will be set later if this video has captions)
-        currentCaption = nil
-        availableCaptions = []
 
         // Mark that we're loading this video - time updates will be ignored until loading completes
         loadingVideoID = video.id
@@ -334,14 +295,13 @@ final class PlayerService {
                 state.videoDetailsState = .loading
 
                 // Fetch full video details (includes description), streams, captions, and storyboards in one API call
-                let (fullVideo, streams, captions, _) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
+                let (fullVideo, streams, _, _) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
 
                 // Check for cancellation after network fetch
                 try Task.checkCancellation()
             guard playbackGeneration == loadGeneration else { throw CancellationError() }
 
                 self.availableStreams = streams.filter(\.isAVPlayerAudioPlayable)
-                self.availableCaptions = captions
 
                 // Select best stream for preferred backend
                 let selection = selectStreamAndBackend(from: streams)
@@ -689,13 +649,6 @@ final class PlayerService {
         state.clearHistory()
         availableStreams = []
         originalStreams = []
-        availableCaptions = []
-        folderFilesCache.removeAll()
-        downloadedSubtitlesCache.removeAll()
-        preDownloadedSubtitleFolders.removeAll()
-        cleanupAllTempSubtitles()
-        currentCaption = nil
-        embeddedTracks = []
         lastSkippedSegmentID = nil
         nowPlayingService.clearNowPlaying()
     }
@@ -754,7 +707,6 @@ final class PlayerService {
         } else if phase == .active && state.playbackState == .playing {
             updateSleepPrevention()
         }
-
 
         let isPiPActive = false
 
@@ -826,114 +778,15 @@ final class PlayerService {
     /// Always prefers local downloaded content over pre-loaded network streams.
     /// For media browser videos, resolves stream and captions on-demand.
     private func playQueuedVideo(_ queuedVideo: QueuedVideo) async {
-        // Check if this is a media source video needing on-demand resolution
-        // Uses unified method that fetches folder contents dynamically - works from any playback source
-        LoggingService.shared.debug("[SubtitleDebug] playQueuedVideo called, isFromMediaSource=\(queuedVideo.video.isFromMediaSource), videoID=\(queuedVideo.video.id.videoID)", category: .player)
-        if queuedVideo.video.isFromMediaSource {
-            LoggingService.shared.debug("[SubtitleDebug] Calling resolveMediaSourceStream", category: .player)
-
-            do {
-                let (stream, captions) = try await resolveMediaSourceStream(for: queuedVideo.video)
-                LoggingService.shared.debug("[SubtitleDebug] resolveMediaSourceStream succeeded with \(captions.count) captions", category: .player)
-                currentDownload = nil
-                await play(video: queuedVideo.video, stream: stream, audioStream: nil, startTime: 0)
-
-                // Set available captions and auto-select preferred
-                if !captions.isEmpty {
-                    self.availableCaptions = captions
-                    if let preferred = settingsManager?.preferredSubtitlesLanguage,
-                       let match = captions.first(where: { $0.baseLanguageCode == preferred || $0.languageCode.hasPrefix(preferred) }) {
-                        loadCaption(match)
-                    }
-                }
-                return
-            } catch {
-                LoggingService.shared.error("[SubtitleDebug] Failed to resolve media source stream: \(error.localizedDescription)", category: .player)
-                // Fall through to try other methods
-            }
-        }
-
-        LoggingService.shared.debug("[SubtitleDebug] Using fallback path, queuedVideo has \(queuedVideo.captions.count) pre-loaded captions", category: .player)
-        // Always check for downloads first - prefer local files over pre-loaded network streams
-        var playedFromDownload = false
-        let videoID = queuedVideo.video.id
-
-        if let downloadManager {
-            if let download = downloadManager.download(for: videoID) {
-                if download.status == .completed {
-                    if let (downloadedVideo, localStream, audioStream, captionURL, dislikeCount) = downloadManager.videoAndStream(for: download) {
-                        currentDownload = download
-                        playedFromDownload = true
-                        LoggingService.shared.debug("[Player] Playing queued video \(videoID.videoID) from local download", category: .player)
-                        await play(video: downloadedVideo, stream: localStream, audioStream: audioStream, startTime: 0)
-                        if let dislikeCount {
-                            state.dislikeCount = dislikeCount
-                        }
-                        if let captionURL {
-                            loadLocalCaption(url: captionURL)
-                        }
-                    } else {
-                        LoggingService.shared.warning("[Player] Download for \(videoID.videoID) is completed but videoAndStream returned nil (local file missing?)", category: .player)
-                        toastManager?.show(
-                            category: .download,
-                            title: String(localized: "toast.download.fileMissing.title"),
-                            icon: "exclamationmark.triangle",
-                            iconColor: .orange,
-                            autoDismissDelay: 4.0
-                        )
-                    }
-                } else {
-                    LoggingService.shared.warning("[Player] Download found for \(videoID.videoID) but status is \(download.status) (not completed)", category: .player)
-                }
-            } else {
-                let completed = downloadManager.completedDownloads.count
-                let active = downloadManager.activeDownloads.count
-                LoggingService.shared.warning("[Player] No download record found for \(videoID.videoID) (completed: \(completed), active: \(active))", category: .player)
-            }
-        } else {
-            LoggingService.shared.warning("[Player] downloadManager is nil when trying to play \(videoID.videoID)", category: .player)
-        }
-
-        if !playedFromDownload {
-            currentDownload = nil
-            var stream = queuedVideo.stream
-            var audioStream = queuedVideo.audioStream
-            if let preResolved = stream, !preResolved.url.isFileURL,
-               preResolved.isAudioOnly != (settingsManager?.audioOnlyModeEnabled == true) {
-                // Pre-resolved before an audio-mode toggle - discard so selection re-runs
-                stream = nil
-                audioStream = nil
-            }
-            await play(video: queuedVideo.video, stream: stream, audioStream: audioStream, startTime: 0)
-            // Load captions if available
-            if !queuedVideo.captions.isEmpty {
-                self.availableCaptions = queuedVideo.captions
-                // Auto-select preferred language
-                if let preferred = settingsManager?.preferredSubtitlesLanguage,
-                   let match = queuedVideo.captions.first(where: { $0.baseLanguageCode == preferred || $0.languageCode.hasPrefix(preferred) }) {
-                    loadCaption(match)
-                }
-            }
-            // Fetch the full stream/caption list in the background so the
-            // quality / audio / subtitle picker isn't limited to the single
-            // pre-resolved stream that the queue item carried.
-            if case .global = queuedVideo.video.id.source {
-                Task { [weak self] in
-                    await self?.loadOnlineStreams()
-                }
-            }
-        }
+        await playPreferringDownloaded(
+            video: queuedVideo.video,
+            fallbackStream: queuedVideo.stream,
+            fallbackAudioStream: queuedVideo.audioStream,
+            startTime: queuedVideo.startTime
+        )
     }
 
-    /// Plays a video, preferring local downloaded content if available.
-    /// If the video has been downloaded, plays the local file instead of streaming.
-    /// For media browser videos, resolves stream and captions on-demand.
-    /// If not downloaded, uses the provided fallback streams or fetches from API.
-    /// - Parameters:
-    ///   - video: The video to play
-    ///   - fallbackStream: Optional stream to use if video is not downloaded
-    ///   - fallbackAudioStream: Optional audio stream to use if video is not downloaded
-    ///   - startTime: Optional start time in seconds
+    /// Offline files take precedence, including when a queue entry holds an expired network URL.
     func playPreferringDownloaded(
         video: Video,
         fallbackStream: Stream? = nil,
@@ -941,78 +794,19 @@ final class PlayerService {
         startTime: TimeInterval? = nil,
         forceStartTime: Bool = false
     ) async {
-        // Check if this is a media source video needing on-demand resolution
-        // Uses unified method that fetches folder contents dynamically - works from any playback source
-        if video.isFromMediaSource {
-            do {
-                let (stream, captions) = try await resolveMediaSourceStream(for: video)
-                currentDownload = nil
-                await play(video: video, stream: stream, audioStream: nil, startTime: startTime, forceStartTime: forceStartTime)
-
-                // Set available captions and auto-select preferred
-                if !captions.isEmpty {
-                    self.availableCaptions = captions
-                    if let preferred = settingsManager?.preferredSubtitlesLanguage,
-                       let match = captions.first(where: { $0.baseLanguageCode == preferred || $0.languageCode.hasPrefix(preferred) }) {
-                        loadCaption(match)
-                    }
-                }
-                return
-            } catch {
-                LoggingService.shared.error("Failed to resolve media source stream: \(error.localizedDescription)", category: .player)
-                // Fall through to try other methods
-            }
-        }
-
-        // Check if video is downloaded and play locally if so
         if let downloadManager,
            let download = downloadManager.download(for: video.id),
-           download.status == .completed {
-            if let (downloadedVideo, localStream, audioStream, captionURL, dislikeCount) = downloadManager.videoAndStream(for: download) {
-                // Store the download info for later reference
-                currentDownload = download
-                await play(video: downloadedVideo, stream: localStream, audioStream: audioStream, startTime: startTime, forceStartTime: forceStartTime)
-                // Restore dislike count from download (for offline playback)
-                if let dislikeCount {
-                    state.dislikeCount = dislikeCount
-                }
-                // Load caption if available, otherwise ensure subtitles are disabled
-                if let captionURL {
-                    loadLocalCaption(url: captionURL)
-                }
-                // Note: Storyboards are now loaded in play() for all downloaded videos
-
-                // If downloaded video doesn't have full details (likeCount, viewCount), fetch them from API
-                // This runs in the background so playback starts immediately from local file
-                if downloadedVideo.supportsAPIStats, downloadedVideo.likeCount == nil || downloadedVideo.viewCount == nil {
-                    Task {
-                        await fetchAndUpdateVideoDetails(for: downloadedVideo)
-                    }
-                } else {
-                    // Video has full details from download, notify observers
-                    NotificationCenter.default.post(name: .videoDetailsDidLoad, object: nil)
-                }
-            } else {
-                LoggingService.shared.warning("[Player] Download for \(video.id) is completed but videoAndStream returned nil (local file missing?)", category: .player)
-                toastManager?.show(
-                    category: .download,
-                    title: String(localized: "toast.download.fileMissing.title"),
-                    icon: "exclamationmark.triangle",
-                    iconColor: .orange,
-                    autoDismissDelay: 4.0
-                )
-                currentDownload = nil
-                await play(video: video, stream: fallbackStream, audioStream: fallbackAudioStream, startTime: startTime, forceStartTime: forceStartTime)
-            }
-        } else {
-            currentDownload = nil
-            await play(video: video, stream: fallbackStream, audioStream: fallbackAudioStream, startTime: startTime, forceStartTime: forceStartTime)
+           download.status == .completed,
+           let (downloadedVideo, stream, _, _, dislikeCount) = downloadManager.videoAndStream(for: download) {
+            currentDownload = download
+            await play(video: downloadedVideo, stream: stream, startTime: startTime, forceStartTime: forceStartTime)
+            state.dislikeCount = dislikeCount
+            return
         }
+        currentDownload = nil
+        await play(video: video, stream: fallbackAudioStream ?? fallbackStream, startTime: startTime, forceStartTime: forceStartTime)
     }
 
-    /// Checks if the given video is currently loaded in the player.
-    /// - Parameter video: The video to check
-    /// - Returns: `true` if the video is currently loaded (playing, paused, or buffering)
     func isCurrentlyPlaying(video: Video) -> Bool {
         guard let currentVideo = state.currentVideo else { return false }
         guard currentVideo.id == video.id else { return false }
@@ -1132,32 +926,7 @@ final class PlayerService {
         LoggingService.shared.logPlayer("openVideo with stream called - download: \(resolvedDownload != nil ? "present" : "nil")")
 
         currentPlayTask = Task {
-            await play(video: video, stream: stream, audioStream: audioStream)
-            // Note: Storyboards are now loaded in play() for all downloaded videos
-
-            // Load local caption if download has caption
-            if let resolvedDownload,
-               let captionPath = resolvedDownload.localCaptionPath,
-               let downloadManager {
-                let captionURL = downloadManager.downloadsDirectory().appendingPathComponent(captionPath)
-                if FileManager.default.fileExists(atPath: captionURL.path) {
-                    LoggingService.shared.logPlayer("Loading local caption: \(captionPath)")
-                    loadLocalCaption(url: captionURL)
-                }
-            }
-
-            // Set external captions (e.g., from WebDAV subtitle files)
-            if !captions.isEmpty {
-                LoggingService.shared.logPlayer("Setting \(captions.count) external caption(s)")
-                self.availableCaptions = captions
-
-                // Auto-select based on preferred language setting
-                if let preferred = settingsManager?.preferredSubtitlesLanguage,
-                   let match = captions.first(where: { $0.baseLanguageCode == preferred || $0.languageCode.hasPrefix(preferred) }) {
-                    LoggingService.shared.logPlayer("Auto-selecting caption: \(match.displayName)")
-                    loadCaption(match)
-                }
-            }
+            await play(video: video, stream: audioStream ?? stream)
         }
     }
 
@@ -1240,7 +1009,7 @@ final class PlayerService {
 
         do {
             // Fetch fresh streams
-            let (_, streams, captions) = try await fetchVideoStreamsAndCaptions(for: video)
+            let (_, streams, _) = try await fetchVideoStreamsAndCaptions(for: video)
 
             guard !streams.isEmpty else {
                 throw APIError.noStreams
@@ -1248,7 +1017,6 @@ final class PlayerService {
 
             // Update available streams
             self.availableStreams = streams.filter(\.isAVPlayerAudioPlayable)
-            self.availableCaptions = captions
 
             guard let newStream = findMatchingAudioStream(in: streams, preferring: state.currentStream) else {
                 throw APIError.noStreams
@@ -1297,348 +1065,6 @@ final class PlayerService {
     private func findMatchingAudioStream(in streams: [Stream], preferring preferred: Stream?) -> Stream? {
         AudioStreamSelector.select(from: streams, preferredLanguage: preferred?.audioLanguage ?? settingsManager?.preferredAudioLanguage)
     }
-    // MARK: - Captions
-
-    /// Retained for the existing controls until the audio UI replaces them.
-    func loadCaption(_ caption: Caption?) {
-        currentCaption = nil
-    }
-    func selectEmbeddedAudioTrack(_ trackID: Int) {}
-    func selectEmbeddedSubtitleTrack(_ trackID: Int?) {}
-    /// Loads a local subtitle file from disk.
-    /// - Parameter url: The local file URL of the caption file
-    func loadLocalCaption(url: URL) {
-        // Extract language from filename (e.g., "videoID_en.vtt" -> "en")
-        let filename = url.deletingPathExtension().lastPathComponent
-        let languageCode = filename.components(separatedBy: "_").last ?? "unknown"
-        let languageName = Locale.current.localizedString(forLanguageCode: languageCode) ?? languageCode
-
-        let caption = Caption(
-            label: languageName,
-            languageCode: languageCode,
-            url: url
-        )
-
-        loadCaption(caption)
-    }
-
-    /// Loads a user-picked external subtitle file (iOS document picker / macOS open panel).
-    /// Copies the file into the per-video temp subtitle directory (so player can read it
-    /// after the picker's security scope expires), registers it as a selectable
-    /// Caption for the current video, and activates it.
-    /// - Parameter pickedURL: The URL returned by the file picker.
-    func loadExternalSubtitleFile(from pickedURL: URL) {
-        guard let video = state.currentVideo, video.isFromMediaSource else { return }
-
-        let fileName = pickedURL.lastPathComponent
-        let didStartAccessing = pickedURL.startAccessingSecurityScopedResource()
-        defer {
-            if didStartAccessing {
-                pickedURL.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        // Same hash-based directory scheme as SMBClient's subtitle pre-download:
-        // media-source video IDs contain slashes, so they can't be path components.
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("yattee-subtitles", isDirectory: true)
-            .appendingPathComponent(String(video.id.id.hashValue), isDirectory: true)
-        let destinationURL = tempDir.appendingPathComponent("picked-\(fileName)")
-
-        do {
-            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-            try FileManager.default.copyItem(at: pickedURL, to: destinationURL)
-        } catch {
-            LoggingService.shared.error(
-                "Failed to copy picked subtitle file \(fileName): \(error.localizedDescription)",
-                category: .player
-            )
-            return
-        }
-
-        // Detect language from a filename suffix like "Movie.en.srt" or "Movie_en.srt"
-        let baseName = pickedURL.deletingPathExtension().lastPathComponent
-        var languageCode = "und"
-        if let suffix = baseName.components(separatedBy: CharacterSet(charactersIn: "._")).last,
-           (2...3).contains(suffix.count),
-           Locale.current.localizedString(forLanguageCode: suffix) != nil {
-            languageCode = suffix.lowercased()
-        }
-
-        let caption = Caption(
-            label: baseName,
-            languageCode: languageCode,
-            url: destinationURL,
-            pickedFileName: fileName
-        )
-
-        // Re-picking the same file replaces its row instead of duplicating it
-        availableCaptions.removeAll { $0.id == caption.id }
-        availableCaptions.append(caption)
-
-        loadCaption(caption)
-        LoggingService.shared.logPlayer("Loaded external subtitle file: \(fileName)")
-    }
-
-    /// Loads online streams for the current video (when playing downloaded content).
-    /// After loading, the user can switch to an online stream from QualitySelectorView.
-    /// The downloaded stream is preserved and mixed in with online streams.
-    func loadOnlineStreams() async {
-        guard let video = state.currentVideo else { return }
-
-        // Keep track of current downloaded streams (local file URLs)
-        let downloadedStreams = availableStreams.filter { $0.url.isFileURL }
-
-        isLoadingOnlineStreams = true
-        defer { isLoadingOnlineStreams = false }
-
-        do {
-            let (_, streams, captions, _) = try await fetchVideoStreamsAndCaptionsAndStoryboards(for: video)
-
-            // Bail if the user moved on to another video while we were fetching
-            guard state.currentVideo?.id == video.id else { return }
-
-            // Combine downloaded streams with online streams (downloaded first)
-            let combined = downloadedStreams + streams
-            availableStreams = combined
-            availableCaptions = captions
-
-
-
-            // The freshly fetched streams have new (signed) URLs that won't
-            // match `state.currentStream`/`state.currentAudioStream` from the
-            // queue's pre-resolved entry — repoint state to the equivalent
-            // refreshed stream (matched by Stream.id which is
-            // resolution+fps+format) so the picker shows checkmarks on the
-            // currently playing tracks.
-            if let playing = state.currentStream,
-               !playing.url.isFileURL,
-               let refreshed = combined.first(where: { $0.id == playing.id })
-            {
-                state.updateCurrentStream(refreshed)
-            }
-            if let playingAudio = state.currentAudioStream,
-               !playingAudio.url.isFileURL,
-               let refreshedAudio = combined.first(where: { $0.id == playingAudio.id })
-            {
-                state.updateCurrentAudioStream(refreshedAudio)
-            }
-            LoggingService.shared.logPlayer("Loaded \(streams.count) online streams and \(captions.count) captions (keeping \(downloadedStreams.count) downloaded)")
-        } catch {
-            LoggingService.shared.logPlayerError("Failed to load online streams", error: error)
-        }
-    }
-
-    /// Switches from downloaded content to an online stream.
-    /// - Parameters:
-    ///   - stream: The online stream to switch to
-    ///   - audioStream: Optional separate audio stream
-    func switchToOnlineStream(_ stream: Stream, audioStream: Stream? = nil) async {
-        guard let video = state.currentVideo else { return }
-
-        // Picking a video stream while audio mode is on turns the mode off
-        // so the explicit choice sticks (same rule as selectStreamManually)
-        if !stream.isAudioOnly, settingsManager?.audioOnlyModeEnabled == true {
-            settingsManager?.audioOnlyModeEnabled = false
-            LoggingService.shared.logPlayer("Audio mode disabled by explicit quality selection")
-        }
-
-        // Clear the download flag since we're now playing online
-        currentDownload = nil
-
-        // Get current playback position to resume at
-        let currentTime = state.currentTime
-
-        // Play the new stream from the current position
-        await play(video: video, stream: stream, audioStream: audioStream, startTime: currentTime)
-    }
-
-    private func applyingAudioModeToLocalStreams(video: Video, stream: Stream, audioStream: Stream?) -> (Stream, Stream?) {
-        // Never relabel a muxed local file: its video bytes would still be read.
-        if let audioStream, audioStream.isAVPlayerAudioPlayable { return (audioStream, nil) }
-        return (stream, nil)
-    }
-    /// Playback is always audio-only; the existing UI cannot enable video.
-    func setAudioMode(_ enabled: Bool) async {
-        settingsManager?.audioOnlyModeEnabled = true
-    }
-    func selectStreamManually(_ stream: Stream, audioStream: Stream?) async {
-        guard let video = state.currentVideo,
-              let audio = bestAudioStream(from: [audioStream, stream].compactMap { $0 }) ?? bestAudioStream(from: availableStreams) else { return }
-        await play(video: video, stream: audio, startTime: state.currentTime)
-    }
-    // MARK: - Media Browser Stream Resolution
-
-    /// Resolves stream and subtitles for a media source video by fetching folder contents on-demand.
-    /// Works for all media source types (WebDAV, SMB, local folders) from any playback source
-    /// (Media Browser, Continue Watching, etc.).
-    func resolveMediaSourceStream(for video: Video) async throws -> (stream: Stream, captions: [Caption]) {
-        LoggingService.shared.debug("[SubtitleDebug] resolveMediaSourceStream called for videoID: \(video.id.videoID)", category: .player)
-
-        // 1. Extract source ID and file path from video ID
-        guard let sourceID = video.mediaSourceID,
-              let filePath = video.mediaSourceFilePath else {
-            LoggingService.shared.error("[SubtitleDebug] Failed to extract source info - mediaSourceID: \(String(describing: video.mediaSourceID)), mediaSourceFilePath: \(String(describing: video.mediaSourceFilePath))", category: .player)
-            throw MediaSourceError.pathNotFound("Could not extract source info from video ID")
-        }
-
-        LoggingService.shared.debug("[SubtitleDebug] Extracted sourceID: \(sourceID), filePath: \(filePath)", category: .player)
-
-        // 2. Look up the MediaSource
-        guard let source = mediaSourcesManager?.source(byID: sourceID) else {
-            LoggingService.shared.error("[SubtitleDebug] Media source not found for ID: \(sourceID)", category: .player)
-            throw MediaSourceError.unknown("Media source not found")
-        }
-
-        LoggingService.shared.debug("[SubtitleDebug] Found source: \(source.name), type: \(source.type)", category: .player)
-
-        let password = mediaSourcesManager?.password(for: source)
-
-        // Legacy video IDs for `.localFolder` sources may carry an absolute container
-        // path (recorded before relative paths were computed correctly). Normalize
-        // against the source folder name so the path becomes relative and doesn't
-        // get appended onto the freshly resolved bookmark base, which would produce
-        // a doubled `/Documents/<folder>/private/var/.../Documents/<folder>/...` path.
-        let normalizedFilePath: String
-        if source.type == .localFolder {
-            normalizedFilePath = LocalFileClient.normalizeAbsolutePath(filePath, sourceFolderName: source.url.lastPathComponent)
-        } else {
-            normalizedFilePath = filePath
-        }
-        let parentPath = (normalizedFilePath as NSString).deletingLastPathComponent
-        let fileName = (normalizedFilePath as NSString).lastPathComponent
-
-        LoggingService.shared.debug("[SubtitleDebug] parentPath: \(parentPath), fileName: \(fileName)", category: .player)
-
-        // 3. Fetch folder contents based on source type (with cache for queued playback)
-        let cacheKey = "\(sourceID):\(parentPath)"
-        let folderFiles: [MediaFile]
-
-        if let cached = folderFilesCache[cacheKey] {
-            LoggingService.shared.debug("[SubtitleDebug] Using cached folder listing for \(cacheKey) (\(cached.count) files)", category: .player)
-            folderFiles = cached
-        } else {
-            switch source.type {
-            case .webdav:
-                guard let webDAVClient else {
-                    throw MediaSourceError.unknown("WebDAV client not available")
-                }
-                folderFiles = try await webDAVClient.listFiles(at: parentPath, source: source, password: password)
-
-            case .smb:
-                guard let smbClient else {
-                    throw MediaSourceError.unknown("SMB client not available")
-                }
-                folderFiles = try await smbClient.listFiles(at: parentPath, source: source, password: password)
-
-            case .localFolder:
-                guard let localFileClient else {
-                    throw MediaSourceError.unknown("Local file client not available")
-                }
-                folderFiles = try await localFileClient.listFiles(at: parentPath, source: source)
-            }
-            folderFilesCache[cacheKey] = folderFiles
-            LoggingService.shared.debug("[SubtitleDebug] Listed \(folderFiles.count) files in folder, cached as \(cacheKey)", category: .player)
-        }
-
-        // 4. Find the MediaFile for this video
-        guard let mediaFile = folderFiles.first(where: { $0.name == fileName }) else {
-            throw MediaSourceError.pathNotFound("Video file not found in folder")
-        }
-
-        // 5. Find matching subtitles
-        let subtitleCaptions = mediaFile.findMatchingSubtitles(in: folderFiles)
-
-        // 6. Build stream and process captions based on source type
-        switch source.type {
-        case .webdav:
-            // Get auth headers for WebDAV
-            var authHeaders: [String: String]?
-            if let webDAVClient {
-                authHeaders = await webDAVClient.authHeaders(for: source, password: password)
-            }
-            let stream = mediaFile.toStream(authHeaders: authHeaders)
-            // Subtitles can use remote URLs directly for WebDAV
-            return (stream, subtitleCaptions)
-
-        case .smb:
-            guard let smbClient else {
-                throw MediaSourceError.unknown("SMB client not available")
-            }
-
-            let folderKey = "\(sourceID):\(parentPath)"
-
-            // Pre-download ALL subtitles in folder on first access.
-            // Must complete before player opens any SMB connection.
-            // For queued videos from the same folder, subtitles will already be cached.
-            if !preDownloadedSubtitleFolders.contains(folderKey) {
-                let allSubtitleFiles = folderFiles.filter { $0.isSubtitle }
-                LoggingService.shared.logMediaSources("Pre-downloading \(allSubtitleFiles.count) subtitle(s) from folder: \(parentPath)")
-
-                for subtitleFile in allSubtitleFiles {
-                    do {
-                        let localURL = try await smbClient.downloadSubtitleToTemp(
-                            file: subtitleFile,
-                            source: source,
-                            password: password,
-                            videoID: folderKey
-                        )
-                        downloadedSubtitlesCache[subtitleFile.id] = localURL
-                        LoggingService.shared.logMediaSources("Pre-downloaded subtitle: \(subtitleFile.name) → \(localURL.lastPathComponent)")
-                    } catch {
-                        LoggingService.shared.error(
-                            "Failed to pre-download subtitle \(subtitleFile.name): \(error.localizedDescription)",
-                            category: .general
-                        )
-                    }
-                }
-
-                preDownloadedSubtitleFolders.insert(folderKey)
-
-                // Release app SMB context before player opens its connection.
-                // libsmbclient uses process-global talloc state that corrupts
-                // when two contexts access the same server concurrently.
-                await smbClient.clearCache(for: source)
-                LoggingService.shared.logMediaSources("Cleared SMB context cache before playback")
-            }
-
-            // Construct video playback URL (pure string manipulation, no libsmbclient)
-            let playbackURL = try await smbClient.constructPlaybackURL(
-                for: mediaFile,
-                source: source,
-                password: password
-            )
-            let stream = Stream(url: playbackURL, resolution: nil, format: mediaFile.fileExtension)
-
-            // Build captions from pre-downloaded local files
-            var localCaptions: [Caption] = []
-            for subtitle in subtitleCaptions {
-                if let subtitleFile = folderFiles.first(where: { $0.url == subtitle.url }),
-                   let localURL = downloadedSubtitlesCache[subtitleFile.id] {
-                    localCaptions.append(Caption(
-                        label: subtitle.label,
-                        languageCode: subtitle.languageCode,
-                        url: localURL
-                    ))
-                    LoggingService.shared.info(
-                        "Using pre-downloaded subtitle: \(subtitleFile.name)",
-                        category: .general
-                    )
-                }
-            }
-
-            return (stream, localCaptions)
-
-        case .localFolder:
-            // Local folder - no auth needed, use file:// URLs directly
-            let stream = mediaFile.toStream(authHeaders: nil)
-            return (stream, subtitleCaptions)
-        }
-    }
-
     // MARK: - Private Methods
 
     /// Checks if the stream URL goes through Yattee Server's fast download endpoint.
@@ -1662,7 +1088,6 @@ final class PlayerService {
         do {
             let session = AVAudioSession.sharedInstance()
             try AVAudioBackend.configureAudioSession()
-
 
             // Only register observer once
             guard interruptionObserver == nil else { return }
@@ -1743,39 +1168,8 @@ final class PlayerService {
     }
 
     private func fetchVideoStreamsAndCaptionsAndStoryboards(for video: Video) async throws -> (Video, [Stream], [Caption], [Storyboard]) {
-        // Handle media source videos (WebDAV, SMB, and local folders)
-        // These don't need API calls - we reconstruct the stream from the stored URL
-        if case .extracted(let extractor, let originalURL) = video.id.source {
-            if extractor == MediaFile.webdavProvider
-                || extractor == MediaFile.localFolderProvider
-                || extractor == MediaFile.smbProvider {
-                let stream = try await createStreamForMediaSource(video: video, url: originalURL, extractor: extractor)
-                return (video, [stream], [], [])
-            }
-
-            // Direct media (a file player plays as-is): rebuild the stream from the
-            // URL. A probe fills in the format/size for opaque CDN links; if it
-            // fails (offline, expired token) still hand player the URL and let it
-            // report the real error.
-            if extractor == DirectMediaHelper.provider {
-                let probe = await DirectMediaProbe.probe(originalURL)
-                let stream = DirectMediaHelper.createStream(from: originalURL, probe: probe)
-                return (video, [stream], [], [])
-            }
-        }
-
         guard let instance = try await findInstance(for: video) else {
             throw APIError.noInstance
-        }
-
-        // For extracted videos, use the extract endpoint with the original URL
-        // (stream URLs expire, so we need to re-extract each time)
-        if case .extracted(_, let originalURL) = video.id.source {
-            guard instance.type == .yatteeServer else {
-                throw APIError.notSupported
-            }
-            let result = try await contentService.extractURL(originalURL, instance: instance)
-            return (result.video, result.streams, result.captions, [])
         }
 
         // Race the proxy-detection HEAD against the video API call so the
@@ -1833,79 +1227,6 @@ final class PlayerService {
 
     /// Creates a stream for media source videos (WebDAV, SMB, or local folder).
     /// For WebDAV, adds authentication headers. For SMB, constructs URL with embedded credentials.
-    private func createStreamForMediaSource(video: Video, url: URL, extractor: String) async throws -> Stream {
-        // Parse the MediaSource UUID from the video ID
-        // Format: "UUID:/path/to/file.mp4"
-        let videoID = video.id.videoID
-        var headers: [String: String]? = nil
-        var playbackURL = url
-
-        if let separatorIndex = videoID.firstIndex(of: ":"),
-           let sourceUUID = UUID(uuidString: String(videoID[..<separatorIndex])) {
-            // For WebDAV sources, add authentication headers
-            if extractor == MediaFile.webdavProvider {
-                if let source = mediaSourcesManager?.sources.first(where: { $0.id == sourceUUID }) {
-                    if let username = source.username,
-                       let password = mediaSourcesManager?.password(for: source) {
-                        let credentials = "\(username):\(password)"
-                        if let credentialsData = credentials.data(using: .utf8) {
-                            let base64Credentials = credentialsData.base64EncodedString()
-                            headers = ["Authorization": "Basic \(base64Credentials)"]
-                            LoggingService.shared.logPlayer("Media source: Created WebDAV stream with auth for '\(source.name)'")
-                        }
-                    } else {
-                        LoggingService.shared.logPlayer("Media source: Created WebDAV stream without auth (no credentials) for '\(source.name)'")
-                    }
-                } else {
-                    LoggingService.shared.logPlayer("Media source: WebDAV source not found for UUID \(sourceUUID)")
-                }
-            }
-            // For SMB sources, construct URL with embedded credentials
-            else if extractor == MediaFile.smbProvider {
-                if let source = mediaSourcesManager?.sources.first(where: { $0.id == sourceUUID }) {
-                    // Reconstruct MediaFile from video to use SMBClient
-                    let path = String(videoID.dropFirst(sourceUUID.uuidString.count + 1))
-                    let mediaFile = MediaFile(
-                        source: source,
-                        path: path,
-                        name: url.lastPathComponent,
-                        isDirectory: false
-                    )
-
-                    let password = mediaSourcesManager?.password(for: source)
-                    if let smbClient {
-                        playbackURL = try await smbClient.constructPlaybackURL(
-                            for: mediaFile,
-                            source: source,
-                            password: password
-                        )
-                    } else {
-                        LoggingService.shared.logPlayer("Media source: SMBClient not available, using original URL")
-                    }
-                    LoggingService.shared.logPlayer("Media source: Created SMB stream with embedded auth for '\(source.name)' - URL: \(playbackURL.sanitized)")
-                } else {
-                    LoggingService.shared.logPlayer("Media source: SMB source not found for UUID \(sourceUUID)")
-                }
-            }
-            // Local folder
-            else {
-                LoggingService.shared.logPlayer("Media source: Created local folder stream")
-            }
-        } else {
-            LoggingService.shared.logPlayer("Media source: Could not parse UUID from videoID \(videoID)")
-        }
-
-        // Create stream with placeholder resolution and audio codec so it's recognized as muxed
-        // (actual values are unknown until playback, but player handles all formats)
-        return Stream(
-            url: playbackURL,
-            resolution: .p720,  // Placeholder - actual resolution unknown
-            format: url.pathExtension,
-            videoCodec: "avc1",  // Placeholder to indicate video content
-            audioCodec: "aac",   // Placeholder to mark as muxed (has audio)
-            httpHeaders: headers
-        )
-    }
 
     private func selectStreamAndBackend(from streams: [Stream]) -> (stream: Stream?, audioStream: Stream?, backend: PlayerBackendType) {
         // Try preferred backend first
@@ -1951,21 +1272,6 @@ final class PlayerService {
     }
 
     private var instancesManager: InstancesManager?
-    private weak var mediaSourcesManager: MediaSourcesManager?
-    private var smbClient: SMBClient?
-    private var webDAVClient: WebDAVClient?
-    private var localFileClient: LocalFileClient?
-    private var folderFilesCache: [String: [MediaFile]] = [:]
-
-    /// Cache of pre-downloaded subtitle local file URLs.
-    /// Key: subtitle MediaFile.id, Value: local temp URL
-    private var downloadedSubtitlesCache: [String: URL] = [:]
-
-    /// Tracks folders whose subtitles have been pre-downloaded.
-    /// Prevents re-downloading when resolving queued videos from the same folder.
-    private var preDownloadedSubtitleFolders: Set<String> = []
-
-    /// Sets the instances manager for finding instances.
     func setInstancesManager(_ manager: InstancesManager) {
         self.instancesManager = manager
 
@@ -1983,24 +1289,12 @@ final class PlayerService {
     }
 
     /// Sets the media sources manager for WebDAV/SMB/local folder playback.
-    func setMediaSourcesManager(_ manager: MediaSourcesManager) {
-        self.mediaSourcesManager = manager
-    }
 
     /// Sets the SMB client for SMB playback.
-    func setSMBClient(_ client: SMBClient) {
-        self.smbClient = client
-    }
 
     /// Sets the WebDAV client for WebDAV playback.
-    func setWebDAVClient(_ client: WebDAVClient) {
-        self.webDAVClient = client
-    }
 
     /// Sets the local file client for local folder playback.
-    func setLocalFileClient(_ client: LocalFileClient) {
-        self.localFileClient = client
-    }
 
     /// Sets the settings manager for accessing user preferences.
     func setSettingsManager(_ manager: SettingsManager) {
@@ -2293,11 +1587,6 @@ final class PlayerService {
         // Whatever was playing is gone from here on
         playbackGeneration += 1
 
-        // Clean up temp subtitle files for current video
-        if let currentVideo = state.currentVideo {
-            cleanupTempSubtitles(for: currentVideo.id.id)
-        }
-
         progressSaveTimer?.invalidate()
         progressSaveTimer = nil
         lastNowPlayingTimeBucket = nil
@@ -2317,42 +1606,9 @@ final class PlayerService {
     /// Cleans up temporary subtitle files for a given video.
     /// Call this when closing/stopping a video.
     /// - Parameter videoID: The video ID whose subtitles to clean up.
-    private func cleanupTempSubtitles(for videoID: String) {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("yattee-subtitles", isDirectory: true)
-            .appendingPathComponent(videoID, isDirectory: true)
-
-        do {
-            if FileManager.default.fileExists(atPath: tempDir.path) {
-                try FileManager.default.removeItem(at: tempDir)
-                LoggingService.shared.debug("Cleaned up temp subtitles for: \(videoID)", category: .player)
-            }
-        } catch {
-            LoggingService.shared.error(
-                "Failed to clean up temp subtitles for \(videoID): \(error.localizedDescription)",
-                category: .player
-            )
-        }
-    }
 
     /// Cleans up all temporary subtitle files (pre-downloaded and per-video).
     /// Called when stopping playback entirely.
-    private func cleanupAllTempSubtitles() {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("yattee-subtitles", isDirectory: true)
-
-        do {
-            if FileManager.default.fileExists(atPath: tempDir.path) {
-                try FileManager.default.removeItem(at: tempDir)
-                LoggingService.shared.debug("Cleaned up all temp subtitles", category: .player)
-            }
-        } catch {
-            LoggingService.shared.error(
-                "Failed to clean up all temp subtitles: \(error.localizedDescription)",
-                category: .player
-            )
-        }
-    }
 
     // MARK: - Chapter Resolution
 

@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-
 /// Observable state for batch download operations.
 @Observable
 @MainActor
@@ -21,9 +20,6 @@ final class BatchDownloadCoordinator {
     /// Current progress (current, total).
     var progress: (current: Int, total: Int)?
 
-    /// Whether to show the quality picker sheet.
-    var showingQualitySheet = false
-
     /// Whether to show the error alert.
     var showingErrorAlert = false
 
@@ -32,9 +28,6 @@ final class BatchDownloadCoordinator {
 
     /// Whether to continue downloading after an error.
     private var shouldContinue = true
-
-    /// Videos to download (set when quality sheet is shown).
-    private var pendingVideos: [Video] = []
 
     // MARK: - Dependencies
 
@@ -51,40 +44,11 @@ final class BatchDownloadCoordinator {
     // MARK: - Public API
 
     /// Starts the download process for the given videos.
-    /// Shows quality picker if needed, otherwise starts immediately.
+    /// Queues audio from every item in the list.
     func startDownload(videos: [Video]) {
-        guard let appEnvironment, !videos.isEmpty else { return }
-
-        pendingVideos = videos
-        let downloadSettings = appEnvironment.downloadSettings
-
-        if downloadSettings.preferredDownloadQuality != .ask {
-            // Use saved preference - start immediately
-            Task {
-                await performBatchDownload(
-                    videos: videos,
-                    quality: downloadSettings.preferredDownloadQuality,
-                    includeSubtitles: downloadSettings.includeSubtitlesInAutoDownload
-                )
-            }
-        } else {
-            // Show quality picker
-            showingQualitySheet = true
-        }
-    }
-
-    /// Called when user confirms quality selection from the sheet.
-    func confirmDownload(quality: DownloadQuality, includeSubtitles: Bool) {
-        let videos = pendingVideos
-        pendingVideos = []
-
-        Task {
-            await performBatchDownload(
-                videos: videos,
-                quality: quality,
-                includeSubtitles: includeSubtitles
-            )
-        }
+        guard !isDownloading, !videos.isEmpty else { return }
+        isDownloading = true
+        Task { await performBatchDownload(videos: videos) }
     }
 
     /// Called when user chooses to continue after an error.
@@ -98,20 +62,16 @@ final class BatchDownloadCoordinator {
     }
 
     /// The number of videos pending download (for sheet display).
-    var pendingVideoCount: Int {
-        pendingVideos.count
-    }
 
     // MARK: - Private Implementation
 
     private func performBatchDownload(
-        videos: [Video],
-        quality: DownloadQuality,
-        includeSubtitles: Bool
+        videos: [Video]
     ) async {
         guard let appEnvironment,
               let firstVideo = videos.first,
               let instance = appEnvironment.instancesManager.instance(for: firstVideo) else {
+            isDownloading = false
             appEnvironment?.toastManager.show(
                 category: .error,
                 title: String(localized: "batchDownload.error.title"),
@@ -138,10 +98,7 @@ final class BatchDownloadCoordinator {
         let downloadManager = appEnvironment.downloadManager
         let result = await downloadManager.batchAutoEnqueue(
             videos: videos,
-            preferredQuality: quality,
             preferredAudioLanguage: appEnvironment.settingsManager.preferredAudioLanguage,
-            preferredSubtitlesLanguage: appEnvironment.settingsManager.preferredSubtitlesLanguage,
-            includeSubtitles: includeSubtitles,
             contentService: appEnvironment.contentService,
             instance: instance,
             onProgress: { @Sendable [weak self] current, total in
@@ -224,11 +181,6 @@ struct BatchDownloadModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $coordinator.showingQualitySheet) {
-                BatchDownloadQualitySheet(videoCount: coordinator.pendingVideoCount) { quality, includeSubtitles in
-                    coordinator.confirmDownload(quality: quality, includeSubtitles: includeSubtitles)
-                }
-            }
             .alert(
                 String(localized: "batchDownload.error.title"),
                 isPresented: $coordinator.showingErrorAlert,

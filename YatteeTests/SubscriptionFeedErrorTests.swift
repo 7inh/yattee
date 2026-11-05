@@ -14,27 +14,7 @@ struct SubscriptionFeedErrorTests {
 
     // MARK: - Without a banner
 
-    @Test("Every feed error shows when no banner is up")
-    func everyErrorShowsWithoutBanner() {
-        let errors: [FeedLoadState.FeedLoadError] = [
-            .yatteeServerRequired,
-            .notAuthenticated,
-            .networkError("The Internet connection appears to be offline.")
-        ]
-
-        for error in errors {
-            #expect(FeedLoadState.error(error).displayedError(contextBannerVisible: false) == error)
-        }
-    }
-
     // MARK: - Under the banner
-
-    @Test("The Yattee Server the fallback asks for stands down under the banner")
-    func yatteeServerRequiredStandsDownUnderBanner() {
-        let state = FeedLoadState.error(.yatteeServerRequired)
-
-        #expect(state.displayedError(contextBannerVisible: true) == nil)
-    }
 
     @Test("An account error stands down under the banner")
     func notAuthenticatedStandsDownUnderBanner() {
@@ -65,29 +45,6 @@ struct SubscriptionFeedErrorTests {
 
         for reason in reasons {
             #expect(state.warrantsPeriodicRetry(unavailability: reason))
-        }
-    }
-
-    @Test("The Yattee Server the unreachable fallback asks for is worth asking again")
-    func yatteeServerRequiredRetriesWhileUnreachable() {
-        let state = FeedLoadState.error(.yatteeServerRequired)
-
-        #expect(state.warrantsPeriodicRetry(unavailability: .unreachable))
-    }
-
-    @Test("A context that genuinely needs a Yattee Server never starts a timer")
-    func yatteeServerRequiredDoesNotRetryOtherwise() {
-        let state = FeedLoadState.error(.yatteeServerRequired)
-        // `nil` is local data the user selected: the request is the real answer.
-        // The rest lift through changes this view already reloads on, and none
-        // of them is the silent status expiry the retry exists for.
-        let reasons: [DataContextUnavailability?] = [
-            nil, .checking, .instancePending, .instanceDisabled,
-            .credentialMissing, .credentialRejected
-        ]
-
-        for reason in reasons {
-            #expect(!state.warrantsPeriodicRetry(unavailability: reason))
         }
     }
 

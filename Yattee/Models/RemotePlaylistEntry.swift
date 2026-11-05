@@ -33,7 +33,6 @@ enum RemotePlaylistEntryID: Hashable, Sendable {
     case invidious(playlistID: String, indexID: String)
 
     /// Snapshot-scoped only — Piped addresses entries by their position.
-    case piped(playlistID: String, position: Int)
 }
 
 /// One video in a server-side playlist, paired with the identity needed to

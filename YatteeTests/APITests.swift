@@ -80,19 +80,6 @@ struct APIEndpointRoutingTests {
         #expect(instance.isYouTubeInstance == true)
     }
 
-    @Test("Piped instance uses correct API")
-    func pipedRouting() {
-        let instance = Instance(type: .piped, url: URL(string: "https://piped.example.com")!)
-        #expect(instance.type == .piped)
-        #expect(instance.isYouTubeInstance == true)
-    }
-
-    @Test("PeerTube instance uses correct API")
-    func peerTubeRouting() {
-        let instance = Instance(type: .peertube, url: URL(string: "https://pt.example.com")!)
-        #expect(instance.type == .peertube)
-        #expect(instance.isPeerTubeInstance == true)
-    }
 }
 
 // MARK: - Author Tests

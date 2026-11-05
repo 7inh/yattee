@@ -45,11 +45,11 @@ struct VideoRowView: View {
     private var metadataFont: Font {
         style == .compact ? .caption2 : .caption2
     }
-    
+
     private var thumbnailTapAction: VideoTapAction {
         .playVideo
     }
-    
+
     private var textAreaTapAction: VideoTapAction {
         .playVideo
     }
@@ -74,7 +74,7 @@ struct VideoRowView: View {
                     .minimumScaleFactor(0.75)
                     .frame(width: usesCompactPlaylistLayout ? 20 : 32)
             }
-            
+
             // Thumbnail
             if showThumbnail {
                 thumbnailView
@@ -88,7 +88,7 @@ struct VideoRowView: View {
         .accessibilityIdentifier("video.row.\(video.id.videoID)")
         .accessibilityLabel(accessibilityLabelText)
     }
-    
+
     @ViewBuilder
     private var thumbnailView: some View {
         DeArrowVideoThumbnail(
@@ -110,7 +110,7 @@ struct VideoRowView: View {
             )
         }
     }
-    
+
     @ViewBuilder
     private var infoView: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -181,10 +181,10 @@ struct VideoRowView: View {
             }
         }
     }
-    
+
     private func handleTapAction(_ action: VideoTapAction) {
         guard let env = appEnvironment else { return }
-        
+
         switch action {
         case .playVideo:
             // This should not be called since we only add gesture for non-playVideo actions

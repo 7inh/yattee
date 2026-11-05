@@ -321,12 +321,7 @@ extension VideoID: Identifiable {
     }
 
     /// Whether this video is from an SMB media source.
-    var isSMBSource: Bool {
-        if case .extracted(let extractor, _) = source {
-            return extractor == MediaFile.smbProvider
-        }
-        return false
-    }
+
 }
 
 // MARK: - Author
