@@ -16,6 +16,8 @@ struct OnTheGoPanel: View {
     @Environment(\.presentAppSheet) private var presentAppSheet
 
     let playerService: PlayerService
+    /// The portrait host extends the panel underneath the home indicator.
+    var bottomSafeAreaInset: CGFloat = 0
     let onClose: () -> Void
 
     @GestureState private var scrubTime: TimeInterval? = nil
@@ -56,10 +58,44 @@ struct OnTheGoPanel: View {
     }
 
     var body: some View {
+        panel
+            .foregroundStyle(.primary)
+            .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
+                isHapticFeedbackEnabled
+            }
+            .onChange(of: state.currentVideo?.id) { _, _ in
+                pendingSeekTime = nil
+            }
+    }
+
+    @ViewBuilder
+    private var panel: some View {
+        if #available(iOS 26, *) {
+            panelContent
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    GlassEffectContainer {
+                        accessoryControls
+                            .padding(.horizontal, Layout.smallSpacing)
+                            .padding(.vertical, Layout.smallSpacing)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                    }
+                    .padding(.horizontal, Layout.mediumSpacing)
+                    .padding(.top, Layout.smallSpacing)
+                    .padding(.bottom, bottomSafeAreaInset + Layout.smallSpacing)
+                }
+        } else {
+            panelContent
+                .background(Color(.systemBackground))
+        }
+    }
+
+    private var panelContent: some View {
         VStack(spacing: 0) {
             header
-            Divider()
-                .opacity(0.5)
+            if #unavailable(iOS 26) {
+                Divider()
+                    .opacity(0.5)
+            }
 
             GeometryReader { geometry in
                 ScrollView {
@@ -71,7 +107,9 @@ struct OnTheGoPanel: View {
                         Spacer(minLength: Layout.mediumSpacing)
                         transportControls
                         Spacer(minLength: Layout.mediumSpacing)
-                        accessoryControls
+                        if #unavailable(iOS 26) {
+                            accessoryControls
+                        }
                     }
                     .padding(.horizontal, Layout.mediumSpacing)
                     .padding(.top, Layout.mediumSpacing)
@@ -80,14 +118,6 @@ struct OnTheGoPanel: View {
                 }
                 .scrollIndicators(.hidden)
             }
-        }
-        .foregroundStyle(.primary)
-        .background(Color(.systemBackground))
-        .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
-            isHapticFeedbackEnabled
-        }
-        .onChange(of: state.currentVideo?.id) { _, _ in
-            pendingSeekTime = nil
         }
     }
 
@@ -104,20 +134,36 @@ struct OnTheGoPanel: View {
                 Text(String(localized: "player.onTheGo.title"))
                     .font(.headline.weight(.semibold))
                 Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color(.secondarySystemBackground), in: Circle())
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "player.onTheGo.close"))
+                closeButton
+                    .accessibilityLabel(String(localized: "player.onTheGo.close"))
             }
         }
         .padding(.horizontal, Layout.mediumSpacing)
         .padding(.vertical, Layout.smallSpacing)
+    }
+
+    @ViewBuilder
+    private var closeButton: some View {
+        if #available(iOS 26, *) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .buttonSizing(.flexible)
+            .frame(width: 44, height: 44)
+        } else {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 32, height: 32)
+                    .background(Color(.secondarySystemBackground), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var videoInfo: some View {
@@ -148,10 +194,10 @@ struct OnTheGoPanel: View {
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(Color(.tertiarySystemFill))
-                        .frame(height: 6)
+                        .frame(height: seekTrackHeight)
                     Capsule()
                         .fill(Color.red)
-                        .frame(width: trackWidth * progress, height: 6)
+                        .frame(width: trackWidth * progress, height: seekTrackHeight)
                     Circle()
                         .fill(Color.red)
                         .frame(width: 20, height: 20)
@@ -203,6 +249,11 @@ struct OnTheGoPanel: View {
         }
     }
 
+    private var seekTrackHeight: CGFloat {
+        if #available(iOS 26, *) { return 4 }
+        return 6
+    }
+
     private func boundedTime(_ time: TimeInterval) -> TimeInterval {
         time.isFinite ? min(max(0, time), duration) : 0
     }
@@ -226,7 +277,18 @@ struct OnTheGoPanel: View {
 
     // MARK: - Transport
 
+    @ViewBuilder
     private var transportControls: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: Layout.mediumSpacing) {
+                transportButtons
+            }
+        } else {
+            transportButtons
+        }
+    }
+
+    private var transportButtons: some View {
         HStack(spacing: 0) {
             transportButton("backward.end.fill", label: String(localized: "menu.playback.previousVideo"), disabled: !state.hasPrevious || isTransportDisabled) {
                 Task { await playerService.playPrevious() }
@@ -240,16 +302,9 @@ struct OnTheGoPanel: View {
                 transportFeedbackTrigger.toggle()
                 playerService.togglePlayPause()
             } label: {
-                Image(systemName: state.playbackState == .playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 44, weight: .semibold))
-                    .contentTransition(.symbolEffect(.replace))
-                    .animation(.easeInOut(duration: 0.2), value: state.playbackState == .playing)
-                    .foregroundStyle(isTransportDisabled ? Color(.tertiaryLabel) : Color(.label))
-                    .frame(width: 88, height: 88)
-                    .background(Color(.secondarySystemBackground), in: Circle())
-                    .contentShape(Circle())
+                playPauseLabel
             }
-            .buttonStyle(OnTheGoTransportButtonStyle())
+            .modifier(OnTheGoTransportStyleModifier(isProminent: true))
             .disabled(isTransportDisabled)
             .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
@@ -263,18 +318,44 @@ struct OnTheGoPanel: View {
         }
     }
 
+    @ViewBuilder
+    private var playPauseLabel: some View {
+        if #available(iOS 26, *) {
+            playPauseSymbol
+                .font(.system(size: 36, weight: .semibold))
+        } else {
+            playPauseSymbol
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(isTransportDisabled ? Color(.tertiaryLabel) : Color(.label))
+                .frame(width: 88, height: 88)
+                .background(Color(.secondarySystemBackground), in: Circle())
+                .contentShape(Circle())
+        }
+    }
+
+    private var playPauseSymbol: some View {
+        Image(systemName: state.playbackState == .playing ? "pause.fill" : "play.fill")
+            .contentTransition(.symbolEffect(.replace))
+            .animation(.easeInOut(duration: 0.2), value: state.playbackState == .playing)
+    }
+
     private func transportButton(_ image: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button {
             transportFeedbackTrigger.toggle()
             action()
         } label: {
-            Image(systemName: image)
-                .font(.system(size: 40))
-                .foregroundStyle(disabled ? Color(.tertiaryLabel) : Color(.label))
-                .frame(width: 60, height: 60)
-                .contentShape(Rectangle())
+            if #available(iOS 26, *) {
+                Image(systemName: image)
+                    .font(.system(size: 28))
+            } else {
+                Image(systemName: image)
+                    .font(.system(size: 40))
+                    .foregroundStyle(disabled ? Color(.tertiaryLabel) : Color(.label))
+                    .frame(width: 60, height: 60)
+                    .contentShape(Rectangle())
+            }
         }
-        .buttonStyle(OnTheGoTransportButtonStyle())
+        .modifier(OnTheGoTransportStyleModifier())
         .disabled(disabled)
         .accessibilityLabel(label)
     }
@@ -393,6 +474,30 @@ struct OnTheGoPanel: View {
         .padding(.vertical, Layout.smallSpacing)
         .frame(maxWidth: .infinity, minHeight: 64)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Transport Styling
+
+/// Native glass supplies press feedback on iOS 26; older systems keep the existing style.
+private struct OnTheGoTransportStyleModifier: ViewModifier {
+    var isProminent = false
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            Group {
+                if isProminent {
+                    content.buttonStyle(.glassProminent)
+                } else {
+                    content.buttonStyle(.glass)
+                }
+            }
+            .buttonBorderShape(.circle)
+            .buttonSizing(.flexible)
+            .frame(width: isProminent ? 88 : 56, height: isProminent ? 88 : 56)
+        } else {
+            content.buttonStyle(OnTheGoTransportButtonStyle())
+        }
     }
 }
 

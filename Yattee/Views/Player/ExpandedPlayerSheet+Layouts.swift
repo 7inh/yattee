@@ -490,6 +490,7 @@ extension ExpandedPlayerSheet {
                             onFullscreen: { [self] in toggleFullscreen() },
                             pillsOverlayOpacity: pillsOverlayOpacity,
                             onTheGoPresentation: canPresentOnTheGo ? $isOnTheGoPresented : nil,
+                            onTheGoBottomSafeAreaInset: safeAreaInsets.bottom,
                             onDragChanged: { [self] offset in
                                 // Set drag flags only on transition to avoid 120/sec @Observable writes
                                 if !isPanelDragging {

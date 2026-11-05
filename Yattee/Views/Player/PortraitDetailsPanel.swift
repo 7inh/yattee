@@ -20,6 +20,7 @@ struct PortraitDetailsPanel: View {
 
     /// Supplied only by the iPhone portrait host. Other layouts keep their details.
     var onTheGoPresentation: Binding<Bool>? = nil
+    var onTheGoBottomSafeAreaInset: CGFloat = 0
 
     /// Corner layout host: comments live in the side column, so the pill is
     /// suppressed entirely.
@@ -164,7 +165,7 @@ struct PortraitDetailsPanel: View {
         if let video {
             Group {
                 if isOnTheGoActive, let playerService {
-                    OnTheGoPanel(playerService: playerService) {
+                    OnTheGoPanel(playerService: playerService, bottomSafeAreaInset: onTheGoBottomSafeAreaInset) {
                         onTheGoPresentation?.wrappedValue = false
                     }
                 } else {
