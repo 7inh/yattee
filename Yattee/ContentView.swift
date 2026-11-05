@@ -54,17 +54,21 @@ struct AdaptiveTabView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     let appEnvironment: AppEnvironment
+    @Namespace private var playerTransition
 
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if !usesSidebar {
-                CompactTabView(router: appEnvironment.navigationCoordinator.router)
+            Group {
+                if !usesSidebar {
+                    CompactTabView(router: appEnvironment.navigationCoordinator.router)
+                        .environment(appEnvironment.settingsManager)
+                } else {
+                    UnifiedTabView(router: appEnvironment.navigationCoordinator.router)
                     .environment(appEnvironment.settingsManager)
-            } else {
-                UnifiedTabView(router: appEnvironment.navigationCoordinator.router)
-                .environment(appEnvironment.settingsManager)
+                }
             }
+            .environment(\.playerTransitionNamespace, playerTransition)
 
             // The tab bar layout on iOS 26.1+ shows the mini player as the tab
             // bar's bottom accessory; the split-view sidebar layout insets it
@@ -80,6 +84,7 @@ struct AdaptiveTabView: View {
         )) {
             ExpandedPlayerSheet()
                 .appEnvironment(appEnvironment)
+                .playerZoomTransition(in: playerTransition)
                 .onAppear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = true }
                 .onDisappear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = false }
         }
@@ -128,4 +133,44 @@ struct AdaptiveTabView: View {
 #Preview {
     ContentView()
         .appEnvironment(.preview)
+}
+
+
+// MARK: - Player zoom transition
+
+private struct PlayerTransitionNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    /// Shared namespace linking the mini player to the full-screen player so the
+    /// cover uses the native zoom transition (with interactive swipe-down dismiss).
+    var playerTransitionNamespace: Namespace.ID? {
+        get { self[PlayerTransitionNamespaceKey.self] }
+        set { self[PlayerTransitionNamespaceKey.self] = newValue }
+    }
+}
+
+enum PlayerTransition {
+    static let sourceID = "nowPlaying"
+}
+
+extension View {
+    @ViewBuilder
+    func playerZoomTransition(in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18, *) {
+            navigationTransition(.zoom(sourceID: PlayerTransition.sourceID, in: namespace))
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func playerTransitionSource(_ namespace: Namespace.ID?) -> some View {
+        if #available(iOS 18, *), let namespace {
+            matchedTransitionSource(id: PlayerTransition.sourceID, in: namespace)
+        } else {
+            self
+        }
+    }
 }

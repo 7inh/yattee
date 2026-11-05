@@ -12,6 +12,7 @@ import NukeUI
 @MainActor
 struct MiniPlayerView: View {
     @Environment(\.appEnvironment) private var appEnvironment
+    @Environment(\.playerTransitionNamespace) private var playerTransitionNamespace
     var isTabAccessory = false
 
     private var service: PlayerService? { appEnvironment?.playerService }
@@ -86,6 +87,7 @@ struct MiniPlayerView: View {
                     }
                     .frame(width: art, height: art)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .playerTransitionSource(playerTransitionNamespace)
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text(state?.currentVideo.map { appEnvironment?.deArrowBrandingProvider.title(for: $0) ?? $0.title } ?? "")
@@ -109,7 +111,8 @@ struct MiniPlayerView: View {
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
-                    .contentTransition(.symbolEffect(.replace))
+                    .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp)))
+                    .animation(.snappy, value: isPlaying)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }

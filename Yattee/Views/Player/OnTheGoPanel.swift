@@ -78,13 +78,12 @@ struct OnTheGoPanel: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    header
                     // Share extra height across all four gaps. Short screens
                     // and large text can scroll without shrinking the controls.
                     Spacer(minLength: Layout.smallSpacing)
                     artwork
-                        .padding(.vertical, 16)
-                        .simultaneousGesture(dismissGesture)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
                     videoInfo
                     Spacer(minLength: Layout.smallSpacing)
                     seekControls
@@ -112,57 +111,11 @@ struct OnTheGoPanel: View {
                 .frame(minHeight: geometry.size.height, alignment: .top)
             }
             .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
         }
     }
 
     // MARK: - Header and Video
-
-    private var header: some View {
-        HStack {
-            closeButton
-                .accessibilityLabel(String(localized: "player.nowPlaying.close"))
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .simultaneousGesture(dismissGesture)
-    }
-
-    // Full-screen covers have no native swipe dismissal. Limit the gesture to
-    // the header and artwork so seeking and transport controls stay independent.
-    private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onEnded { value in
-                let translation = value.translation
-                guard translation.height > 40,
-                      translation.height > abs(translation.width) * 1.5,
-                      translation.height > 100 || value.predictedEndTranslation.height > 180 else { return }
-                onClose()
-            }
-    }
-
-    @ViewBuilder
-    private var closeButton: some View {
-        if #available(iOS 26, *) {
-            Button(action: onClose) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .foregroundStyle(.primary)
-        } else {
-            Button(action: onClose) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 32, height: 32)
-                    .background(Color(.secondarySystemBackground), in: Circle())
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
 
     private var artworkURLs: [URL] {
         guard let video = state.currentVideo else { return [] }
@@ -217,24 +170,15 @@ struct OnTheGoPanel: View {
     }
 
     private var videoInfo: some View {
-        HStack(alignment: .center, spacing: Layout.smallSpacing) {
+        Button {
+            showingDetails = true
+        } label: {
             videoInfoText
-            if state.currentVideo != nil {
-                Button {
-                    showingDetails = true
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color.secondary.opacity(0.15), in: Circle())
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
-                .accessibilityLabel("Details")
-            }
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(state.currentVideo == nil)
+        .accessibilityHint("Shows details")
     }
 
     private var videoInfoText: some View {
@@ -402,8 +346,8 @@ struct OnTheGoPanel: View {
 
     private var playPauseSymbol: some View {
         Image(systemName: state.playbackState == .playing ? "pause.fill" : "play.fill")
-            .contentTransition(.symbolEffect(.replace))
-            .animation(.easeInOut(duration: 0.2), value: state.playbackState == .playing)
+            .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp)))
+            .animation(.snappy, value: state.playbackState == .playing)
     }
 
     private func transportButton(_ image: String, size: TransportSize = .regular, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
@@ -444,7 +388,7 @@ struct OnTheGoPanel: View {
                     playerService.currentBackend?.rate = Float(rate.rawValue)
                 }
             } label: {
-                accessoryLabel("gauge.with.needle", caption: state.rate.compactDisplayText, isActive: state.rate != .x1, showsCaptionInsteadOfIcon: state.rate != .x1)
+                accessoryLabel(speedSymbol, caption: state.rate.compactDisplayText, isActive: state.rate != .x1)
             }
             .frame(maxWidth: .infinity)
             .menuIndicator(.hidden)
@@ -492,6 +436,17 @@ struct OnTheGoPanel: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// Gauge needle position reflects the current speed.
+    private var speedSymbol: String {
+        switch state.rate.rawValue {
+        case ..<0.9: "gauge.with.dots.needle.0percent"
+        case ..<1.1: "gauge.with.dots.needle.33percent"
+        case ..<1.4: "gauge.with.dots.needle.50percent"
+        case ..<1.9: "gauge.with.dots.needle.67percent"
+        default: "gauge.with.dots.needle.100percent"
+        }
     }
 
     private var sleepTimerMenu: some View {
@@ -544,6 +499,8 @@ struct OnTheGoPanel: View {
                 Image(systemName: image)
                     .symbolVariant(.none)
                     .font(.system(size: 25, weight: .regular))
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.snappy, value: image)
             }
         }
         .foregroundStyle(isActive ? nowPlayingAccent : iconColor)
