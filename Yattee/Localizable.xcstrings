@@ -99,6 +99,17 @@
     "%lld" : {
 
     },
+    "%lld minutes" : {
+      "comment" : "Sleep timer duration in minutes",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld minutes"
+          }
+        }
+      }
+    },
     "%lld/%lld" : {
       "localizations" : {
         "en" : {
@@ -3178,8 +3189,30 @@
         }
       }
     },
+    "End" : {
+      "comment" : "Short sleep timer caption indicating playback will stop at the end of the video",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        }
+      }
+    },
     "End of Queue" : {
 
+    },
+    "End of video" : {
+      "comment" : "Sleep timer option that stops playback when the current video ends",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End of video"
+          }
+        }
+      }
     },
     "error.noInstance" : {
 
@@ -8987,6 +9020,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not Playing"
+          }
+        }
+      }
+    },
+    "player.onTheGo.autoplay" : {
+      "comment" : "Caption below the On-the-go autoplay button; its icon indicates whether autoplay is enabled",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autoplay"
+          }
+        }
+      }
+    },
+    "player.onTheGo.close" : {
+      "comment" : "Accessibility label for the button that closes the On-the-go panel",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close On-the-go"
+          }
+        }
+      }
+    },
+    "player.onTheGo.playbackPosition" : {
+      "comment" : "Accessibility label for the adjustable On-the-go seek bar",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback position"
+          }
+        }
+      }
+    },
+    "player.onTheGo.sleep" : {
+      "comment" : "Short caption below the On-the-go sleep timer button when no timer is active",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "player.onTheGo.sleepTimer" : {
+      "comment" : "Accessibility label for the On-the-go sleep timer menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep timer"
+          }
+        }
+      }
+    },
+    "player.onTheGo.title" : {
+      "comment" : "Title of the iPhone panel with large playback controls",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On-the-go"
           }
         }
       }
