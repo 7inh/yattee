@@ -346,10 +346,11 @@ struct OnTheGoPanel: View {
     private var playPauseLabel: some View {
         if #available(iOS 26, *) {
             playPauseSymbol
-                .font(.system(size: 44, weight: .semibold))
+                .font(.system(size: 30, weight: .semibold))
+                .frame(width: 68, height: 68)
         } else {
             playPauseSymbol
-                .font(.system(size: 52, weight: .semibold))
+                .font(.system(size: 38, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 104, height: 104)
                 .background(onTheGoAccent, in: Circle())
