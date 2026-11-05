@@ -545,8 +545,9 @@ struct YatteeApp: App {
             return
         }
 
-        // All other destinations use standard navigation
-        appEnvironment.navigationCoordinator.navigate(to: destination)
+        // Show the linked screen above the current navigation stack. An
+        // expanded player would otherwise hide a playlist behind its video.
+        appEnvironment.navigationCoordinator.navigateToOpenedLink(destination)
     }
 
     /// Tell the user an incoming link couldn't be opened instead of failing silently.

@@ -2668,7 +2668,7 @@ struct VideoInfoView: View {
               let queueManager = queueManager,
               let list = context.videoList else {
             // No queue context - play single video
-            if time > 0 {
+            if time > 0 || forceStartTime {
                 playerService?.openVideo(video, startTime: time, forceStartTime: forceStartTime)
             } else {
                 playerService?.openVideo(video)
@@ -2685,7 +2685,8 @@ struct VideoInfoView: View {
             index: playIndex,
             queueSource: context.queueSource,
             sourceLabel: context.sourceLabel,
-            startTime: time
+            startTime: time,
+            forceStartTime: forceStartTime
         )
     }
     

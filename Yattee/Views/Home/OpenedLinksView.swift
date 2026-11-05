@@ -127,15 +127,16 @@ struct OpenedLinksView: View {
         case .loading:
             LinkStatusRow(url: link.url, message: nil, style: rowStyle, status: .loading)
 
-        case .video(let video):
-            let videos = viewModel.videos
+        case .video(let video, let context):
+            let videos = context?.videoList ?? viewModel.videos
             VideoRowView(video: video, style: rowStyle)
                 .tappableVideo(
                     video,
-                    queueSource: .manual,
-                    sourceLabel: title,
+                    queueSource: context?.queueSource ?? .manual,
+                    sourceLabel: context?.sourceLabel ?? title,
                     videoList: videos,
-                    videoIndex: videos.firstIndex(where: { $0.id == video.id })
+                    videoIndex: context?.videoIndex ?? videos.firstIndex(where: { $0.id == video.id }),
+                    linkStartTime: context?.linkStartTime
                 )
                 #if !os(tvOS)
                 .videoSwipeActions(video: video)
@@ -211,11 +212,14 @@ struct OpenedLinksView: View {
     private func playAll() {
         let videos = viewModel.videos
         guard let appEnvironment, !videos.isEmpty else { return }
+        let context = viewModel.singleVideoQueueContext
         appEnvironment.queueManager.playFromList(
-            videos: videos,
-            index: 0,
-            queueSource: .manual,
-            sourceLabel: title
+            videos: context?.videoList ?? videos,
+            index: context?.videoIndex ?? 0,
+            queueSource: context?.queueSource ?? .manual,
+            sourceLabel: context?.sourceLabel ?? title,
+            startTime: context?.linkStartTime,
+            forceStartTime: context?.linkStartTime != nil
         )
     }
 

@@ -89,6 +89,23 @@ struct VideoQueueContext {
             loadMoreVideos: nil
         )
     }
+
+    /// Keeps the full playlist around the linked video, including preceding
+    /// entries for Previous. Use the resolved video for its full metadata.
+    static func playlist(_ playlist: Playlist, startingAt video: Video) -> VideoQueueContext? {
+        guard let index = playlist.videos.firstIndex(where: { $0.id == video.id }) else { return nil }
+        var videos = playlist.videos
+        videos[index] = video
+        return VideoQueueContext(
+            video: video,
+            queueSource: .playlist(playlistID: playlist.id.playlistID, continuation: nil),
+            sourceLabel: playlist.title,
+            videoList: videos,
+            videoIndex: index,
+            startTime: nil,
+            loadMoreVideos: nil
+        )
+    }
 }
 
 // MARK: - Equatable & Hashable

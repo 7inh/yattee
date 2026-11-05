@@ -21,7 +21,7 @@ enum AppSheet: Identifiable {
     /// Add a video to a playlist. `halfHeight` opens at the medium detent.
     case addToPlaylist(Video, halfHeight: Bool = false)
     /// Play now / queue choices for a tapped video while something is playing.
-    case queueAction(Video, queueSource: QueueSource? = nil)
+    case queueAction(Video, queueSource: QueueSource? = nil, queueContext: VideoQueueContext? = nil)
     /// Details of a playback or loading error.
     case errorDetails(String)
     /// Open a link, optionally prefilled.
@@ -46,7 +46,7 @@ enum AppSheet: Identifiable {
             return "errorDetails"
         case .openLink:
             return "openLink"
-        case .queueAction(let video, _):
+        case .queueAction(let video, _, _):
             return "queueAction-\(video.id.id)"
         case .resumeAction(let video, _, _, _):
             return "resumeAction-\(video.id.id)"
@@ -197,8 +197,8 @@ private struct AppSheetHost: ViewModifier {
                 ErrorDetailsSheet(errorMessage: message)
             case .openLink(let url):
                 OpenLinkSheet(prefilledURL: url)
-            case .queueAction(let video, let queueSource):
-                QueueActionSheet(video: video, queueSource: queueSource)
+            case .queueAction(let video, let queueSource, let queueContext):
+                QueueActionSheet(video: video, queueSource: queueSource, queueContext: queueContext)
             case .resumeAction(let video, let resumeTime, let onContinue, let onStartOver):
                 ResumeActionSheet(video: video, resumeTime: resumeTime, onContinue: onContinue, onStartOver: onStartOver)
             case .linkActionConfirmation(let confirmation):

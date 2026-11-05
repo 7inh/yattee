@@ -31,6 +31,9 @@ struct TappableVideoModifier: ViewModifier {
     /// Callback to load more videos via continuation
     nonisolated(unsafe) var loadMoreVideos: LoadMoreVideosCallback? = nil
 
+    /// Explicit timestamp from an opened link, honored over saved progress.
+    var linkStartTime: TimeInterval? = nil
+
     // Password alert state (for WebDAV sources)
     @State private var showingPasswordAlert = false
     @State private var sourceNeedingPassword: MediaSource?
@@ -102,7 +105,8 @@ struct TappableVideoModifier: ViewModifier {
             videoList: videoList,
             videoIndex: videoIndex,
             startTime: startTime,
-            loadMoreVideos: loadMoreVideos
+            loadMoreVideos: loadMoreVideos,
+            linkStartTime: linkStartTime
         )
     }
 
@@ -126,7 +130,7 @@ struct TappableVideoModifier: ViewModifier {
             sourceNeedingPassword = source
             showingPasswordAlert = true
         } else if shouldShowQueueSheet {
-            presentAppSheet(.queueAction(video, queueSource: queueSource))
+            presentAppSheet(.queueAction(video, queueSource: queueSource, queueContext: queueContext))
         } else {
             playVideoAndQueueRest()
         }
@@ -141,7 +145,7 @@ struct TappableVideoModifier: ViewModifier {
         
         // Now check if we should show queue sheet or play directly
         if shouldShowQueueSheet {
-            presentAppSheet(.queueAction(video, queueSource: queueSource))
+            presentAppSheet(.queueAction(video, queueSource: queueSource, queueContext: queueContext))
         } else {
             playVideoAndQueueRest()
         }
@@ -156,6 +160,11 @@ struct TappableVideoModifier: ViewModifier {
         // never ask, always join at the live edge.
         guard !video.isLive else {
             playVideoWithStartTime(0)
+            return
+        }
+
+        if let linkStartTime {
+            playVideoWithStartTime(linkStartTime, forceStartTime: true)
             return
         }
 
@@ -204,7 +213,7 @@ struct TappableVideoModifier: ViewModifier {
     }
 
     /// Plays the video with the specified start time.
-    private func playVideoWithStartTime(_ time: TimeInterval) {
+    private func playVideoWithStartTime(_ time: TimeInterval, forceStartTime: Bool = false) {
         guard let env = appEnvironment else { return }
 
         // If we have a video list, use centralized playFromList
@@ -214,10 +223,11 @@ struct TappableVideoModifier: ViewModifier {
                 index: index,
                 queueSource: queueSource,
                 sourceLabel: sourceLabel,
-                startTime: time
+                startTime: time,
+                forceStartTime: forceStartTime
             )
-        } else if time > 0 {
-            env.playerService.openVideo(video, startTime: time)
+        } else if time > 0 || forceStartTime {
+            env.playerService.openVideo(video, startTime: time, forceStartTime: forceStartTime)
         } else {
             env.playerService.openVideo(video)
         }
@@ -240,6 +250,7 @@ extension View {
     ///   - videoList: All videos in the current list (for auto-queuing subsequent videos).
     ///   - videoIndex: Index of this video in the list.
     ///   - loadMoreVideos: Callback to load more videos via continuation.
+    ///   - linkStartTime: Explicit timestamp requested by an opened link.
     func tappableVideo(
         _ video: Video,
         startTime: Double? = nil,
@@ -250,7 +261,8 @@ extension View {
         sourceLabel: String? = nil,
         videoList: [Video]? = nil,
         videoIndex: Int? = nil,
-        loadMoreVideos: LoadMoreVideosCallback? = nil
+        loadMoreVideos: LoadMoreVideosCallback? = nil,
+        linkStartTime: TimeInterval? = nil
     ) -> some View {
         modifier(TappableVideoModifier(
             video: video,
@@ -262,7 +274,8 @@ extension View {
             sourceLabel: sourceLabel,
             videoList: videoList,
             videoIndex: videoIndex,
-            loadMoreVideos: loadMoreVideos
+            loadMoreVideos: loadMoreVideos,
+            linkStartTime: linkStartTime
         ))
     }
 }

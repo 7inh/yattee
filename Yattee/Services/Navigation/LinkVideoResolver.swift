@@ -79,9 +79,8 @@ struct LinkVideoResolver {
         let url = router.unwrapped(url)
         let startTime = router.parseTimestamp(url)
 
-        func details(_ video: Video) -> NavigationDestination {
-            var context = VideoQueueContext.single(video)
-            context.linkStartTime = startTime
+        @MainActor func details(_ video: Video) async -> NavigationDestination {
+            let context = await queueContext(for: video, from: url, startTime: startTime)
             return .video(.loaded(video), queueContext: context)
         }
 
@@ -92,14 +91,14 @@ struct LinkVideoResolver {
                 throw LinkResolveError.noInstanceAvailable
             }
             let video = try await appEnvironment.contentService.video(id: videoID.videoID, instance: instance)
-            return details(video)
+            return await details(video)
 
         case .video(.loaded(let video), _):
-            return details(video)
+            return await details(video)
 
         case .directMedia, .externalVideo, nil:
             let (video, _, _, _) = try await resolve(url)
-            return details(video)
+            return await details(video)
 
         case .some(let destination):
             return destination
@@ -110,25 +109,46 @@ struct LinkVideoResolver {
     /// (`watch?v=X&list=Y`) plays it with the playlist queued around it;
     /// if the playlist can't be loaded, the video plays alone.
     func play(_ video: Video, from url: URL?, startTime: TimeInterval?) async {
-        let router = URLRouter()
+        let context = await queueContext(for: video, from: url, startTime: startTime)
+        if let videos = context.videoList, let index = context.videoIndex {
+            appEnvironment.queueManager.playFromList(
+                videos: videos,
+                index: index,
+                queueSource: context.queueSource,
+                sourceLabel: context.sourceLabel,
+                startTime: startTime,
+                forceStartTime: startTime != nil
+            )
+        } else {
+            appEnvironment.playerService.openVideo(video, startTime: startTime, forceStartTime: startTime != nil)
+        }
+    }
+
+    /// Shared by direct playback and loaded details/Opened Links rows. The
+    /// content service's playlist API loads all pages before building context.
+    private func queueContext(for video: Video, from url: URL?, startTime: TimeInterval?) async -> VideoQueueContext {
+        var context = VideoQueueContext.single(video)
         if let url, appEnvironment.queueManager.isQueueEnabled,
-           let listID = router.youTubePlaylistContext(router.unwrapped(url)) {
-            let source = PlaylistSource.remote(.global(listID), instance: nil)
-            if let playlist = try? await playlist(for: source),
-               let index = playlist.videos.firstIndex(where: { $0.id.videoID == video.id.videoID }) {
-                var videos = playlist.videos
-                videos[index] = video
-                appEnvironment.queueManager.playFromList(
-                    videos: videos,
-                    index: index,
-                    queueSource: .playlist(playlistID: listID, continuation: nil),
-                    sourceLabel: playlist.title,
-                    startTime: startTime
-                )
-                return
+           let listID = URLRouter().youTubePlaylistContext(url) {
+            do {
+                let playlist = try await playlist(for: .remote(.global(listID), instance: nil))
+                if let playlistContext = VideoQueueContext.playlist(playlist, startingAt: video) {
+                    context = playlistContext
+                    LoggingService.shared.logPlayer(
+                        "Link playlist \(listID): loaded \(playlist.videos.count) videos, starting at index \(playlistContext.videoIndex ?? 0)"
+                    )
+                } else {
+                    LoggingService.shared.warning(
+                        "Link playlist \(listID) does not contain video \(video.id.videoID); playing video alone",
+                        category: .player
+                    )
+                }
+            } catch {
+                LoggingService.shared.logPlayerError("Failed to load link playlist \(listID); playing video alone", error: error)
             }
         }
-        appEnvironment.playerService.openVideo(video, startTime: startTime, forceStartTime: startTime != nil)
+        context.linkStartTime = startTime
+        return context
     }
 
     /// Loads a remote playlist with its videos from the instance suited to it.

@@ -5,9 +5,9 @@
 //  Tests for navigation components.
 //
 
-import Testing
 import Foundation
 import SwiftUI
+import Testing
 @testable import Yattee
 
 // MARK: - URLRouter Tests
@@ -312,6 +312,18 @@ struct URLRouterTests {
         }
     }
 
+    @Test("Playlist links open the playlist list, including pages with a video parameter", arguments: [
+        "yattee://playlist/PLbXQQ6JQ7v4A",
+        "yattee://playlist/PLbXQQ6JQ7v4A?v=wFDTZyWNwJw",
+        "yattee://playlist?list=PLbXQQ6JQ7v4A",
+        "https://www.youtube.com/playlist?list=PLbXQQ6JQ7v4A&v=wFDTZyWNwJw",
+    ])
+    func playlistLinks(_ string: String) {
+        let url = URL(string: string)!
+        #expect(router.route(url) == .playlist(.remote(.global("PLbXQQ6JQ7v4A"), instance: nil)))
+        #expect(router.youTubePlaylistContext(url) == nil)
+    }
+
     // MARK: - Edge Cases
 
     @Test("Unknown URL routes to external video for yt-dlp extraction")
@@ -372,10 +384,23 @@ struct URLRouterTests {
 
     @Test("Watch link playlist context", arguments: [
         ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest123", "PLtest123"),
+        ("https://youtu.be/dQw4w9WgXcQ?list=PLtest123", "PLtest123"),
+        ("yattee://watch?v=dQw4w9WgXcQ&list=PLtest123", "PLtest123"),
+        ("yattee://youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest123", "PLtest123"),
+        ("yattee://https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest123", "PLtest123"),
+        ("yattee://video/dQw4w9WgXcQ?list=PLtest123", "PLtest123"),
+        ("yattee://open?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest123", "PLtest123"),
         ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ", nil),
+        ("yattee://watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ", nil),
         ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=WL", nil),
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=LL", nil),
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=LM", nil),
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=", nil),
         ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", nil),
         ("https://www.youtube.com/playlist?list=PLtest123", nil),
+        ("https://www.youtube.com/playlist?list=PLtest123&v=dQw4w9WgXcQ", nil),
+        ("https://notyoutube.com/watch?v=dQw4w9WgXcQ&list=PLtest123", nil),
+        ("yattee://video/123?source=peertube&instance=https://peertube.social&list=PLtest123", nil),
     ] as [(String, String?)])
     func playlistContext(_ string: String, _ expected: String?) {
         #expect(router.youTubePlaylistContext(URL(string: string)!) == expected)
@@ -674,6 +699,72 @@ struct URLRouterTests {
     }
 }
 
+// MARK: - Playlist Link Playback Tests
+
+@Suite("Playlist Link Playback Tests")
+@MainActor
+struct PlaylistLinkPlaybackTests {
+    @Test("A linked playlist queues later videos and keeps earlier videos for Previous", arguments: [0, 2, 4])
+    func playlistQueueAroundLinkedVideo(_ index: Int) throws {
+        let videos = (0..<5).map { Video.metadataPlaceholder(for: "video\($0)") }
+        let playlist = Playlist(id: .global("PLtest"), title: "Full playlist", videos: videos)
+        let linkedVideo = Video.metadataUnavailable(for: "video\(index)", title: "Resolved details")
+        let context = try #require(VideoQueueContext.playlist(playlist, startingAt: linkedVideo))
+        let list = try #require(context.videoList)
+
+        #expect(context.videoIndex == index)
+        #expect(context.video.id == linkedVideo.id)
+        #expect(list.count == 5)
+        #expect(list[index].title == "Resolved details")
+
+        // Exercise the same queue operation used by playlist Play all and links,
+        // without attaching a player or opening streams.
+        let queueManager = QueueManager(contentService: ContentService(httpClient: HTTPClient()))
+        let state = PlayerState()
+        queueManager.setPlayerState(state)
+        state.addToQueue(Video.metadataPlaceholder(for: "oldQueue"))
+        queueManager.playFromList(
+            videos: list,
+            index: index,
+            queueSource: context.queueSource,
+            sourceLabel: context.sourceLabel
+        )
+
+        #expect(state.queue.map(\.video.id) == Array(videos.dropFirst(index + 1)).map(\.id))
+        #expect(state.history.map(\.video.id) == Array(videos.prefix(index)).map(\.id))
+        #expect(state.hasNext == (index < 4))
+        #expect(state.hasPrevious == (index > 0))
+        #expect(queueManager.currentQueueSource == .playlist(playlistID: "PLtest", continuation: nil))
+        #expect(queueManager.currentQueueSourceLabel == "Full playlist")
+        if index > 0 {
+            #expect(state.retreatQueue()?.video.id == videos[index - 1].id)
+        }
+    }
+
+    @Test("An absent linked video does not silently select the first playlist video")
+    func linkedVideoMissing() {
+        let playlist = Playlist(
+            id: .global("PLtest"), title: "Playlist",
+            videos: [Video.metadataPlaceholder(for: "other")]
+        )
+        #expect(VideoQueueContext.playlist(playlist, startingAt: .metadataPlaceholder(for: "linked")) == nil)
+    }
+
+    @Test("Opened Links includes the playlist for web, legacy and wrapped watch links", arguments: [
+        "https://www.youtube.com/watch?v=wFDTZyWNwJw&list=PLbXQQ6JQ7v4A",
+        "yattee://watch?v=wFDTZyWNwJw&list=PLbXQQ6JQ7v4A",
+        "yattee://open?url=https://www.youtube.com/watch?v=wFDTZyWNwJw&list=PLbXQQ6JQ7v4A",
+    ])
+    func openedLinkIncludesPlaylist(_ string: String) throws {
+        let url = URL(string: string)!
+        let model = OpenedLinksViewModel(urls: [url])
+        #expect(model.links.count == 2)
+        #expect(model.links.first?.url == url)
+        let playlistLink = try #require(model.links.last)
+        #expect(URLRouter().route(playlistLink.url) == .playlist(.remote(.global("PLbXQQ6JQ7v4A"), instance: nil)))
+    }
+}
+
 // MARK: - NavigationDestination Tests
 
 @Suite("NavigationDestination Tests")
@@ -756,6 +847,18 @@ struct NavigationCoordinatorTests {
         coordinator.navigate(to: destination)
 
         #expect(coordinator.router.stack(for: .home) == [destination])
+    }
+
+    @Test("Opening a playlist reveals it above an expanded player")
+    func openedPlaylistCollapsesPlayer() {
+        let coordinator = NavigationCoordinator()
+        coordinator.isPlayerExpanded = true
+        let destination = URLRouter().route(URL(string: "yattee://playlist/PLbXQQ6JQ7v4A")!)!
+
+        coordinator.navigateToOpenedLink(destination)
+
+        #expect(!coordinator.isPlayerExpanded)
+        #expect(coordinator.router.stack(for: .home).last == destination)
     }
 
     @Test("Multiple navigations stack in order")

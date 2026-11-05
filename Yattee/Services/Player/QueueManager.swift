@@ -152,6 +152,7 @@ final class QueueManager {
     ///   - queueSource: Source for continuation loading
     ///   - sourceLabel: Display label for the queue source (e.g., playlist title, channel name)
     ///   - startTime: Optional start time for the video
+    ///   - forceStartTime: Honor an explicit link timestamp over saved progress
     ///   - streamProvider: Optional closure to get stream info (for downloaded content)
     func playFromList(
         videos: [Video],
@@ -159,6 +160,7 @@ final class QueueManager {
         queueSource: QueueSource?,
         sourceLabel: String? = nil,
         startTime: TimeInterval? = nil,
+        forceStartTime: Bool = false,
         streamProvider: StreamProvider? = nil
     ) {
         guard isQueueEnabled, !videos.isEmpty, index >= 0, index < videos.count else {
@@ -168,7 +170,7 @@ final class QueueManager {
                 if let provider = streamProvider, let result = provider(video) {
                     playerService?.openVideo(video, stream: result.stream!, audioStream: result.audioStream)
                 } else if let startTime {
-                    playerService?.openVideo(video, startTime: startTime)
+                    playerService?.openVideo(video, startTime: startTime, forceStartTime: forceStartTime)
                 } else {
                     playerService?.openVideo(video)
                 }
@@ -214,7 +216,7 @@ final class QueueManager {
         if let provider = streamProvider, let result = provider(videoToPlay) {
             playerService?.openVideo(videoToPlay, stream: result.stream!, audioStream: result.audioStream)
         } else if let startTime {
-            playerService?.openVideo(videoToPlay, startTime: startTime)
+            playerService?.openVideo(videoToPlay, startTime: startTime, forceStartTime: forceStartTime)
         } else {
             playerService?.openVideo(videoToPlay)
         }

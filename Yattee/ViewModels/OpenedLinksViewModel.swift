@@ -12,7 +12,7 @@ import Foundation
 struct OpenedLink: Identifiable {
     enum State {
         case loading
-        case video(Video)
+        case video(Video, queueContext: VideoQueueContext?)
         case playlist(Playlist, destination: NavigationDestination)
         case channel(Channel, destination: NavigationDestination)
         /// A screen the link opens whose details couldn't be loaded here
@@ -59,9 +59,18 @@ final class OpenedLinksViewModel {
     /// Resolved videos, in link order.
     var videos: [Video] {
         links.compactMap { link in
-            if case .video(let video) = link.state { return video }
+            if case .video(let video, _) = link.state { return video }
             return nil
         }
+    }
+
+    /// A single watch link's playlist also applies to the page's Play action.
+    var singleVideoQueueContext: VideoQueueContext? {
+        guard videos.count == 1 else { return nil }
+        for link in links {
+            if case .video(_, let context) = link.state { return context }
+        }
+        return nil
     }
 
     /// Links of the videos in `videos`, for re-resolving their streams.
@@ -115,8 +124,8 @@ final class OpenedLinksViewModel {
         }
 
         switch destination {
-        case .video(.loaded(let video), _):
-            return .video(video)
+        case .video(.loaded(let video), let context):
+            return .video(video, queueContext: context)
 
         case .playlist(let source):
             do {

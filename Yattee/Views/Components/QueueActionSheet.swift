@@ -14,6 +14,7 @@ struct QueueActionSheet: View {
 
     let video: Video
     var queueSource: QueueSource?
+    var queueContext: VideoQueueContext?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,7 +58,18 @@ struct QueueActionSheet: View {
             VStack(spacing: 0) {
                 // Play Now (primary action)
                 Button {
-                    appEnvironment?.playerService.openVideo(video)
+                    if let context = queueContext, let videos = context.videoList, let index = context.videoIndex {
+                        appEnvironment?.queueManager.playFromList(
+                            videos: videos,
+                            index: index,
+                            queueSource: context.queueSource,
+                            sourceLabel: context.sourceLabel,
+                            startTime: context.linkStartTime ?? context.startTime,
+                            forceStartTime: context.linkStartTime != nil
+                        )
+                    } else {
+                        appEnvironment?.playerService.openVideo(video)
+                    }
                     dismiss()
                 } label: {
                     HStack {

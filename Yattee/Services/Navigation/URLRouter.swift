@@ -369,7 +369,12 @@ struct URLRouter: Sendable {
     /// (`watch?v=X&list=Y`), when it is a real playlist. Mixes (`RD…`) and
     /// private lists (Liked, Watch Later) can't be opened as playlists.
     func youTubePlaylistContext(_ url: URL) -> String? {
-        guard isYouTubeHost(url.host), parseYouTubeURL(url) != nil,
+        let url = unwrapped(url)
+        // Use routing so legacy yattee://watch and scheme-swapped YouTube
+        // links retain the same context as their https equivalents. Playlist
+        // pages (even with v=) and PeerTube videos are not watch contexts.
+        guard case .video(.id(let videoID), _) = route(url),
+              videoID.source == .global(provider: ContentSource.youtubeProvider),
               let listID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "list" })?.value,
               !listID.isEmpty,
