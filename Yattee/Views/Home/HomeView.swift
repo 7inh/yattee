@@ -442,20 +442,49 @@ struct HomeView: View {
         backgroundStyle.color
             .ignoresSafeArea()
             .overlay(
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        Spacer().frame(height: 16)
+                Group {
+                    #if os(iOS)
+                    if horizontalSizeClass == .compact {
                         homeContent
+                    } else {
+                        dashboardScrollContent
                     }
+                    #else
+                    dashboardScrollContent
+                    #endif
                 }
             )
         #endif
     }
 
+    #if !os(tvOS)
+    private var dashboardScrollContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                Spacer().frame(height: 16)
+                homeContent
+            }
+        }
+    }
+    #endif
+
     // MARK: - Home Content
 
     @ViewBuilder
     private var homeContent: some View {
+        #if os(iOS)
+        if horizontalSizeClass == .compact {
+            YouTubeHomeFeed()
+        } else {
+            dashboardContent
+        }
+        #else
+        dashboardContent
+        #endif
+    }
+
+    @ViewBuilder
+    private var dashboardContent: some View {
         #if !os(tvOS)
         if hasVisibleShortcuts {
             shortcutsSection
