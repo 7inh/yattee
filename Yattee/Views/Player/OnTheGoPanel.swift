@@ -119,29 +119,33 @@ struct OnTheGoPanel: View {
             Text(String(localized: "player.onTheGo.title"))
                 .font(.headline.weight(.semibold))
             Spacer()
-            Button {
-                showingDetails = true
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Details")
             closeButton
                 .accessibilityLabel(String(localized: "player.onTheGo.close"))
         }
     }
 
+    @ViewBuilder
     private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 32, height: 32)
-                .background(Color(.secondarySystemBackground), in: Circle())
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+        if #available(iOS 26, *) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .foregroundStyle(.primary)
+        } else {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 32, height: 32)
+                    .background(Color(.secondarySystemBackground), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     private var artworkURLs: [URL] {
@@ -197,6 +201,27 @@ struct OnTheGoPanel: View {
     }
 
     private var videoInfo: some View {
+        HStack(alignment: .center, spacing: Layout.smallSpacing) {
+            videoInfoText
+            if state.currentVideo != nil {
+                Button {
+                    showingDetails = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .background(Color.secondary.opacity(0.15), in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Details")
+            }
+        }
+    }
+
+    private var videoInfoText: some View {
         VStack(alignment: .leading, spacing: Layout.smallSpacing) {
             if let video = state.currentVideo {
                 Text(appEnvironment?.deArrowBrandingProvider.title(for: video) ?? video.title)
