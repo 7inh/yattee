@@ -8986,9 +8986,6 @@
         }
       }
     },
-    "player.expandedSheet" : {
-
-    },
     "player.live" : {
       "localizations" : {
         "en" : {
@@ -9024,8 +9021,8 @@
         }
       }
     },
-    "player.onTheGo.autoplay" : {
-      "comment" : "Caption below the On-the-go autoplay button; its icon indicates whether autoplay is enabled",
+    "player.nowPlaying.autoplay" : {
+      "comment" : "Caption below the Now Playing autoplay button; its icon indicates whether autoplay is enabled",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9035,19 +9032,19 @@
         }
       }
     },
-    "player.onTheGo.close" : {
-      "comment" : "Accessibility label for the button that closes the On-the-go panel",
+    "player.nowPlaying.close" : {
+      "comment" : "Accessibility label for the button that dismisses the full-screen Now Playing screen",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Close On-the-go"
+            "value" : "Close Now Playing"
           }
         }
       }
     },
-    "player.onTheGo.playbackPosition" : {
-      "comment" : "Accessibility label for the adjustable On-the-go seek bar",
+    "player.nowPlaying.playbackPosition" : {
+      "comment" : "Accessibility label for the adjustable Now Playing seek bar",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9057,8 +9054,8 @@
         }
       }
     },
-    "player.onTheGo.sleep" : {
-      "comment" : "Short caption below the On-the-go sleep timer button when no timer is active",
+    "player.nowPlaying.sleep" : {
+      "comment" : "Short caption below the Now Playing sleep timer button when no timer is active",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9068,8 +9065,8 @@
         }
       }
     },
-    "player.onTheGo.sleepTimer" : {
-      "comment" : "Accessibility label for the On-the-go sleep timer menu",
+    "player.nowPlaying.sleepTimer" : {
+      "comment" : "Accessibility label for the Now Playing sleep timer menu",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9079,13 +9076,13 @@
         }
       }
     },
-    "player.onTheGo.title" : {
-      "comment" : "Title of the iPhone panel with large playback controls",
+    "player.nowPlaying.title" : {
+      "comment" : "Accessibility label for the full-screen audio player",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On-the-go"
+            "value" : "Now Playing"
           }
         }
       }

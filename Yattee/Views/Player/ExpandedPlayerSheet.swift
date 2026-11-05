@@ -23,7 +23,8 @@ struct ExpandedPlayerSheet: View {
                 shouldHost: true,
                 appEnvironment: appEnvironment
             )
-            .accessibilityLabel("player.expandedSheet")
+            .accessibilityLabel(String(localized: "player.nowPlaying.title"))
+            .accessibilityIdentifier("player.expandedSheet")
         }
     }
 }

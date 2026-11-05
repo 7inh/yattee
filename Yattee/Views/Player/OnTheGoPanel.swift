@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 import NukeUI
 
-private let onTheGoAccent = Color.red
+private let nowPlayingAccent = Color.red
 
 @MainActor
 struct OnTheGoPanel: View {
@@ -59,8 +59,9 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
+            .background(Color(.systemBackground).ignoresSafeArea())
             .foregroundStyle(.primary)
-            .tint(onTheGoAccent)
+            .tint(nowPlayingAccent)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
@@ -70,6 +71,7 @@ struct OnTheGoPanel: View {
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
             }
+            .accessibilityAction(.escape, onClose)
     }
 
     private var panelContent: some View {
@@ -77,11 +79,12 @@ struct OnTheGoPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
-                    // Share extra height across all four gaps. Compact detents
-                    // keep the gaps small; shorter sheets and large text scroll.
+                    // Share extra height across all four gaps. Short screens
+                    // and large text can scroll without shrinking the controls.
                     Spacer(minLength: Layout.smallSpacing)
                     artwork
                         .padding(.vertical, 16)
+                        .simultaneousGesture(dismissGesture)
                     videoInfo
                     Spacer(minLength: Layout.smallSpacing)
                     seekControls
@@ -116,19 +119,32 @@ struct OnTheGoPanel: View {
 
     private var header: some View {
         HStack {
-            Text(String(localized: "player.onTheGo.title"))
-                .font(.headline.weight(.semibold))
-            Spacer()
             closeButton
-                .accessibilityLabel(String(localized: "player.onTheGo.close"))
+                .accessibilityLabel(String(localized: "player.nowPlaying.close"))
+            Spacer()
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(dismissGesture)
+    }
+
+    // Full-screen covers have no native swipe dismissal. Limit the gesture to
+    // the header and artwork so seeking and transport controls stay independent.
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let translation = value.translation
+                guard translation.height > 40,
+                      translation.height > abs(translation.width) * 1.5,
+                      translation.height > 100 || value.predictedEndTranslation.height > 180 else { return }
+                onClose()
+            }
     }
 
     @ViewBuilder
     private var closeButton: some View {
         if #available(iOS 26, *) {
             Button(action: onClose) {
-                Image(systemName: "xmark")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 24, height: 24)
             }
@@ -137,7 +153,7 @@ struct OnTheGoPanel: View {
             .foregroundStyle(.primary)
         } else {
             Button(action: onClose) {
-                Image(systemName: "xmark")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .semibold))
                     .frame(width: 32, height: 32)
                     .background(Color(.secondarySystemBackground), in: Circle())
@@ -251,10 +267,10 @@ struct OnTheGoPanel: View {
                         .fill(Color.secondary.opacity(0.25))
                         .frame(height: Layout.seekTrackHeight)
                     Capsule()
-                        .fill(onTheGoAccent)
+                        .fill(nowPlayingAccent)
                         .frame(width: trackWidth * progress, height: Layout.seekTrackHeight)
                     Circle()
-                        .fill(onTheGoAccent)
+                        .fill(nowPlayingAccent)
                         .frame(width: 20, height: 20)
                         .scaleEffect(scrubTime == nil ? 1 : 1.2)
                         .animation(.easeOut(duration: 0.15), value: scrubTime != nil)
@@ -276,7 +292,7 @@ struct OnTheGoPanel: View {
             }
             .frame(height: 44)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "player.onTheGo.playbackPosition"))
+            .accessibilityLabel(String(localized: "player.nowPlaying.playbackPosition"))
             .accessibilityValue(timeLabel)
             .accessibilityAdjustableAction { direction in
                 switch direction {
@@ -378,7 +394,7 @@ struct OnTheGoPanel: View {
                 .font(.system(size: 38, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 104, height: 104)
-                .background(onTheGoAccent, in: Circle())
+                .background(nowPlayingAccent, in: Circle())
                 .opacity(isTransportDisabled ? 0.4 : 1)
                 .contentShape(Circle())
         }
@@ -432,7 +448,7 @@ struct OnTheGoPanel: View {
             }
             .frame(maxWidth: .infinity)
             .menuIndicator(.hidden)
-            .tint(state.rate != .x1 ? onTheGoAccent : .primary)
+            .tint(state.rate != .x1 ? nowPlayingAccent : .primary)
             .disabled(state.isControlsLocked)
             .accessibilityLabel(String(localized: "controls.button.speed"))
             .accessibilityValue(state.rate.displayText)
@@ -445,7 +461,7 @@ struct OnTheGoPanel: View {
             } label: {
                 accessoryLabel(
                     "play.square.stack",
-                    caption: String(localized: "player.onTheGo.autoplay"),
+                    caption: String(localized: "player.nowPlaying.autoplay"),
                     isActive: isAutoPlayNextEnabled,
                     iconColor: .secondary
                 )
@@ -495,14 +511,14 @@ struct OnTheGoPanel: View {
         } label: {
             accessoryLabel(
                 "moon.zzz",
-                caption: sleepTimer.caption ?? String(localized: "player.onTheGo.sleep"),
+                caption: sleepTimer.caption ?? String(localized: "player.nowPlaying.sleep"),
                 isActive: sleepTimer.isActive
             )
         }
         .menuIndicator(.hidden)
-        .tint(sleepTimer.isActive ? onTheGoAccent : .primary)
+        .tint(sleepTimer.isActive ? nowPlayingAccent : .primary)
         .disabled(state.isControlsLocked)
-        .accessibilityLabel(String(localized: "player.onTheGo.sleepTimer"))
+        .accessibilityLabel(String(localized: "player.nowPlaying.sleepTimer"))
         .accessibilityValue(sleepTimer.caption ?? String(localized: "common.off"))
     }
 
@@ -530,7 +546,7 @@ struct OnTheGoPanel: View {
                     .font(.system(size: 25, weight: .regular))
             }
         }
-        .foregroundStyle(isActive ? onTheGoAccent : iconColor)
+        .foregroundStyle(isActive ? nowPlayingAccent : iconColor)
         .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
     }
@@ -559,7 +575,7 @@ private struct OnTheGoTransportStyleModifier: ViewModifier {
             Group {
                 if isProminent {
                     content.buttonStyle(.glassProminent)
-                        .tint(onTheGoAccent)
+                        .tint(nowPlayingAccent)
                         .foregroundStyle(.white)
                 } else {
                     content.buttonStyle(.glass)

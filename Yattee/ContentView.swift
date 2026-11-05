@@ -74,14 +74,12 @@ struct AdaptiveTabView: View {
             }
 
         }
-        .sheet(isPresented: Binding(
+        .fullScreenCover(isPresented: Binding(
             get: { appEnvironment.navigationCoordinator.isPlayerExpanded },
             set: { appEnvironment.navigationCoordinator.isPlayerExpanded = $0 }
         )) {
             ExpandedPlayerSheet()
                 .appEnvironment(appEnvironment)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
                 .onAppear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = true }
                 .onDisappear { appEnvironment.navigationCoordinator.isPlayerWindowVisible = false }
         }
