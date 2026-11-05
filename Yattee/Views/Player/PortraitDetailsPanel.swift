@@ -19,8 +19,7 @@ struct PortraitDetailsPanel: View {
     let pillsOverlayOpacity: CGFloat
 
     /// Supplied only by the iPhone portrait host. Other layouts keep their details.
-    var onTheGoPresentation: Binding<Bool>? = nil
-    var onTheGoBottomSafeAreaInset: CGFloat = 0
+    var onPresentOnTheGo: (() -> Void)? = nil
 
     /// Corner layout host: comments live in the side column, so the pill is
     /// suppressed entirely.
@@ -57,8 +56,6 @@ struct PortraitDetailsPanel: View {
     private var playerService: PlayerService? { appEnvironment?.playerService }
     private var playerState: PlayerState? { playerService?.state }
     private var isPanelDragging: Bool { appEnvironment?.navigationCoordinator.isPanelDragging ?? false }
-
-    private var isOnTheGoActive: Bool { onTheGoPresentation?.wrappedValue ?? false }
 
     // Read video from playerState for reactive updates
     private var video: Video? { playerState?.currentVideo }
@@ -163,40 +160,32 @@ struct PortraitDetailsPanel: View {
 
     var body: some View {
         if let video {
-            Group {
-                if isOnTheGoActive, let playerService {
-                    OnTheGoPanel(playerService: playerService, bottomSafeAreaInset: onTheGoBottomSafeAreaInset) {
-                        onTheGoPresentation?.wrappedValue = false
+            detailsContent(video: video)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: panelCornerRadius))
+                // Pills overlay at bottom
+                .overlay {
+                    if !isCommentsExpanded {
+                        pillsOverlay
+                            .padding(.leading, pillsLeadingInset)
+                            .opacity(pillsOverlayOpacity)
+                            .allowsHitTesting(pillsOverlayOpacity > 0.01)
                     }
-                } else {
-                    detailsContent(video: video)
                 }
-            }
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: panelCornerRadius))
-            // Pills overlay at bottom
-            .overlay {
-                if !isOnTheGoActive && !isCommentsExpanded {
-                    pillsOverlay
-                        .padding(.leading, pillsLeadingInset)
-                        .opacity(pillsOverlayOpacity)
-                        .allowsHitTesting(pillsOverlayOpacity > 0.01)
+                // Expanded comments overlay (only when the comments page is not
+                // available; the pill then falls back to the overlay path)
+                .overlay {
+                    if !isCommentsPageAvailable {
+                        expandedCommentsOverlay(video: video)
+                    }
                 }
-            }
-            // Expanded comments overlay (only when the comments page is not
-            // available; the pill then falls back to the overlay path)
-            .overlay {
-                if !isOnTheGoActive && !isCommentsPageAvailable {
-                    expandedCommentsOverlay(video: video)
+                .animation(.smooth(duration: 0.3), value: isCommentsExpanded)
+                .onChange(of: video.id) { _, _ in
+                    isCommentsExpanded = false
                 }
-            }
-            .animation(.smooth(duration: 0.3), value: isCommentsExpanded)
-            .onChange(of: video.id) { _, _ in
-                isCommentsExpanded = false
-            }
-            .onChange(of: isCommentsExpanded) { _, newValue in
-                appEnvironment?.navigationCoordinator.isCommentsExpanded = newValue
-            }
+                .onChange(of: isCommentsExpanded) { _, newValue in
+                    appEnvironment?.navigationCoordinator.isCommentsExpanded = newValue
+                }
         }
     }
 
@@ -233,7 +222,7 @@ struct PortraitDetailsPanel: View {
                 showPageBar: false,
                 inlineInfoSections: inlineInfoSections
             )
-            .padding(.top, onTheGoPresentation == nil ? 0 : 44)
+            .padding(.top, onPresentOnTheGo == nil ? 0 : 44)
             .background(Color(.systemBackground))
             .overlay(alignment: .bottom) {
                 bottomFadeOverlay
@@ -286,10 +275,10 @@ struct PortraitDetailsPanel: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if onTheGoPresentation != nil {
+            if let onPresentOnTheGo {
                 Button {
                     collapseComments()
-                    onTheGoPresentation?.wrappedValue = true
+                    onPresentOnTheGo()
                 } label: {
                     Label("On-the-go", systemImage: "car")
                         .font(.subheadline.weight(.semibold))

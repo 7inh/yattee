@@ -66,6 +66,7 @@ struct ExpandedPlayerSheet: View {
     #if os(iOS)
     /// Session-only presentation state for the iPhone portrait controls panel.
     @State var isOnTheGoPresented: Bool = false
+    @State var onTheGoSelectedDetent: PresentationDetent = .large
     #endif
     /// Track if we're in widescreen layout for status bar hiding
     @State private var isInWideScreenLayout = false
@@ -183,6 +184,24 @@ struct ExpandedPlayerSheet: View {
         guard let video = playerState?.currentVideo else { return }
         presentSheet(.addToPlaylist(video))
     }
+
+    #if os(iOS)
+    /// A separate host lets queue/download sheets open above On-the-go.
+    @ViewBuilder
+    func onTheGoSheet(smallDetent: PresentationDetent) -> some View {
+        if let playerService {
+            OnTheGoPanel(playerService: playerService) {
+                isOnTheGoPresented = false
+            }
+            .appSheetHost(isTopLevel: navigationCoordinator?.isPlayerExpanded == true)
+            .sheetToastOverlay(scope: .player, depth: 1)
+            .environment(\.sheetToastLevel, SheetToastLevel(scope: .player, depth: 1))
+            .presentationDetents([smallDetent, .large], selection: $onTheGoSelectedDetent)
+            .presentationDragIndicator(.visible)
+            .presentationBackgroundInteraction(.enabled(upThrough: smallDetent))
+        }
+    }
+    #endif
 
     // MARK: - Body
 
@@ -416,6 +435,9 @@ struct ExpandedPlayerSheet: View {
             .onChange(of: wideScreen) { _, newValue in
                 isInWideScreenLayout = newValue
                 #if os(iOS)
+                if newValue {
+                    isOnTheGoPresented = false
+                }
                 // Detect orientation changes for panscan reset
                 if let previous = previousIsLandscape, previous != newValue {
                     // Landscape→portrait: panscan reset
@@ -492,7 +514,7 @@ struct ExpandedPlayerSheet: View {
         )
         // Shared sheets opened from the player, and global requests while it
         // is up, so they appear above the player window.
-        .appSheetHost(isTopLevel: appEnvironment?.navigationCoordinator.isPlayerExpanded == true, toastScope: .player)
+        .appSheetHost(isTopLevel: hostsGlobalSheetRequests, toastScope: .player)
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         // Corner layout with panels visible keeps the system status bar and
@@ -503,6 +525,14 @@ struct ExpandedPlayerSheet: View {
         // corner layout always hides it there.
         .playerStatusBarHidden(hidesSystemOverlays)
         .persistentSystemOverlays(hidesSystemOverlays ? .hidden : .automatic)
+        #endif
+    }
+
+    private var hostsGlobalSheetRequests: Bool {
+        #if os(iOS)
+        navigationCoordinator?.isPlayerExpanded == true && !isOnTheGoPresented
+        #else
+        navigationCoordinator?.isPlayerExpanded == true
         #endif
     }
 }

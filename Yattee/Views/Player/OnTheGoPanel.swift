@@ -2,7 +2,7 @@
 //  OnTheGoPanel.swift
 //  Yattee
 //
-//  Large playback controls shown below the video on iPhone in portrait.
+//  Large playback controls presented in a native sheet below the iPhone video.
 //
 
 import Foundation
@@ -16,8 +16,6 @@ struct OnTheGoPanel: View {
     @Environment(\.presentAppSheet) private var presentAppSheet
 
     let playerService: PlayerService
-    /// The portrait host extends the panel underneath the home indicator.
-    var bottomSafeAreaInset: CGFloat = 0
     let onClose: () -> Void
 
     @GestureState private var scrubTime: TimeInterval? = nil
@@ -81,11 +79,10 @@ struct OnTheGoPanel: View {
                     }
                     .padding(.horizontal, Layout.mediumSpacing)
                     .padding(.top, Layout.smallSpacing)
-                    .padding(.bottom, bottomSafeAreaInset + Layout.smallSpacing)
+                    .padding(.bottom, Layout.smallSpacing)
                 }
         } else {
             panelContent
-                .background(Color(.systemBackground))
         }
     }
 
@@ -124,19 +121,12 @@ struct OnTheGoPanel: View {
     // MARK: - Header and Video
 
     private var header: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(.quaternary)
-                .frame(width: 36, height: 4)
-                .accessibilityHidden(true)
-
-            HStack {
-                Text(String(localized: "player.onTheGo.title"))
-                    .font(.headline.weight(.semibold))
-                Spacer()
-                closeButton
-                    .accessibilityLabel(String(localized: "player.onTheGo.close"))
-            }
+        HStack {
+            Text(String(localized: "player.onTheGo.title"))
+                .font(.headline.weight(.semibold))
+            Spacer()
+            closeButton
+                .accessibilityLabel(String(localized: "player.onTheGo.close"))
         }
         .padding(.horizontal, Layout.mediumSpacing)
         .padding(.vertical, Layout.smallSpacing)

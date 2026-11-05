@@ -141,9 +141,6 @@ extension ExpandedPlayerSheet {
 
         #if os(iOS)
         let canPresentOnTheGo = UIDevice.current.userInterfaceIdiom == .phone && !isWideScreenLayout(size: geometry.size)
-        let usesOnTheGoPanel = canPresentOnTheGo && isOnTheGoPresented
-        #else
-        let usesOnTheGoPanel = false
         #endif
 
         // Check if expanded comments pill will be visible (needs extra panel height)
@@ -158,8 +155,8 @@ extension ExpandedPlayerSheet {
             !commentsPillMode.alwaysCollapsed
 
         let minPanelHeight: CGFloat = useCompactPanel ? 150 : 200
-        // Expanded comments need a taller compact panel. On-the-go uses all space below the video.
-        let maxPanelHeight: CGFloat = useCompactPanel && !usesOnTheGoPanel ? (hasExpandedCommentsPill ? 250 : 190) : .infinity
+        // Expanded comments need a taller compact panel.
+        let maxPanelHeight: CGFloat = useCompactPanel ? (hasExpandedCommentsPill ? 250 : 190) : .infinity
 
         let maxVideoHeight = max(1, screenHeight - minPanelHeight)
 
@@ -261,6 +258,16 @@ extension ExpandedPlayerSheet {
         // Video centered in video area (above panel). Hinge split: the same
         // spot as with the panel hidden, so toggling the panel never moves it.
         let topY = isHingeSplit ? hiddenVideoY : videoAreaHeight / 2
+
+        #if os(iOS)
+        // 500 points fits the full controls at standard text sizes on a
+        // 375×812 iPhone. Cap the sheet below the actual video, including when
+        // compact details center it lower down; shorter panels can scroll.
+        // Sheet detent heights exclude the window's bottom safe area.
+        let onTheGoVideoBottom = safeAreaInsets.top + topY + fitHeight / 2
+        let onTheGoAvailableHeight = fullScreenHeight - onTheGoVideoBottom - windowSafeAreaInsets.bottom - 8
+        let onTheGoSmallDetent = PresentationDetent.height(max(1, min(500, onTheGoAvailableHeight)))
+        #endif
 
         let videoY: CGFloat = {
             if isPortraitPanelVisible {
@@ -489,8 +496,15 @@ extension ExpandedPlayerSheet {
                             playerControlsLayout: playerControlsLayout,
                             onFullscreen: { [self] in toggleFullscreen() },
                             pillsOverlayOpacity: pillsOverlayOpacity,
-                            onTheGoPresentation: canPresentOnTheGo ? $isOnTheGoPresented : nil,
-                            onTheGoBottomSafeAreaInset: safeAreaInsets.bottom,
+                            onPresentOnTheGo: canPresentOnTheGo ? {
+                                // Reveal the video if details were expanded over it.
+                                isPanelExpanded = false
+                                panelExpandOffset = 0
+                                panelDragOffset = 0
+                                videoYOffset = 0
+                                onTheGoSelectedDetent = onTheGoSmallDetent
+                                isOnTheGoPresented = true
+                            } : nil,
                             onDragChanged: { [self] offset in
                                 // Set drag flags only on transition to avoid 120/sec @Observable writes
                                 if !isPanelDragging {
@@ -600,15 +614,6 @@ extension ExpandedPlayerSheet {
                                 }
                             }
                         )
-                        .onChange(of: isOnTheGoPresented) { _, isPresented in
-                            if isPresented {
-                                // Keep the video visible if the details were expanded over it.
-                                isPanelExpanded = false
-                                panelExpandOffset = 0
-                                panelDragOffset = 0
-                                videoYOffset = 0
-                            }
-                        }
                         .frame(height: {
                             let normalHeight = pinnedPanelHeight + safeAreaInsets.bottom
                             let expandedHeight = screenHeight + safeAreaInsets.bottom
@@ -676,6 +681,9 @@ extension ExpandedPlayerSheet {
         // after reveal, allowing sheet dismiss gesture to incorrectly fire.
         .onChange(of: isPortraitPanelVisible) { _, isVisible in
             if !isVisible {
+                #if os(iOS)
+                isOnTheGoPresented = false
+                #endif
                 // Clear panel frame when hidden
                 navigationCoordinator?.portraitPanelFrame = .zero
                 // Reset panel expansion state
@@ -703,6 +711,16 @@ extension ExpandedPlayerSheet {
                 useCompactPanel = shouldUseCompact
             }
         }
+        #if os(iOS)
+        .sheet(isPresented: $isOnTheGoPresented) {
+            onTheGoSheet(smallDetent: onTheGoSmallDetent)
+        }
+        .onChange(of: onTheGoSmallDetent) { _, newDetent in
+            if isOnTheGoPresented, onTheGoSelectedDetent != .large {
+                onTheGoSelectedDetent = newDetent
+            }
+        }
+        #endif
     }
 
     /// Toggle floating panel visibility (for tall videos only)
