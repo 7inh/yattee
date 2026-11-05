@@ -5,6 +5,7 @@
 //  Unified view for displaying both local and remote playlists.
 //
 
+import Foundation
 import SwiftUI
 import NukeUI
 
@@ -255,7 +256,10 @@ struct UnifiedPlaylistDetailView: View {
                 notFoundView
             }
         }
-        #if !os(tvOS)
+        #if os(iOS)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        #elseif os(macOS)
         .navigationTitle(navigationTitleText)
         .toolbarTitleDisplayMode(.inlineLarge)
         .navigationSubtitleIfAvailable(playlistSummaryText)
@@ -393,6 +397,10 @@ struct UnifiedPlaylistDetailView: View {
                 playlistBody
             }
         }
+        #if os(iOS)
+        // Let the last row scroll above the floating tab bar.
+        .contentMargins(.bottom, 80, for: .scrollContent)
+        #endif
         .refreshable {
             if case .remote = source {
                 await loadPlaylist()
@@ -451,6 +459,9 @@ struct UnifiedPlaylistDetailView: View {
                     .padding(.top, 40)
             }
         }
+        #if os(iOS)
+        .contentMargins(.bottom, 80, for: .scrollContent)
+        #endif
     }
 
     private func playlistHeader() -> some View {
@@ -474,23 +485,49 @@ struct UnifiedPlaylistDetailView: View {
             if videoCount > 0 || !isLoading {
                 parts.append(String(localized: "playlist.videoCount \(videoCount)"))
             }
+            #if os(iOS)
+            if let author = remotePlaylist?.authorName.trimmingCharacters(in: .whitespacesAndNewlines), !author.isEmpty {
+                parts.append(author)
+            }
+            #endif
             if let localPlaylist {
                 parts.append(localPlaylist.formattedTotalDuration)
             }
             return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }()
 
-        return VStack(alignment: .leading, spacing: 12) {
-            // Summary info (only shown on pre-iOS 26, or non-iOS platforms)
-            #if os(iOS)
-            if #unavailable(iOS 26) {
-                if let summaryText {
-                    Text(summaryText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+        #if os(iOS)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(navigationTitleText)
+                .font(.title3.bold())
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let summaryText {
+                Text(summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            #elseif os(macOS)
+
+            if let description = distinctPlaylistDescription(descriptionText) {
+                ExpandableText(text: description, lineLimit: 2, isExpanded: $isDescriptionExpanded)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !videos.isEmpty || localPlaylist != nil || canEditRemotePlaylist {
+                playlistActionButtons
+                    .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        #else
+        return VStack(alignment: .leading, spacing: 12) {
+            #if os(macOS)
             if let summaryText {
                 Text(summaryText)
                     .font(.subheadline)
@@ -517,13 +554,41 @@ struct UnifiedPlaylistDetailView: View {
             #endif
         }
         .padding()
+        #endif
     }
+
+    #if os(iOS)
+    /// Ignore differences in whitespace, punctuation and case for repeated titles.
+    private func distinctPlaylistDescription(_ description: String?) -> String? {
+        guard let description = description?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !description.isEmpty
+        else { return nil }
+
+        func normalized(_ text: String) -> String {
+            text.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }
+
+        return normalized(description) == normalized(navigationTitleText) ? nil : description
+    }
+    #endif
 
     // MARK: - Action Buttons Row
 
     #if !os(tvOS)
     @ViewBuilder
     private var playlistActionButtons: some View {
+        #if os(iOS)
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                compactPlaylistActionButtons
+            }
+        } else {
+            compactPlaylistActionButtons
+        }
+        #else
         HStack(spacing: 12) {
             // Playing and downloading need videos to act on; the menu does not.
             if !videos.isEmpty {
@@ -577,61 +642,138 @@ struct UnifiedPlaylistDetailView: View {
 
             Spacer()
 
-            // Menu button (circular with glass background)
-            Menu {
-                // Remote-only: Save to Library, Share
-                if case .remote = source, let remotePlaylist, !remotePlaylist.isLocal {
-                    // Nothing to copy out of an empty playlist.
-                    if !videos.isEmpty {
-                        Button {
-                            Task { await importToLocal() }
-                        } label: {
-                            if isImporting, let progress = importProgress {
-                                Label(String(localized: "playlist.savingToLibrary \(progress.current) \(progress.total)"), systemImage: "plus.rectangle.on.folder")
-                            } else {
-                                Label(String(localized: "playlist.saveToLibrary"), systemImage: "plus.rectangle.on.folder")
-                            }
-                        }
-                        .disabled(isImporting)
-                    }
-
-                    ShareLink(item: playlistShareURL()) {
-                        Label(String(localized: "common.share"), systemImage: "square.and.arrow.up")
-                    }
-                }
-
-                // Edit and Delete: local playlists, and server-side ones this
-                // account owns.
-                if (isLocal && localPlaylist != nil) || canEditRemotePlaylist {
-                    Button {
-                        beginEdit()
-                    } label: {
-                        Label(String(localized: "playlist.edit"), systemImage: "pencil")
-                    }
-                    .disabled(isPreparingEdit)
-
-                    Button(role: .destructive) {
-                        showingDeleteConfirmation = true
-                    } label: {
-                        Label(String(localized: "playlist.delete"), systemImage: "trash")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.medium))
-                    .frame(width: 44, height: 44)
-                    .background(.regularMaterial, in: Circle())
-            }
-            .menuIndicator(.hidden)
-            #if os(macOS)
-            // The default macOS menu style renders as a bordered pull-down that
-            // stretches to fill available width on macOS 15 (Sequoia).
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            #endif
+            playlistMenu
         }
         .padding(.top, 8)
+        #endif
     }
+
+    private var playlistMenu: some View {
+        Menu {
+            // Remote-only: Save to Library, Share
+            if case .remote = source, let remotePlaylist, !remotePlaylist.isLocal {
+                // Nothing to copy out of an empty playlist.
+                if !videos.isEmpty {
+                    Button {
+                        Task { await importToLocal() }
+                    } label: {
+                        if isImporting, let progress = importProgress {
+                            Label(String(localized: "playlist.savingToLibrary \(progress.current) \(progress.total)"), systemImage: "plus.rectangle.on.folder")
+                        } else {
+                            Label(String(localized: "playlist.saveToLibrary"), systemImage: "plus.rectangle.on.folder")
+                        }
+                    }
+                    .disabled(isImporting)
+                }
+
+                ShareLink(item: playlistShareURL()) {
+                    Label(String(localized: "common.share"), systemImage: "square.and.arrow.up")
+                }
+            }
+
+            // Edit and Delete: local playlists, and server-side ones this
+            // account owns.
+            if (isLocal && localPlaylist != nil) || canEditRemotePlaylist {
+                Button {
+                    beginEdit()
+                } label: {
+                    Label(String(localized: "playlist.edit"), systemImage: "pencil")
+                }
+                .disabled(isPreparingEdit)
+
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label(String(localized: "playlist.delete"), systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body.weight(.medium))
+                #if os(macOS)
+                .frame(width: 44, height: 44)
+                .background(.regularMaterial, in: Circle())
+                #endif
+        }
+        .menuIndicator(.hidden)
+        #if os(iOS)
+        .modifier(PlaylistActionStyleModifier(isIconOnly: true))
+        .accessibilityLabel(String(localized: "videoInfo.toolbar.moreActions"))
+        #endif
+        #if os(macOS)
+        // The default macOS menu style renders as a bordered pull-down that
+        // stretches to fill available width on macOS 15 (Sequoia).
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        #endif
+    }
+
+    #if os(iOS)
+    private var compactPlaylistActionButtons: some View {
+        HStack(spacing: 8) {
+            if !videos.isEmpty {
+                if isQueueEnabled {
+                    Button(action: playAll) {
+                        Label(String(localized: "playlist.play"), systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .modifier(PlaylistActionStyleModifier(isProminent: true))
+
+                    Button {
+                        appEnvironment?.playerService.state.queueMode = .shuffle
+                        playAll()
+                    } label: {
+                        Label(String(localized: "queue.mode.shuffle"), systemImage: "shuffle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .modifier(PlaylistActionStyleModifier())
+                }
+
+                compactDownloadButton
+            }
+
+            if !isQueueEnabled || videos.isEmpty {
+                Spacer(minLength: 0)
+            }
+
+            playlistMenu
+        }
+        .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+    }
+
+    private var compactDownloadButton: some View {
+        Button {
+            downloadCoordinator.startDownload(videos: videos)
+        } label: {
+            Group {
+                if downloadCoordinator.isDownloading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: cachedAllVideosDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .modifier(PlaylistActionStyleModifier(isIconOnly: true))
+        .disabled(downloadCoordinator.isDownloading || cachedAllVideosDownloaded)
+        .accessibilityLabel(downloadAccessibilityLabel)
+        .accessibilityValue(downloadAccessibilityValue)
+    }
+
+    private var downloadAccessibilityLabel: String {
+        if downloadCoordinator.isDownloading {
+            return String(localized: "video.downloading")
+        }
+        return String(localized: cachedAllVideosDownloaded ? "playlist.downloaded" : "playlist.downloadAll")
+    }
+
+    private var downloadAccessibilityValue: String {
+        guard downloadCoordinator.isDownloading, let progress = downloadCoordinator.progress else { return "" }
+        return "\(progress.current)/\(progress.total)"
+    }
+    #endif
     #endif
 
     // MARK: - tvOS Two-Column Layout
@@ -866,6 +1008,15 @@ struct UnifiedPlaylistDetailView: View {
     }
 
     private var videoList: some View {
+        #if os(iOS)
+        LazyVStack(spacing: 0) {
+            ForEach(Array(videos.enumerated()), id: \.offset) { index, video in
+                playlistVideoButton(at: index, video: video)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+            }
+        }
+        #else
         #if os(tvOS)
         let indexColumnWidth: CGFloat = 60
         #else
@@ -883,20 +1034,25 @@ struct UnifiedPlaylistDetailView: View {
                     listStyle: .plain,
                     indexWidth: indexColumnWidth  // Index column width in VideoRowView
                 ) {
-                    Button {
-                        playFromIndex(index)
-                    } label: {
-                        PlaylistVideoRowView(
-                            index: index + 1,
-                            video: video,
-                            watchProgress: watchProgress(for: video),
-                            onRemove: removeAction(forRow: index)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    playlistVideoButton(at: index, video: video)
                 }
             }
         }
+        #endif
+    }
+
+    private func playlistVideoButton(at index: Int, video: Video) -> some View {
+        Button {
+            playFromIndex(index)
+        } label: {
+            PlaylistVideoRowView(
+                index: index + 1,
+                video: video,
+                watchProgress: watchProgress(for: video),
+                onRemove: removeAction(forRow: index)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Error View
@@ -1471,6 +1627,47 @@ struct UnifiedPlaylistDetailView: View {
         appEnvironment.toastManager.showSuccess(String(localized: "playlist.imported.title"))
     }
 }
+
+// MARK: - iOS Action Styling
+
+#if os(iOS)
+private struct PlaylistActionStyleModifier: ViewModifier {
+    var isProminent = false
+    var isIconOnly = false
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            Group {
+                if isProminent {
+                    content.buttonStyle(.glassProminent)
+                        .tint(.red)
+                        .foregroundStyle(.white)
+                } else {
+                    content.buttonStyle(.glass)
+                        .tint(.primary)
+                }
+            }
+            .buttonBorderShape(.capsule)
+            .buttonSizing(.flexible)
+            .frame(width: isIconOnly ? 40 : nil, height: 40)
+        } else {
+            Group {
+                if isProminent {
+                    content.buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .foregroundStyle(.white)
+                } else {
+                    content.buttonStyle(.bordered)
+                        .tint(.primary)
+                }
+            }
+            .buttonBorderShape(.capsule)
+            .controlSize(.regular)
+            .frame(width: isIconOnly ? 40 : nil, height: 40)
+        }
+    }
+}
+#endif
 
 // MARK: - Preview
 

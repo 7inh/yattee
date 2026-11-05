@@ -5,6 +5,7 @@
 //  A video row for list layouts.
 //
 
+import Foundation
 import SwiftUI
 
 /// A video row for list layouts.
@@ -28,6 +29,15 @@ struct VideoRowView: View {
     var disableInternalTapHandling: Bool = false
     /// When false, hides the thumbnail (e.g. details panel related page setting).
     var showThumbnail: Bool = true
+
+    /// Indexed rows are playlist rows; other platforms retain their usual layout.
+    private var usesCompactPlaylistLayout: Bool {
+        #if os(iOS)
+        index != nil
+        #else
+        false
+        #endif
+    }
 
     // Platform-specific fonts
     #if os(tvOS)
@@ -82,17 +92,21 @@ struct VideoRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: usesCompactPlaylistLayout ? 8 : 12) {
             // Index number (for playlists)
             if let index {
                 Text("\(index)")
-                    .font(.subheadline)
+                    .font(usesCompactPlaylistLayout ? .caption : .subheadline)
                     .foregroundStyle(.secondary)
                     #if os(tvOS)
                     .lineLimit(1)
                     .frame(width: 60, alignment: .trailing)
                     #else
-                    .frame(width: 32)
+                    #if os(iOS)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    #endif
+                    .frame(width: usesCompactPlaylistLayout ? 20 : 32)
                     #endif
             }
             
@@ -118,7 +132,10 @@ struct VideoRowView: View {
             watchProgress: watchProgress,
             duration: style == .compact ? nil : video.formattedDuration
         )
-        .frame(width: style.thumbnailWidth, height: style.thumbnailHeight)
+        .frame(
+            width: style.thumbnailWidth,
+            height: usesCompactPlaylistLayout ? style.thumbnailWidth * 9 / 16 : style.thumbnailHeight
+        )
         #if !os(tvOS)
         .contentShape(Rectangle())
         .if(thumbnailTapAction != .playVideo && !disableInternalTapHandling) { view in
@@ -138,40 +155,13 @@ struct VideoRowView: View {
                 .font(titleFont)
                 .lineLimit(style == .large ? 3 : style == .regular ? 2 : 1)
 
-            HStack(spacing: 4) {
-                if style == .compact {
-                    // In compact mode, show author and duration inline with dot separator
-                    let duration = video.formattedDuration
-                    if !duration.isEmpty {
-                        Text("\(video.author.name) · \(duration)")
-                            .font(authorFont)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(video.author.name)
-                            .font(authorFont)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Text(video.author.name)
-                        .font(authorFont)
-                        .foregroundStyle(.secondary)
-                }
-                
-                if showSourceBadge {
-                    SourceBadge(source: video.id.source)
-                }
-            }
-
-            if style != .compact {
-                if let custom = customMetadata {
-                    Text(custom)
-                        .font(metadataFont)
-                        .foregroundStyle(.tertiary)
-                } else if video.viewCount != nil || video.formattedPublishedDate != nil {
-                    VideoMetadataLine(viewCount: video.formattedViewCount, publishedText: video.formattedPublishedDate)
-                        .font(metadataFont)
-                        .foregroundStyle(.tertiary)
-                }
+            if usesCompactPlaylistLayout {
+                Text(playlistMetadataText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else {
+                standardMetadata
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,6 +175,50 @@ struct VideoRowView: View {
             )
         }
         #endif
+    }
+
+    private var playlistMetadataText: String {
+        let metadata = customMetadata.map { [$0] } ?? [video.formattedViewCount, video.formattedPublishedDate].compactMap { $0 }
+        return ([video.author.name] + metadata).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var standardMetadata: some View {
+        HStack(spacing: 4) {
+            if style == .compact {
+                // In compact mode, show author and duration inline with dot separator
+                let duration = video.formattedDuration
+                if !duration.isEmpty {
+                    Text("\(video.author.name) · \(duration)")
+                        .font(authorFont)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(video.author.name)
+                        .font(authorFont)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text(video.author.name)
+                    .font(authorFont)
+                    .foregroundStyle(.secondary)
+            }
+
+            if showSourceBadge {
+                SourceBadge(source: video.id.source)
+            }
+        }
+
+        if style != .compact {
+            if let custom = customMetadata {
+                Text(custom)
+                    .font(metadataFont)
+                    .foregroundStyle(.tertiary)
+            } else if video.viewCount != nil || video.formattedPublishedDate != nil {
+                VideoMetadataLine(viewCount: video.formattedViewCount, publishedText: video.formattedPublishedDate)
+                    .font(metadataFont)
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
     
     #if !os(tvOS)
