@@ -43,15 +43,34 @@ struct MiniPlayerView: View {
 
         var body: some View {
             view.content(compact: placement == .inline)
-                .padding(.leading, 6)
-                .padding(.trailing, 4)
+                .padding(.leading, 8)
+                .padding(.trailing, 6)
+                .padding(.vertical, placement == .inline ? 0 : 4)
+                .overlay(alignment: .bottom) {
+                    if placement != .inline {
+                        view.progressLine
+                            .padding(.horizontal, 18)
+                    }
+                }
         }
     }
 
     private var isPlaying: Bool { state?.playbackState == .playing }
 
+    fileprivate var progressLine: some View {
+        GeometryReader { geo in
+            let p = max(0, min(1, state?.progress ?? 0))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.25))
+                Capsule().fill(Color.red).frame(width: geo.size.width * p)
+            }
+        }
+        .frame(height: 2.5)
+        .accessibilityHidden(true)
+    }
+
     fileprivate func content(compact: Bool) -> some View {
-        let art: CGFloat = compact ? 26 : 34
+        let art: CGFloat = compact ? 26 : 40
         return HStack(spacing: compact ? 8 : 10) {
             Button {
                 appEnvironment?.navigationCoordinator.expandPlayer()

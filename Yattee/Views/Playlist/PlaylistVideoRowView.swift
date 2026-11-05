@@ -20,8 +20,7 @@ struct PlaylistVideoRowView: View {
         VideoRowView(
             video: video,
             style: .regular,
-            watchProgress: watchProgress,
-            index: index
+            watchProgress: watchProgress
         )
         .videoContextMenu(
             video: video,
