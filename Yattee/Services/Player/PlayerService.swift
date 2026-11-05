@@ -150,6 +150,11 @@ final class PlayerService {
     /// Used to prevent saving progress when switching to next video after natural completion.
     private var videoEndedNaturally = false
 
+    #if os(iOS)
+    /// Prevents pending loads or backend recovery from undoing a sleep timer pause.
+    private var isPausedBySleepTimer = false
+    #endif
+
     /// Bumped every time the playback identity changes hands: a load claiming
     /// the player, or a teardown clearing it. Work that suspends mid-playback
     /// captures it and compares on the way back, so a continuation belonging to
@@ -233,6 +238,9 @@ final class PlayerService {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.state.publishesTimeUpdates = true
+                #if os(iOS)
+                SleepTimer.shared.checkForExpiration()
+                #endif
             }
         }
         #endif
@@ -255,6 +263,10 @@ final class PlayerService {
     ///   - forceStartTime: When true, startTime is an explicit user request (timed link,
     ///     chapter tap) and is honored even past the completion threshold
     func play(video: Video, stream: Stream? = nil, audioStream: Stream? = nil, startTime: TimeInterval? = nil, forceStartTime: Bool = false) async {
+        #if os(iOS)
+        isPausedBySleepTimer = false
+        #endif
+
         // Downloaded/local files bypass stream selection (they arrive here as
         // ready-made file:// streams), so audio mode is applied at this choke
         // point instead of in selectStreams.
@@ -584,7 +596,15 @@ final class PlayerService {
             // Without this, audio may start while thumbnail is still visible.
             try? await Task.sleep(nanoseconds: 250_000_000)  // 250ms (animation is 200ms)
 
+            #if os(iOS)
+            if isPausedBySleepTimer {
+                pause()
+            } else {
+                backend.play()
+            }
+            #else
             backend.play()
+            #endif
 
             // Update Handoff activity for cross-device continuation
             handoffManager?.updateActivity(for: .video(.id(video.id)))
@@ -662,14 +682,37 @@ final class PlayerService {
         sleepPreventionService.allowSleep()
         currentBackend?.pause()
         state.setPlaybackState(.paused)
+        #if os(iOS)
+        // A sleep timer leaves a completed video paused rather than ended.
+        // Preserve its completion when a later control action pauses it again.
+        let shouldSaveProgress = shouldSaveProgress && !videoEndedNaturally
+        #endif
         if shouldSaveProgress {
             saveProgress()
         }
         nowPlayingService.updatePlaybackRate(isPlaying: false, currentTime: state.currentTime)
     }
 
+    #if os(iOS)
+    /// Uses the normal pause path, while keeping a pending load from starting later.
+    func pauseForSleepTimer() {
+        guard state.currentVideo != nil else { return }
+        isPausedBySleepTimer = true
+        wasInterrupted = false
+        pause(saveProgress: !videoEndedNaturally && state.playbackState != .ended)
+    }
+    #endif
+
     /// Resumes playback.
     func resume() {
+        #if os(iOS)
+        if isPausedBySleepTimer && videoEndedNaturally {
+            Task { await replayCurrentVideo() }
+            return
+        }
+        isPausedBySleepTimer = false
+        #endif
+
         updateSleepPrevention()
         currentBackend?.play()
         state.setPlaybackState(.playing)
@@ -860,6 +903,10 @@ final class PlayerService {
 
     /// Plays the next video in queue, respecting the current queue mode.
     func playNext() async {
+        #if os(iOS)
+        if SleepTimer.shared.stopAtEndOfVideo(for: self) { return }
+        #endif
+
         // Pause without saving progress if video ended - 100% was already saved in backendDidFinishPlaying
         pause(saveProgress: state.playbackState != .ended)
 
@@ -1364,6 +1411,11 @@ final class PlayerService {
             }
 
             LoggingService.shared.logPlayer("Resuming with stream: \(newStream.qualityLabel) at \(resumeTime ?? 0)s")
+
+            #if os(iOS)
+            // A refresh may have been awaiting the network when the timer fired.
+            guard !isPausedBySleepTimer else { return }
+            #endif
 
             // Resume playback with fresh stream
             await play(video: video, stream: newStream, audioStream: newAudioStream, startTime: resumeTime)
@@ -3081,6 +3133,13 @@ extension PlayerService: PlayerBackendDelegate {
     func backend(_ backend: any PlayerBackend, didChangeState playbackState: PlaybackState) {
         LoggingService.shared.debug("Backend state changed to: \(playbackState)", category: .player)
 
+        #if os(iOS)
+        if isPausedBySleepTimer && playbackState == .playing {
+            pause(saveProgress: !videoEndedNaturally)
+            return
+        }
+        #endif
+
         // Clear the time-update gate once the new video is loaded, in case the load
         // flow wedged before doing so (issue #956). Only .ready: it comes from mpv's
         // file-loaded event, which only the new load can emit. The previous video
@@ -3181,6 +3240,16 @@ extension PlayerService: PlayerBackendDelegate {
         // already in flight.
         watchHistorySyncService?.endSession()
 
+        #if os(iOS)
+        // Leave the state paused so the visible player's .ended observer cannot
+        // start a countdown. Stop here before repeat-one or background autoplay.
+        if SleepTimer.shared.stopAtEndOfVideo(for: self) { return }
+        if isPausedBySleepTimer {
+            pause(saveProgress: false)
+            return
+        }
+        #endif
+
         delegate?.playerServiceDidFinishPlaying(self)
 
         // Repeat one: restart immediately - no countdown, independent of queue contents
@@ -3225,6 +3294,10 @@ extension PlayerService: PlayerBackendDelegate {
     /// Handles playback errors by auto-skipping to next video if available and player is not visible.
     /// When player is visible, user can manually tap "Play Next" button on the error overlay.
     private func handlePlaybackErrorAutoSkip() async {
+        #if os(iOS)
+        guard !isPausedBySleepTimer else { return }
+        #endif
+
         let autoPlayEnabled = settingsManager?.queueAutoPlayNext ?? true
         let hasNextInQueue = !state.queue.isEmpty
 

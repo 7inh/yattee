@@ -22,6 +22,7 @@ struct OnTheGoPanel: View {
     @State private var pendingSeekTime: TimeInterval?
 
     private var state: PlayerState { playerService.state }
+    private var sleepTimer: SleepTimer { .shared }
     private var duration: TimeInterval {
         state.duration.isFinite ? max(0, state.duration) : 0
     }
@@ -259,6 +260,9 @@ struct OnTheGoPanel: View {
             .accessibilityValue(state.rate.displayText)
 
             Spacer(minLength: 0)
+            sleepTimerMenu
+
+            Spacer(minLength: 0)
             Button {
                 presentAppSheet(.queue())
             } label: {
@@ -280,6 +284,50 @@ struct OnTheGoPanel: View {
             Spacer(minLength: 0)
         }
         .buttonStyle(.plain)
+    }
+
+    private var sleepTimerMenu: some View {
+        Menu {
+            sleepTimerOption(String(localized: "Off"), isSelected: sleepTimer.mode == .off) {
+                sleepTimer.cancel()
+            }
+            ForEach(SleepTimer.durationOptions, id: \.self) { minutes in
+                sleepTimerOption(String(localized: "\(minutes) minutes"), isSelected: sleepTimer.selectedMinutes == minutes) {
+                    sleepTimer.start(minutes: minutes, playerService: playerService)
+                }
+            }
+            sleepTimerOption(String(localized: "End of video"), isSelected: sleepTimer.mode == .endOfVideo) {
+                sleepTimer.startEndOfVideo(playerService: playerService)
+            }
+            .disabled(state.currentVideo == nil)
+        } label: {
+            accessoryIcon(sleepTimer.isActive ? "moon.zzz.fill" : "moon.zzz")
+                .overlay(alignment: .bottom) {
+                    if let caption = sleepTimer.caption {
+                        Text(caption)
+                            .font(.caption2.monospacedDigit())
+                            .offset(y: 8)
+                            .accessibilityHidden(true)
+                    }
+                }
+        }
+        .menuIndicator(.hidden)
+        .tint(sleepTimer.isActive ? Color.accentColor : .primary)
+        .foregroundStyle(sleepTimer.isActive ? Color.accentColor : .primary)
+        .disabled(state.isControlsLocked)
+        .accessibilityLabel("Sleep timer")
+        .accessibilityValue(sleepTimer.caption ?? String(localized: "Off"))
+    }
+
+    private func sleepTimerOption(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                }
+            }
+        }
     }
 
     private func accessoryIcon(_ image: String) -> some View {
