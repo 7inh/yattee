@@ -845,17 +845,8 @@ struct ControlsSectionRenderer: View {
         let frameSize = buttonBackground.glassStyle != nil ? buttonBackgroundSize : buttonSize.pointSize
 
         Menu {
-            ForEach(PlaybackRate.allCases) { rate in
-                Button {
-                    actions.onRateChanged?(rate)
-                } label: {
-                    HStack {
-                        Text(rate.displayText)
-                        if actions.playerState.rate == rate {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
+            PlaybackSpeedMenuContent(currentRate: actions.playerState.rate) { rate in
+                actions.onRateChanged?(rate)
             }
         } label: {
             playbackSpeedLabel(hasText: hasText, frameSize: frameSize)

@@ -139,6 +139,13 @@ extension ExpandedPlayerSheet {
         let videoDetailsState = playerState?.videoDetailsState ?? .idle
         let shouldUseCompactPanel = videoDetailsState == .loaded && !hasDescription
 
+        #if os(iOS)
+        let canPresentOnTheGo = UIDevice.current.userInterfaceIdiom == .phone && !isWideScreenLayout(size: geometry.size)
+        let usesOnTheGoPanel = canPresentOnTheGo && isOnTheGoPresented
+        #else
+        let usesOnTheGoPanel = false
+        #endif
+
         // Check if expanded comments pill will be visible (needs extra panel height)
         let pillSettings = playerControlsLayout.effectivePlayerPillSettings
         let commentsPillMode = playerControlsLayout.effectivePanelSettings.commentsPillMode
@@ -151,8 +158,8 @@ extension ExpandedPlayerSheet {
             !commentsPillMode.alwaysCollapsed
 
         let minPanelHeight: CGFloat = useCompactPanel ? 150 : 200
-        // When compact panel but expanded comments pill visible, need taller panel (~250pt)
-        let maxPanelHeight: CGFloat = useCompactPanel ? (hasExpandedCommentsPill ? 250 : 190) : .infinity
+        // Expanded comments need a taller compact panel. On-the-go uses all space below the video.
+        let maxPanelHeight: CGFloat = useCompactPanel && !usesOnTheGoPanel ? (hasExpandedCommentsPill ? 250 : 190) : .infinity
 
         let maxVideoHeight = max(1, screenHeight - minPanelHeight)
 
@@ -482,6 +489,7 @@ extension ExpandedPlayerSheet {
                             playerControlsLayout: playerControlsLayout,
                             onFullscreen: { [self] in toggleFullscreen() },
                             pillsOverlayOpacity: pillsOverlayOpacity,
+                            onTheGoPresentation: canPresentOnTheGo ? $isOnTheGoPresented : nil,
                             onDragChanged: { [self] offset in
                                 // Set drag flags only on transition to avoid 120/sec @Observable writes
                                 if !isPanelDragging {
@@ -591,6 +599,15 @@ extension ExpandedPlayerSheet {
                                 }
                             }
                         )
+                        .onChange(of: isOnTheGoPresented) { _, isPresented in
+                            if isPresented {
+                                // Keep the video visible if the details were expanded over it.
+                                isPanelExpanded = false
+                                panelExpandOffset = 0
+                                panelDragOffset = 0
+                                videoYOffset = 0
+                            }
+                        }
                         .frame(height: {
                             let normalHeight = pinnedPanelHeight + safeAreaInsets.bottom
                             let expandedHeight = screenHeight + safeAreaInsets.bottom

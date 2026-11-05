@@ -63,6 +63,10 @@ struct ExpandedPlayerSheet: View {
     @State var panelExpandOffset: CGFloat = 0
     /// Whether to use compact panel (no description) - animated state
     @State var useCompactPanel: Bool = false
+    #if os(iOS)
+    /// Session-only presentation state for the iPhone portrait controls panel.
+    @State var isOnTheGoPresented: Bool = false
+    #endif
     /// Track if we're in widescreen layout for status bar hiding
     @State private var isInWideScreenLayout = false
     /// Active player controls layout from preset (loaded once, updated on notification)

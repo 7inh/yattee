@@ -18,6 +18,9 @@ struct PortraitDetailsPanel: View {
     let onFullscreen: (() -> Void)?
     let pillsOverlayOpacity: CGFloat
 
+    /// Supplied only by the iPhone portrait host. Other layouts keep their details.
+    var onTheGoPresentation: Binding<Bool>? = nil
+
     /// Corner layout host: comments live in the side column, so the pill is
     /// suppressed entirely.
     var hidesCommentsPill: Bool = false
@@ -53,6 +56,8 @@ struct PortraitDetailsPanel: View {
     private var playerService: PlayerService? { appEnvironment?.playerService }
     private var playerState: PlayerState? { playerService?.state }
     private var isPanelDragging: Bool { appEnvironment?.navigationCoordinator.isPanelDragging ?? false }
+
+    private var isOnTheGoActive: Bool { onTheGoPresentation?.wrappedValue ?? false }
 
     // Read video from playerState for reactive updates
     private var video: Video? { playerState?.currentVideo }
@@ -157,92 +162,20 @@ struct PortraitDetailsPanel: View {
 
     var body: some View {
         if let video {
-            ZStack(alignment: .top) {
-                // Unified page content (page bar + selected page)
-                PlayerPanelContentView(
-                    panelSettings: panelSettings,
-                    selectedPage: $selectedPage,
-                    context: PanelPageContext(
-                        appEnvironment: appEnvironment,
-                        video: video,
-                        accentColor: accentColor,
-                        onChannelTap: onChannelTap
-                    ),
-                    scrollConfig: PanelScrollConfig(
-                        topInset: 10,
-                        bottomInset: hasVideoDescription ? 80 : 50,
-                        scrollOffsetChanged: { offset in
-                            scrollOffset = offset
-                        },
-                        scrollToTopTrigger: scrollToTopTrigger,
-                        isScrollDisabled: isDraggingHandle,
-                        onOverscrollDragChanged: { offset in
-                            onDragChanged?(offset)
-                        },
-                        onOverscrollDragEnded: { offset, predicted in
-                            onDragEnded?(offset, predicted)
-                        }
-                    ),
-                    pageBarTopPadding: 14,
-                    showPageBar: false,
-                    inlineInfoSections: inlineInfoSections
-                )
-                .background(Color(.systemBackground))
-                .overlay(alignment: .bottom) {
-                    bottomFadeOverlay
-                }
-
-                // Extended drag hit area overlay - visual handle at top, hit area
-                // extends down over the title (the portrait panel has no page bar)
-                VStack(spacing: 0) {
-                    dragHandle
-                    Spacer()
-                }
-                .frame(height: 50)
-                .frame(maxWidth: .infinity)
-                .background(alignment: .top) {
-                    LinearGradient(
-                        colors: [Color(.systemBackground), Color(.systemBackground).opacity(0)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 25)
-                    .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    DragGesture(coordinateSpace: .global)
-                        .updating($isDraggingHandle) { _, state, _ in
-                            state = true
-                        }
-                        .onChanged { value in
-                            // Allow both upward (negative) and downward (positive) drag
-                            let offset = value.translation.height
-                            onDragChanged?(offset)
-                        }
-                        .onEnded { value in
-                            onDragEnded?(value.translation.height, value.predictedEndTranslation.height)
-                        }
-                )
-                .onChange(of: isDraggingHandle) { oldValue, newValue in
-                    // When gesture state resets (true -> false) but onEnded wasn't called,
-                    // the gesture was cancelled (app backgrounded, control center, etc.)
-                    if oldValue && !newValue {
-                        // Small delay to let onEnded fire first if it will
-                        DispatchQueue.main.async {
-                            // If still dragging according to parent, it was a cancellation
-                            if appEnvironment?.navigationCoordinator.isPanelDragging == true {
-                                onDragCancelled?()
-                            }
-                        }
+            Group {
+                if isOnTheGoActive, let playerService {
+                    OnTheGoPanel(playerService: playerService) {
+                        onTheGoPresentation?.wrappedValue = false
                     }
+                } else {
+                    detailsContent(video: video)
                 }
             }
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: panelCornerRadius))
             // Pills overlay at bottom
             .overlay {
-                if !isCommentsExpanded {
+                if !isOnTheGoActive && !isCommentsExpanded {
                     pillsOverlay
                         .padding(.leading, pillsLeadingInset)
                         .opacity(pillsOverlayOpacity)
@@ -252,7 +185,7 @@ struct PortraitDetailsPanel: View {
             // Expanded comments overlay (only when the comments page is not
             // available; the pill then falls back to the overlay path)
             .overlay {
-                if !isCommentsPageAvailable {
+                if !isOnTheGoActive && !isCommentsPageAvailable {
                     expandedCommentsOverlay(video: video)
                 }
             }
@@ -262,6 +195,111 @@ struct PortraitDetailsPanel: View {
             }
             .onChange(of: isCommentsExpanded) { _, newValue in
                 appEnvironment?.navigationCoordinator.isCommentsExpanded = newValue
+            }
+        }
+    }
+
+    // MARK: - Normal Details
+
+    private func detailsContent(video: Video) -> some View {
+        ZStack(alignment: .top) {
+            // Unified page content (page bar + selected page)
+            PlayerPanelContentView(
+                panelSettings: panelSettings,
+                selectedPage: $selectedPage,
+                context: PanelPageContext(
+                    appEnvironment: appEnvironment,
+                    video: video,
+                    accentColor: accentColor,
+                    onChannelTap: onChannelTap
+                ),
+                scrollConfig: PanelScrollConfig(
+                    topInset: 10,
+                    bottomInset: hasVideoDescription ? 80 : 50,
+                    scrollOffsetChanged: { offset in
+                        scrollOffset = offset
+                    },
+                    scrollToTopTrigger: scrollToTopTrigger,
+                    isScrollDisabled: isDraggingHandle,
+                    onOverscrollDragChanged: { offset in
+                        onDragChanged?(offset)
+                    },
+                    onOverscrollDragEnded: { offset, predicted in
+                        onDragEnded?(offset, predicted)
+                    }
+                ),
+                pageBarTopPadding: 14,
+                showPageBar: false,
+                inlineInfoSections: inlineInfoSections
+            )
+            .padding(.top, onTheGoPresentation == nil ? 0 : 44)
+            .background(Color(.systemBackground))
+            .overlay(alignment: .bottom) {
+                bottomFadeOverlay
+            }
+
+            // Extended drag hit area overlay - visual handle at top, hit area
+            // extends down over the title (the portrait panel has no page bar)
+            VStack(spacing: 0) {
+                dragHandle
+                Spacer()
+            }
+            .frame(height: 50)
+            .frame(maxWidth: .infinity)
+            .background(alignment: .top) {
+                LinearGradient(
+                    colors: [Color(.systemBackground), Color(.systemBackground).opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 25)
+                .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(coordinateSpace: .global)
+                    .updating($isDraggingHandle) { _, state, _ in
+                        state = true
+                    }
+                    .onChanged { value in
+                        // Allow both upward (negative) and downward (positive) drag
+                        let offset = value.translation.height
+                        onDragChanged?(offset)
+                    }
+                    .onEnded { value in
+                        onDragEnded?(value.translation.height, value.predictedEndTranslation.height)
+                    }
+            )
+            .onChange(of: isDraggingHandle) { oldValue, newValue in
+                // When gesture state resets (true -> false) but onEnded wasn't called,
+                // the gesture was cancelled (app backgrounded, control center, etc.)
+                if oldValue && !newValue {
+                    // Small delay to let onEnded fire first if it will
+                    DispatchQueue.main.async {
+                        // If still dragging according to parent, it was a cancellation
+                        if appEnvironment?.navigationCoordinator.isPanelDragging == true {
+                            onDragCancelled?()
+                        }
+                    }
+                }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if onTheGoPresentation != nil {
+                Button {
+                    collapseComments()
+                    onTheGoPresentation?.wrappedValue = true
+                } label: {
+                    Label("On-the-go", systemImage: "car")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 16)
+                .padding(.top, 20)
             }
         }
     }
