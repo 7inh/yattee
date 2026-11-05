@@ -90,9 +90,6 @@ struct OnTheGoPanel: View {
                     transportControls
                     Spacer(minLength: Layout.smallSpacing)
                     accessoryBar
-                    AirPlayButton(tintColor: .label)
-                        .frame(width: 44, height: 44)
-                        .frame(maxWidth: .infinity)
                     if case .failed(let error) = state.playbackState {
                         Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
                         Button("Retry") { Task { await playerService.replayCurrentVideo() } }
@@ -221,7 +218,7 @@ struct OnTheGoPanel: View {
     private var seekControls: some View {
         VStack(alignment: .leading, spacing: 0) {
             GeometryReader { geometry in
-                let trackWidth = max(1, geometry.size.width - Layout.seekInset * 2)
+                let trackWidth = max(1, geometry.size.width)
                 let progress = duration > 0 ? CGFloat(displayedTime / duration) : 0
 
                 ZStack(alignment: .leading) {
@@ -236,10 +233,9 @@ struct OnTheGoPanel: View {
                         .frame(width: 20, height: 20)
                         .scaleEffect(scrubTime == nil ? 1 : 1.2)
                         .animation(.easeOut(duration: 0.15), value: scrubTime != nil)
-                        .offset(x: trackWidth * progress - 10)
+                        .offset(x: min(max(0, trackWidth * progress - 10), trackWidth - 20))
                 }
                 .frame(width: trackWidth, height: 44)
-                .padding(.horizontal, Layout.seekInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
@@ -287,7 +283,7 @@ struct OnTheGoPanel: View {
     }
 
     private func seekTime(at position: CGFloat, trackWidth: CGFloat) -> TimeInterval {
-        boundedTime(Double((position - Layout.seekInset) / trackWidth) * duration)
+        boundedTime(Double(position / trackWidth) * duration)
     }
 
     private func seek(to time: TimeInterval) {
@@ -318,7 +314,7 @@ struct OnTheGoPanel: View {
 
     private var transportButtons: some View {
         HStack(spacing: 0) {
-            transportButton("backward.end", label: String(localized: "menu.playback.previousVideo"), disabled: !state.hasPrevious || isTransportDisabled) {
+            transportButton("backward.end", size: .small, label: String(localized: "menu.playback.previousVideo"), disabled: !state.hasPrevious || isTransportDisabled) {
                 Task { await playerService.playPrevious() }
             }
             Spacer(minLength: 0)
@@ -332,7 +328,7 @@ struct OnTheGoPanel: View {
             } label: {
                 playPauseLabel
             }
-            .modifier(OnTheGoTransportStyleModifier(isProminent: true))
+            .modifier(OnTheGoTransportStyleModifier(isProminent: true, size: .large))
             .disabled(isTransportDisabled)
             .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
@@ -340,7 +336,7 @@ struct OnTheGoPanel: View {
                 playerService.seekForward(by: 10)
             }
             Spacer(minLength: 0)
-            transportButton("forward.end", label: String(localized: "menu.playback.nextVideo"), disabled: !state.hasNext || isTransportDisabled) {
+            transportButton("forward.end", size: .small, label: String(localized: "menu.playback.nextVideo"), disabled: !state.hasNext || isTransportDisabled) {
                 Task { await playerService.playNext() }
             }
         }
@@ -350,12 +346,12 @@ struct OnTheGoPanel: View {
     private var playPauseLabel: some View {
         if #available(iOS 26, *) {
             playPauseSymbol
-                .font(.system(size: 36, weight: .semibold))
+                .font(.system(size: 44, weight: .semibold))
         } else {
             playPauseSymbol
-                .font(.system(size: 44, weight: .semibold))
+                .font(.system(size: 52, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 88, height: 88)
+                .frame(width: 104, height: 104)
                 .background(onTheGoAccent, in: Circle())
                 .opacity(isTransportDisabled ? 0.4 : 1)
                 .contentShape(Circle())
@@ -368,7 +364,7 @@ struct OnTheGoPanel: View {
             .animation(.easeInOut(duration: 0.2), value: state.playbackState == .playing)
     }
 
-    private func transportButton(_ image: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+    private func transportButton(_ image: String, size: TransportSize = .regular, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button {
             transportFeedbackTrigger.toggle()
             action()
@@ -376,17 +372,17 @@ struct OnTheGoPanel: View {
             if #available(iOS 26, *) {
                 Image(systemName: image)
                     .symbolVariant(.none)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: size == .small ? 15 : 28, weight: .semibold))
             } else {
                 Image(systemName: image)
                     .symbolVariant(.none)
-                    .font(.system(size: 40, weight: .semibold))
+                    .font(.system(size: size == .small ? 20 : 40, weight: .semibold))
                     .foregroundStyle(disabled ? Color(.tertiaryLabel) : Color(.label))
                     .frame(width: 60, height: 60)
                     .contentShape(Rectangle())
             }
         }
-        .modifier(OnTheGoTransportStyleModifier())
+        .modifier(OnTheGoTransportStyleModifier(size: size))
         .disabled(disabled)
         .accessibilityLabel(label)
     }
@@ -517,8 +513,20 @@ struct OnTheGoPanel: View {
 // MARK: - Transport Styling
 
 /// Native glass supplies press feedback on iOS 26; older systems use a scale effect.
+private enum TransportSize {
+    case small, regular, large
+    var diameter: CGFloat {
+        switch self {
+        case .small: 44
+        case .regular: 56
+        case .large: 104
+        }
+    }
+}
+
 private struct OnTheGoTransportStyleModifier: ViewModifier {
     var isProminent = false
+    var size: TransportSize = .regular
 
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
@@ -533,7 +541,7 @@ private struct OnTheGoTransportStyleModifier: ViewModifier {
             }
             .buttonBorderShape(.circle)
             .buttonSizing(.flexible)
-            .frame(width: isProminent ? 88 : 56, height: isProminent ? 88 : 56)
+            .frame(width: size.diameter, height: size.diameter)
         } else {
             content.buttonStyle(OnTheGoTransportButtonStyle())
         }
