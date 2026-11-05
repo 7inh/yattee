@@ -36,6 +36,10 @@ final class AVAudioBackend: PlayerBackend {
     private var generation = UUID()
     private var seekGeneration = UUID()
     private var loadingAsset: AVURLAsset?
+    private let dashPlaylistLoader = DASHAudioPlaylistLoader()
+    private var playlistTask: Task<String, Error>?
+    // AVAssetResourceLoader holds its delegate weakly; retain it for the whole item lifetime.
+    private var playlistResourceLoader: DASHAudioResourceLoader?
     private var wantsToPlay = false
     private var defersReady = false
     private var reportedReady = false
@@ -69,9 +73,7 @@ final class AVAudioBackend: PlayerBackend {
         do {
             try activateAudioSession()
             // Validation above prevents opening muxed/video assets or HLS masters.
-            let asset = AVURLAsset(url: audio.url, options: audio.httpHeaders.map {
-                ["AVURLAssetHTTPHeaderFieldsKey": $0]
-            })
+            let asset = try await makeAudioAsset(for: audio, generation: token)
             loadingAsset = asset
             guard try await asset.load(.isPlayable) else {
                 throw BackendError.loadFailed("The audio rendition is not playable")
@@ -109,6 +111,36 @@ final class AVAudioBackend: PlayerBackend {
         }
     }
 
+    private func makeAudioAsset(for audio: Stream, generation token: UUID) async throws -> AVURLAsset {
+        let options = audio.httpHeaders.map { ["AVURLAssetHTTPHeaderFieldsKey": $0] }
+        if !audio.isLive, audio.mimeType?.lowercased().hasPrefix("audio/mp4") == true,
+           audio.initRange != nil, audio.indexRange != nil {
+            let task = Task { try await dashPlaylistLoader.playlist(for: audio) }
+            playlistTask = task
+            do {
+                let playlist = try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+                try checkLoad(token)
+                playlistTask = nil
+                let loader = DASHAudioResourceLoader(playlist: playlist)
+                let asset = AVURLAsset(url: loader.url, options: options)
+                asset.resourceLoader.setDelegate(loader, queue: .main)
+                playlistResourceLoader = loader
+                LoggingService.shared.logPlayer("Audio: using generated DASH HLS byte-range playlist")
+                return asset
+            } catch {
+                try checkLoad(token)
+                playlistTask = nil
+                LoggingService.shared.logPlayerError("Audio DASH playlist failed; falling back to direct URL", error: error)
+            }
+        }
+        try checkLoad(token)
+        return AVURLAsset(url: audio.url, options: options)
+    }
+
     func play() {
         guard player.currentItem?.status == .readyToPlay else { return }
         if case .failed = playbackState { return }
@@ -140,6 +172,8 @@ final class AVAudioBackend: PlayerBackend {
     private func resetPlayback() {
         generation = UUID()
         seekGeneration = UUID()
+        playlistTask?.cancel()
+        playlistTask = nil
         loadingAsset?.cancelLoading()
         loadingAsset = nil
         wantsToPlay = false
@@ -152,6 +186,7 @@ final class AVAudioBackend: PlayerBackend {
         player.pause()
         player.currentItem?.cancelPendingSeeks()
         player.replaceCurrentItem(with: nil)
+        playlistResourceLoader = nil
         defersReady = false
         reportedReady = false
         setState(.idle)

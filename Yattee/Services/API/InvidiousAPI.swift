@@ -1602,9 +1602,18 @@ private struct InvidiousAdaptiveFormat: Decodable, Sendable {
     let resolution: String?
     let bitrate: String?
     let clen: String?
+    let initRange: String?
+    let indexRange: String?
     let audioTrack: InvidiousAudioTrack?
     let audioQuality: String?
     let fps: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case url, itag, type, container, encoding, resolution, bitrate, clen
+        case audioTrack, audioQuality, fps
+        case initRange = "init"
+        case indexRange = "index"
+    }
 
     var isAudioOnly: Bool {
         type?.starts(with: "audio/") ?? false
@@ -1638,7 +1647,9 @@ private struct InvidiousAdaptiveFormat: Decodable, Sendable {
             audioLanguage: language,
             audioTrackName: trackName,
             isOriginalAudio: isOriginal,
-            fps: isAudioOnly ? nil : fps
+            fps: isAudioOnly ? nil : fps,
+            initRange: initRange,
+            indexRange: indexRange
         )
     }
 

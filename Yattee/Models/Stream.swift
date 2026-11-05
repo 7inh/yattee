@@ -36,6 +36,10 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
     /// File size in bytes if known.
     let fileSize: Int64?
 
+    /// Inclusive byte ranges for the DASH initialization data and segment index.
+    let initRange: String?
+    let indexRange: String?
+
     /// Whether this is an audio-only stream.
     let isAudioOnly: Bool
 
@@ -96,7 +100,9 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
         audioTrackName: String? = nil,
         isOriginalAudio: Bool = false,
         httpHeaders: [String: String]? = nil,
-        fps: Int? = nil
+        fps: Int? = nil,
+        initRange: String? = nil,
+        indexRange: String? = nil
     ) {
         self.url = url
         self.resolution = resolution
@@ -105,6 +111,8 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
         self.audioCodec = audioCodec
         self.bitrate = bitrate
         self.fileSize = fileSize
+        self.initRange = initRange
+        self.indexRange = indexRange
         self.isAudioOnly = isAudioOnly
         self.isLive = isLive
         self.mimeType = mimeType
@@ -216,7 +224,9 @@ extension Stream {
             audioLanguage: audioLanguage,
             audioTrackName: audioTrackName,
             isOriginalAudio: isOriginalAudio,
-            httpHeaders: httpHeaders
+            httpHeaders: httpHeaders,
+            initRange: initRange,
+            indexRange: indexRange
         )
     }
 }
@@ -242,7 +252,9 @@ extension Stream {
             audioTrackName: audioTrackName,
             isOriginalAudio: isOriginalAudio,
             httpHeaders: httpHeaders,
-            fps: fps
+            fps: fps,
+            initRange: initRange,
+            indexRange: indexRange
         )
     }
 }
