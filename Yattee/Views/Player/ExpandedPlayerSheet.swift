@@ -673,6 +673,11 @@ private struct PlayerEventHandlersModifier: ViewModifier {
             .onChange(of: playerState?.playbackState) { oldState, newState in
                 handlePlaybackStateChange(oldState: oldState, newState: newState)
             }
+            .onChange(of: isAutoPlayEnabled) { _, enabled in
+                if !enabled {
+                    stopAutoplayCountdown()
+                }
+            }
             .onChange(of: playerState?.isBufferReady) { oldValue, newValue in
                 if newValue == true && oldValue != true {
                     startPreloadingComments()

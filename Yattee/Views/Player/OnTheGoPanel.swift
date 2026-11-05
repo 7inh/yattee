@@ -23,6 +23,9 @@ struct OnTheGoPanel: View {
 
     private var state: PlayerState { playerService.state }
     private var sleepTimer: SleepTimer { .shared }
+    private var isAutoPlayNextEnabled: Bool {
+        appEnvironment?.settingsManager.queueAutoPlayNext ?? true
+    }
     private var duration: TimeInterval {
         state.duration.isFinite ? max(0, state.duration) : 0
     }
@@ -243,7 +246,7 @@ struct OnTheGoPanel: View {
     // MARK: - Accessories
 
     private var accessoryControls: some View {
-        HStack {
+        HStack(spacing: 0) {
             Spacer(minLength: 0)
             Menu {
                 PlaybackSpeedMenuContent(currentRate: state.rate) { rate in
@@ -261,6 +264,17 @@ struct OnTheGoPanel: View {
 
             Spacer(minLength: 0)
             sleepTimerMenu
+
+            Spacer(minLength: 0)
+            Button {
+                appEnvironment?.settingsManager.queueAutoPlayNext.toggle()
+            } label: {
+                accessoryIcon("play.square.stack.fill")
+            }
+            .foregroundStyle(isAutoPlayNextEnabled ? Color.accentColor : .secondary)
+            .disabled(state.isControlsLocked || appEnvironment == nil)
+            .accessibilityLabel(String(localized: "controls.button.autoPlayNext"))
+            .accessibilityValue(isAutoPlayNextEnabled ? String(localized: "On") : String(localized: "Off"))
 
             Spacer(minLength: 0)
             Button {

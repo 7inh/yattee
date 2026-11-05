@@ -20,6 +20,12 @@ extension ExpandedPlayerSheet {
 
         autoplayTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [self] _ in
             Task { @MainActor in
+                // The setting may change while the countdown is running.
+                // Sleep timer expiration also leaves playback paused.
+                guard isAutoPlayEnabled, playerState?.playbackState == .ended, !isAutoplayCancelled else {
+                    stopAutoplayCountdown()
+                    return
+                }
                 if autoplayCountdown > 1 {
                     autoplayCountdown -= 1
                 } else {
