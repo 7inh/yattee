@@ -159,9 +159,11 @@ struct AddRemoteServerView: View {
         }
         #else
         formContent
-            .navigationTitle(String(localized: "sources.addRemoteServer"))
             #if os(iOS)
+            .navigationTitle(String(localized: "sources.addInvidiousServer"))
             .navigationBarTitleDisplayMode(.inline)
+            #else
+            .navigationTitle(String(localized: "sources.addRemoteServer"))
             #endif
             .confirmationDialog(
                 String(localized: "sources.yatteeServer.warning.title"),
@@ -347,7 +349,11 @@ struct AddRemoteServerView: View {
             }
             #endif
         } footer: {
+            #if os(iOS)
+            Text(String(localized: "sources.footer.invidiousServer"))
+            #else
             Text(String(localized: "sources.footer.remoteServer"))
+            #endif
         }
     }
 

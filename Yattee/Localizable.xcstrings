@@ -17842,6 +17842,17 @@
         }
       }
     },
+    "sources.addInvidiousServer" : {
+      "comment" : "Navigation title for adding an Invidious server on iOS",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Invidious Server"
+          }
+        }
+      }
+    },
     "sources.addLocalFolder" : {
       "comment" : "Menu item to add a local folder source",
       "localizations" : {
@@ -18477,6 +18488,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Optional. Piped often serves its web frontend from a different address than the API. When set, it is used for opening this instance in the browser and copying its link. Leave empty to use the API URL."
+          }
+        }
+      }
+    },
+    "sources.footer.invidiousServer" : {
+      "comment" : "Footer text for Invidious server URL entry on iOS",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the URL of an Invidious instance."
           }
         }
       }

@@ -2,8 +2,8 @@
 //  AddSourceView.swift
 //  Yattee
 //
-//  Selection screen for adding new sources. Presents a list of source types
-//  with NavigationLinks to dedicated forms for each type.
+//  Opens the remote server form directly on iOS and presents source type
+//  selection with dedicated forms on other platforms.
 //
 
 import SwiftUI
@@ -26,7 +26,14 @@ struct AddSourceView: View {
     @State private var hasLegacyAccountsToImport = false
 
     var body: some View {
-        #if os(tvOS)
+        #if os(iOS)
+        NavigationStack {
+            AddRemoteServerView(dismissSheet: dismiss)
+                .toolbar {
+                    sheetCloseToolbarItem { dismiss() }
+                }
+        }
+        #elseif os(tvOS)
         listContent
             .navigationDestination(isPresented: $navigateToWebDAV) {
                 TVSidebarDetailContainer(
@@ -60,9 +67,6 @@ struct AddSourceView: View {
         NavigationStack {
             listContent
                 .navigationTitle(String(localized: "sources.newSource"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     sheetCloseToolbarItem { dismiss() }
                 }
