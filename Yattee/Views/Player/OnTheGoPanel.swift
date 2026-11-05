@@ -478,6 +478,7 @@ private struct OnTheGoTransportStyleModifier: ViewModifier {
             Group {
                 if isProminent {
                     content.buttonStyle(.glassProminent)
+                        .foregroundStyle(.white)
                 } else {
                     content.buttonStyle(.glass)
                 }
