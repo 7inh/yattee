@@ -11,10 +11,9 @@ struct PlayerPanelScrollDetents: Sendable {
     let halfOpenOffset: CGFloat
     let fullQueueOffset: CGFloat
 
-    /// Limits queue deceleration so momentum cannot collapse the player.
-    func queueTargetOffset(startOffset: CGFloat, proposedOffset: CGFloat) -> CGFloat {
-        guard startOffset >= fullQueueOffset - 1 else { return proposedOffset }
-        return max(fullQueueOffset, proposedOffset)
+    /// Reaching A during a gesture from B/C must not enable dismissal mid-drag.
+    static func allowsDismissal(offset: CGFloat, gestureStartOffset: CGFloat?) -> Bool {
+        offset <= 1 && (gestureStartOffset ?? offset) <= 1
     }
 
     /// A nil destination leaves native queue scrolling or top-edge dismissal alone.
@@ -22,11 +21,8 @@ struct PlayerPanelScrollDetents: Sendable {
         let tolerance: CGFloat = 1
         let flickVelocity: CGFloat = 250
 
-        // A gesture that began inside the queue can return to its top, but
-        // collapsing the player requires another gesture from that boundary.
-        if startOffset > fullQueueOffset + tolerance {
-            return releaseOffset < fullQueueOffset ? fullQueueOffset : nil
-        }
+        // Only releases still inside the queue retain native scrolling. Once
+        // the finger crosses C, the same gesture can collapse the panel.
         if startOffset >= fullQueueOffset - tolerance, releaseOffset > fullQueueOffset {
             return nil
         }
@@ -35,12 +31,19 @@ struct PlayerPanelScrollDetents: Sendable {
         }
 
         let offsets: [CGFloat] = [0, halfOpenOffset, fullQueueOffset]
+        let nearestOffset = offsets.min { abs($0 - releaseOffset) < abs($1 - releaseOffset) }
+        guard abs(velocity) >= flickVelocity else { return nearestOffset }
+
+        // A flick advances at least one detent. Project from the release so a
+        // long drag or fast flick can also pass B on its way between A and C.
+        let projectedOffset = releaseOffset + velocity * 0.2
+        let projectedDetent = offsets.min { abs($0 - projectedOffset) < abs($1 - projectedOffset) } ?? 0
+        let panelStartOffset = min(fullQueueOffset, max(0, startOffset))
         if velocity >= flickVelocity {
-            return offsets.first { $0 > startOffset + tolerance } ?? fullQueueOffset
+            let nextOffset = offsets.first { $0 > panelStartOffset + tolerance } ?? fullQueueOffset
+            return max(nextOffset, projectedDetent)
         }
-        if velocity <= -flickVelocity {
-            return offsets.last { $0 < startOffset - tolerance } ?? 0
-        }
-        return offsets.min { abs($0 - releaseOffset) < abs($1 - releaseOffset) }
+        let previousOffset = offsets.last { $0 < panelStartOffset - tolerance } ?? 0
+        return min(previousOffset, projectedDetent)
     }
 }

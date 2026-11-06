@@ -37,12 +37,12 @@ struct OnTheGoPanel: View {
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var panelScrollOffset: CGFloat = 0
-    @State private var isPanelAtTop = true
     @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
         screenHeight: 0, topSafeArea: 0, headerHeight: Layout.headerHeight, noticesHeight: 0
     )
     @State private var playbackNoticesHeight: CGFloat = 0
-    @State private var scrollGestureStartOffset: CGFloat = 0
+    @State private var scrollGestureStartOffset: CGFloat?
+    @State private var isQueueDecelerating = false
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
@@ -86,6 +86,12 @@ struct OnTheGoPanel: View {
         guard !state.queue.isEmpty, state.currentVideo != nil, panelCoverGeometry.screenHeight > 0 else { return false }
         return panelScrollOffset >= panelCoverGeometry.detents.fullQueueOffset - 1
     }
+    private var isPanelDismissalAllowed: Bool {
+        PlayerPanelScrollDetents.allowsDismissal(
+            offset: panelScrollOffset,
+            gestureStartOffset: scrollGestureStartOffset
+        )
+    }
     private var queueMorphProgress: CGFloat {
         guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
         return panelCoverGeometry.morphProgress(at: panelScrollOffset)
@@ -128,7 +134,7 @@ struct OnTheGoPanel: View {
             .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(controlPrimaryColor)
             .tint(nowPlayingAccent)
-            .interactiveDismissDisabled(!isPanelAtTop || isPaging)
+            .interactiveDismissDisabled(!isPanelDismissalAllowed || isPaging)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
@@ -362,12 +368,17 @@ struct OnTheGoPanel: View {
             // Reflow moves the queue up as the player morphs. Keep the scroll
             // coordinate fixed instead of preserving a position near its end.
             .defaultScrollAnchor(.top, for: .sizeChanges)
-            .scrollTargetBehavior(QueueTopScrollTargetBehavior(
-                isEnabled: !state.queue.isEmpty && state.currentVideo != nil,
-                detents: detents
-            ))
+            // Snap on release, not during layout reflow: a scroll target floor
+            // at C would prevent the same drag from returning into the panel.
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
+                defer {
+                    if newPhase == .idle {
+                        scrollGestureStartOffset = nil
+                        isQueueDecelerating = false
+                    }
+                }
+                if newPhase == .animating { isQueueDecelerating = false }
                 if newPhase == .idle, !state.queue.isEmpty, state.currentVideo != nil {
                     LoggingService.shared.debug(
                         "Player panel settled: offset=\(offset), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
@@ -376,19 +387,34 @@ struct OnTheGoPanel: View {
                 }
                 if newPhase == .tracking || (newPhase == .interacting && oldPhase != .tracking) {
                     scrollGestureStartOffset = max(0, offset)
+                    isQueueDecelerating = false
+                    LoggingService.shared.debug(
+                        "Player panel gesture began: offset=\(offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset), dismissalAllowed=\(isPanelDismissalAllowed)",
+                        category: .player
+                    )
                 }
-                guard oldPhase == .interacting, newPhase == .decelerating || newPhase == .idle,
-                      !state.queue.isEmpty, state.currentVideo != nil,
-                      let target = detents.targetOffset(
-                          startOffset: scrollGestureStartOffset,
-                          releaseOffset: offset,
-                          velocity: context.velocity?.dy ?? 0
-                      ) else { return }
+                let isRelease = oldPhase == .interacting && (newPhase == .decelerating || newPhase == .idle)
+                // Native queue momentum may cross C too. Snap its final
+                // position if it settles between panel detents.
+                let isQueueSettling = isQueueDecelerating && oldPhase == .decelerating && newPhase == .idle
+                guard isRelease || isQueueSettling,
+                      !state.queue.isEmpty, state.currentVideo != nil else { return }
+                let startOffset = scrollGestureStartOffset ?? max(0, offset)
+                let velocity = isRelease ? context.velocity?.dy ?? 0 : 0
+                let target = detents.targetOffset(
+                    startOffset: startOffset,
+                    releaseOffset: offset,
+                    velocity: velocity
+                )
+                if isRelease {
+                    isQueueDecelerating = target == nil && offset > detents.fullQueueOffset && newPhase == .decelerating
+                }
 
                 LoggingService.shared.debug(
-                    "Player panel snap: start=\(scrollGestureStartOffset), release=\(offset), velocity=\(context.velocity?.dy ?? 0), target=\(target), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), coverHeight=\(coverGeometry.coverHeight)",
+                    "Player panel \(isRelease ? "release" : "queue settled"): start=\(startOffset), offset=\(offset), velocity=\(velocity), target=\(target.map { String(describing: $0) } ?? "native"), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
                     category: .player
                 )
+                guard let target, isRelease || abs(target - offset) > 0.5 else { return }
                 // Replace panel deceleration with a spring immediately on
                 // release. Queue-only gestures retain native scrolling.
                 withAnimation(pageSnapAnimation) {
@@ -408,7 +434,6 @@ struct OnTheGoPanel: View {
                 max(0, geometry.contentOffset.y + geometry.contentInsets.top)
             } action: { _, offset in
                 panelScrollOffset = offset
-                isPanelAtTop = offset <= 1
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
@@ -614,7 +639,12 @@ struct OnTheGoPanel: View {
                     actionLabel: "player.nowPlaying.title",
                     actionHint: "Returns to the player controls"
                 ) {
-                    withAnimation(.snappy) {
+                    isQueueDecelerating = false
+                    LoggingService.shared.debug(
+                        "Player pinned card: returning to A from offset=\(panelScrollOffset)",
+                        category: .player
+                    )
+                    withAnimation(pageSnapAnimation) {
                         scrollPosition.scrollTo(edge: .top)
                     }
                 }
@@ -1343,26 +1373,6 @@ struct OnTheGoPanel: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Queue Scroll Boundary
-
-private struct QueueTopScrollTargetBehavior: ScrollTargetBehavior, Sendable {
-    let isEnabled: Bool
-    let detents: PlayerPanelScrollDetents
-
-    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
-        // Returning through a long queue must stop at its top first. A new
-        // downward gesture can then collapse the panel.
-        guard isEnabled else { return }
-        let offset = detents.queueTargetOffset(
-            startOffset: context.originalTarget.rect.minY,
-            proposedOffset: target.rect.minY
-        )
-        guard offset != target.rect.minY else { return }
-        target.rect.origin.y = offset
-        target.anchor = .top
     }
 }
 

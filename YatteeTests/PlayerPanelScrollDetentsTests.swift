@@ -20,7 +20,7 @@ struct PlayerPanelScrollDetentsTests {
         #expect(detents.targetOffset(startOffset: 140, releaseOffset: sample[0], velocity: 0) == sample[1])
     }
 
-    @Test("Flicks advance one detent in their direction", arguments: [
+    @Test("Flicks advance to the next detent in either direction", arguments: [
         [CGFloat(0), 20, 600, 140],
         [140, 160, 600, 500],
         [500, 480, -600, 140],
@@ -31,6 +31,27 @@ struct PlayerPanelScrollDetentsTests {
         #expect(detents.targetOffset(startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2]) == sample[3])
     }
 
+    @Test("Long drags and fast flicks can pass the half-open detent", arguments: [
+        [CGFloat(500), 100, -600, 0],
+        [500, 480, -2400, 0],
+        [0, 450, 600, 500],
+        [0, 20, 2400, 500]
+    ])
+    func passingHalfOpen(sample: [CGFloat]) {
+        #expect(detents.targetOffset(startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2]) == sample[3])
+    }
+
+    @Test("Downward drags from C can collapse to B or A", arguments: [
+        [CGFloat(500), 300, 0, 140],
+        [500, 250, 0, 140],
+        [500, 50, 0, 0],
+        [500.5, 300, 0, 140],
+        [499.5, 300, 0, 140]
+    ])
+    func collapsingFullQueue(sample: [CGFloat]) {
+        #expect(detents.targetOffset(startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2]) == sample[3])
+    }
+
     @Test("Queue content scrolls freely beyond the full queue detent")
     func freeQueueScrolling() {
         #expect(detents.targetOffset(startOffset: 500, releaseOffset: 540, velocity: 600) == nil)
@@ -38,19 +59,40 @@ struct PlayerPanelScrollDetentsTests {
         #expect(detents.targetOffset(startOffset: 800, releaseOffset: 950, velocity: 0) == nil)
     }
 
-    @Test("Returning from within the queue stops at its top before collapsing")
+    @Test("A drag from inside the queue can continue through C into the panel")
     func queueBoundary() {
-        #expect(detents.queueTargetOffset(startOffset: 800, proposedOffset: 100) == 500)
-        #expect(detents.queueTargetOffset(startOffset: 800, proposedOffset: 650) == 650)
-        #expect(detents.queueTargetOffset(startOffset: 500, proposedOffset: 100) == 500)
-        #expect(detents.queueTargetOffset(startOffset: 140, proposedOffset: 100) == 100)
-        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 300, velocity: -600) == 500)
-        #expect(detents.targetOffset(startOffset: 500, releaseOffset: 480, velocity: -600) == 140)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 500, velocity: 0) == 500)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 480, velocity: -600) == 140)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 300, velocity: 0) == 140)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 300, velocity: -600) == 140)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 50, velocity: -600) == 0)
+    }
+
+    @Test("Queue momentum settling between detents snaps to the nearest one")
+    func queueMomentum() {
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 650, velocity: 0) == nil)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 420, velocity: 0) == 500)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 220, velocity: 0) == 140)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 30, velocity: 0) == 0)
     }
 
     @Test("A downward drag at the player top remains available for dismissal")
     func topDismissal() {
         #expect(detents.targetOffset(startOffset: 0, releaseOffset: -40, velocity: -600) == nil)
         #expect(detents.targetOffset(startOffset: 0, releaseOffset: 0, velocity: 0) == nil)
+        #expect(detents.targetOffset(startOffset: 140, releaseOffset: -40, velocity: -600) == 0)
+        #expect(detents.targetOffset(startOffset: 500, releaseOffset: -40, velocity: -600) == 0)
+    }
+
+    @Test("Dismissal requires A and a gesture that began at A")
+    func dismissalEligibility() {
+        #expect(PlayerPanelScrollDetents.allowsDismissal(offset: 0, gestureStartOffset: nil))
+        #expect(PlayerPanelScrollDetents.allowsDismissal(offset: 0, gestureStartOffset: 0))
+        #expect(PlayerPanelScrollDetents.allowsDismissal(offset: -40, gestureStartOffset: 0))
+        #expect(!PlayerPanelScrollDetents.allowsDismissal(offset: 140, gestureStartOffset: nil))
+        #expect(!PlayerPanelScrollDetents.allowsDismissal(offset: 500, gestureStartOffset: nil))
+        #expect(!PlayerPanelScrollDetents.allowsDismissal(offset: 0, gestureStartOffset: 140))
+        #expect(!PlayerPanelScrollDetents.allowsDismissal(offset: 0, gestureStartOffset: 500))
+        #expect(!PlayerPanelScrollDetents.allowsDismissal(offset: -40, gestureStartOffset: 800))
     }
 }
