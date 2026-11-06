@@ -113,11 +113,13 @@ struct OnTheGoPanel: View {
                     playerContent
                         .frame(minHeight: geometry.size.height, alignment: .center)
 
-                    inlineQueue
-                        .frame(maxWidth: 560)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, Layout.horizontalPadding)
-                        .padding(.bottom, Layout.mediumSpacing)
+                    if !state.queue.isEmpty {
+                        inlineQueue
+                            .frame(maxWidth: 560)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Layout.horizontalPadding)
+                            .padding(.bottom, Layout.mediumSpacing)
+                    }
                 }
             }
             .scrollIndicators(.hidden)
@@ -203,6 +205,14 @@ struct OnTheGoPanel: View {
         let shareURL = appEnvironment?.shareURL(for: video) ?? video.shareURL
 
         Section {
+            Toggle(isOn: Binding(
+                get: { isAutoPlayNextEnabled },
+                set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
+            )) {
+                Label(String(localized: "player.nowPlaying.autoplay"), systemImage: "infinity")
+            }
+            .disabled(state.isControlsLocked || appEnvironment == nil)
+
             Button {
                 presentAppSheet(.queue())
             } label: {
@@ -289,16 +299,6 @@ struct OnTheGoPanel: View {
 
     // MARK: - Inline Queue
 
-    private var queueTitle: String {
-        guard let queueManager = appEnvironment?.queueManager,
-              case .playlist = queueManager.currentQueueSource,
-              let title = queueManager.currentQueueSourceLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !title.isEmpty else {
-            return String(localized: "queue.section.upNext")
-        }
-        return title
-    }
-
     private var inlineQueue: some View {
         VStack(alignment: .leading, spacing: Layout.mediumSpacing) {
             Capsule()
@@ -308,55 +308,8 @@ struct OnTheGoPanel: View {
                 .padding(.top, Layout.smallSpacing)
                 .accessibilityHidden(true)
 
-            HStack(spacing: Layout.smallSpacing) {
-                Text(queueTitle)
-                    .font(.title2.weight(.semibold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-
-                Button {
-                    presentAppSheet(.queue())
-                } label: {
-                    Image(systemName: "text.badge.plus")
-                        .font(.title2)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "controls.button.queue"))
-            }
-
-            autoplayRow
-
-            if !state.queue.isEmpty {
-                inlineQueueItems
-            }
+            inlineQueueItems
         }
-    }
-
-    private var autoplayRow: some View {
-        Toggle(isOn: Binding(
-            get: { isAutoPlayNextEnabled },
-            set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
-        )) {
-            HStack(spacing: Layout.mediumSpacing) {
-                Image(systemName: "infinity")
-                    .font(.title2)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "player.nowPlaying.autoplay"))
-                        .font(.body.weight(.semibold))
-                    Text("Play similar audio when the queue ends")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .toggleStyle(.switch)
-        .tint(nowPlayingAccent)
-        .disabled(state.isControlsLocked || appEnvironment == nil)
     }
 
     private var inlineQueueItems: some View {
