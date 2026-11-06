@@ -592,7 +592,7 @@ struct OnTheGoPanel: View {
             } label: {
                 playPauseLabel
             }
-            .modifier(OnTheGoTransportStyleModifier(isProminent: true, size: .large))
+            .modifier(OnTheGoPlayPauseStyleModifier())
             .disabled(isTransportDisabled)
             .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
@@ -627,26 +627,16 @@ struct OnTheGoPanel: View {
             .animation(.snappy, value: state.playbackState == .playing)
     }
 
-    private func transportButton(_ image: String, size: TransportSize = .regular, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+    private func transportButton(_ image: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button {
             transportFeedbackTrigger.toggle()
             action()
         } label: {
-            if #available(iOS 26, *) {
-                Image(systemName: image)
-                    .symbolVariant(.none)
-                    .font(.system(size: size == .small ? 15 : 28, weight: .semibold))
-            } else {
-                Image(systemName: image)
-                    .symbolVariant(.none)
-                    .font(.system(size: size == .small ? 20 : 40, weight: .semibold))
-                    .foregroundStyle(disabled ? Color(.tertiaryLabel) : Color(.label))
-                    .frame(width: 60, height: 60)
-                    .contentShape(Rectangle())
-            }
+            transportSymbol(image)
         }
-        .modifier(OnTheGoTransportStyleModifier(size: size))
+        .buttonStyle(OnTheGoTransportButtonStyle())
         .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
         .accessibilityLabel(label)
     }
 
@@ -668,9 +658,9 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            transportMenuSymbol(speedSymbol, isActive: state.rate != .x1)
+            transportSymbol(speedSymbol, isActive: state.rate != .x1)
         }
-        .transportMenuCircle()
+        .transportMenuStyle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "controls.button.speed"))
         .accessibilityValue(state.rate.displayText)
@@ -706,20 +696,21 @@ struct OnTheGoPanel: View {
             }
             .disabled(state.currentVideo == nil)
         } label: {
-            transportMenuSymbol(sleepTimer.isActive ? "moon.zzz.fill" : "moon.zzz", isActive: sleepTimer.isActive)
+            transportSymbol(sleepTimer.isActive ? "moon.zzz.fill" : "moon.zzz", isActive: sleepTimer.isActive)
         }
-        .transportMenuCircle()
+        .transportMenuStyle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "player.nowPlaying.sleepTimer"))
         .accessibilityValue(sleepTimer.caption ?? String(localized: "common.off"))
     }
 
-    private func transportMenuSymbol(_ name: String, isActive: Bool) -> some View {
+    private func transportSymbol(_ name: String, isActive: Bool = false) -> some View {
         Image(systemName: name)
             .symbolVariant(.none)
+            .font(.system(size: 24, weight: .regular))
             .foregroundStyle(isActive ? nowPlayingAccent : Color.primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Circle())
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
     }
 
     private func sleepTimerOption(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -762,58 +753,25 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
 // MARK: - Transport Styling
 
 private extension View {
-    @ViewBuilder
-    func transportMenuCircle() -> some View {
-        let menu = self
+    func transportMenuStyle() -> some View {
+        self
             .menuStyle(.button)
-            .buttonStyle(.plain)
+            .buttonStyle(OnTheGoTransportButtonStyle())
             .menuIndicator(.hidden)
             .menuOrder(.fixed)
-
-        if #available(iOS 26, *) {
-            // Apply glass outside Menu to match the former small transport buttons.
-            menu
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: TransportSize.small.diameter, height: TransportSize.small.diameter)
-                .glassEffect(.regular.interactive(), in: .circle)
-        } else {
-            menu
-                .font(.system(size: 20, weight: .semibold))
-                .frame(width: 60, height: 60)
-        }
     }
 }
 
-/// Native glass supplies press feedback on iOS 26; older systems use a scale effect.
-private enum TransportSize {
-    case small, regular, large
-    var diameter: CGFloat {
-        switch self {
-        case .small: 44
-        case .regular: 56
-        case .large: 104
-        }
-    }
-}
-
-private struct OnTheGoTransportStyleModifier: ViewModifier {
-    var isProminent = false
-    var size: TransportSize = .regular
-
+private struct OnTheGoPlayPauseStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
-            Group {
-                if isProminent {
-                    content.buttonStyle(.glassProminent)
-                        .tint(nowPlayingAccent)
-                        .foregroundStyle(.white)
-                } else {
-                    content.buttonStyle(.glass)
-                }
-            }
-            .buttonBorderShape(.circle)
-            .buttonSizing(.flexible)
-            .frame(width: size.diameter, height: size.diameter)
+            content
+                .buttonStyle(.glassProminent)
+                .tint(nowPlayingAccent)
+                .foregroundStyle(.white)
+                .buttonBorderShape(.circle)
+                .buttonSizing(.flexible)
+                .frame(width: 104, height: 104)
         } else {
             content.buttonStyle(OnTheGoTransportButtonStyle())
         }
