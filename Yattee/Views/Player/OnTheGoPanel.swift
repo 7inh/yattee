@@ -203,11 +203,6 @@ struct OnTheGoPanel: View {
         let shareURL = appEnvironment?.shareURL(for: video) ?? video.shareURL
 
         Section {
-            playbackSpeedMenu
-            sleepTimerMenu
-        }
-
-        Section {
             Button {
                 presentAppSheet(.queue())
             } label: {
@@ -585,9 +580,7 @@ struct OnTheGoPanel: View {
 
     private var transportButtons: some View {
         HStack(spacing: 0) {
-            transportButton("backward.end", size: .small, label: String(localized: "menu.playback.previousVideo"), disabled: !state.hasPrevious || isTransportDisabled) {
-                Task { await playerService.playPrevious() }
-            }
+            playbackSpeedMenu
             Spacer(minLength: 0)
             transportButton("gobackward.10", label: String(localized: "menu.playback.seekBackward \(10)"), disabled: isSeekDisabled) {
                 playerService.seekBackward(by: 10)
@@ -607,9 +600,7 @@ struct OnTheGoPanel: View {
                 playerService.seekForward(by: 10)
             }
             Spacer(minLength: 0)
-            transportButton("forward.end", size: .small, label: String(localized: "menu.playback.nextVideo"), disabled: !state.hasNext || isTransportDisabled) {
-                Task { await playerService.playNext() }
-            }
+            sleepTimerMenu
         }
     }
 
@@ -677,9 +668,9 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            let rate = state.rate.compactDisplayText.replacingOccurrences(of: "x", with: "×")
-            Label("Speed \(rate)", systemImage: speedSymbol)
+            transportMenuSymbol(speedSymbol, isActive: state.rate != .x1)
         }
+        .transportMenuCircle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "controls.button.speed"))
         .accessibilityValue(state.rate.displayText)
@@ -698,6 +689,10 @@ struct OnTheGoPanel: View {
 
     private var sleepTimerMenu: some View {
         Menu {
+            if let remainingTime = sleepTimer.caption {
+                Button(remainingTime) {}
+                    .disabled(true)
+            }
             sleepTimerOption(String(localized: "common.off"), isSelected: sleepTimer.mode == .off) {
                 sleepTimer.cancel()
             }
@@ -711,12 +706,20 @@ struct OnTheGoPanel: View {
             }
             .disabled(state.currentVideo == nil)
         } label: {
-            let status = sleepTimer.caption ?? String(localized: "common.off")
-            Label("\(String(localized: "player.nowPlaying.sleepTimer")): \(status)", systemImage: "moon.zzz")
+            transportMenuSymbol(sleepTimer.isActive ? "moon.zzz.fill" : "moon.zzz", isActive: sleepTimer.isActive)
         }
+        .transportMenuCircle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "player.nowPlaying.sleepTimer"))
         .accessibilityValue(sleepTimer.caption ?? String(localized: "common.off"))
+    }
+
+    private func transportMenuSymbol(_ name: String, isActive: Bool) -> some View {
+        Image(systemName: name)
+            .symbolVariant(.none)
+            .foregroundStyle(isActive ? nowPlayingAccent : Color.primary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Circle())
     }
 
     private func sleepTimerOption(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -757,6 +760,29 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
 }
 
 // MARK: - Transport Styling
+
+private extension View {
+    @ViewBuilder
+    func transportMenuCircle() -> some View {
+        let menu = self
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .menuOrder(.fixed)
+
+        if #available(iOS 26, *) {
+            // Apply glass outside Menu to match the former small transport buttons.
+            menu
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: TransportSize.small.diameter, height: TransportSize.small.diameter)
+                .glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            menu
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 60, height: 60)
+        }
+    }
+}
 
 /// Native glass supplies press feedback on iOS 26; older systems use a scale effect.
 private enum TransportSize {
