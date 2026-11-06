@@ -658,23 +658,16 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            transportSymbol(speedSymbol, isActive: state.rate != .x1)
+            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : .primary)
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "controls.button.speed"))
-        .accessibilityValue(state.rate.displayText)
+        .accessibilityValue(playbackSpeedText)
     }
 
-    /// Gauge needle position reflects the current speed.
-    private var speedSymbol: String {
-        switch state.rate.rawValue {
-        case ..<0.9: "gauge.with.dots.needle.0percent"
-        case ..<1.1: "gauge.with.dots.needle.33percent"
-        case ..<1.4: "gauge.with.dots.needle.50percent"
-        case ..<1.9: "gauge.with.dots.needle.67percent"
-        default: "gauge.with.dots.needle.100percent"
-        }
+    private var playbackSpeedText: String {
+        state.rate.compactDisplayText.replacingOccurrences(of: "x", with: "×")
     }
 
     private var sleepTimerMenu: some View {
@@ -696,19 +689,56 @@ struct OnTheGoPanel: View {
             }
             .disabled(state.currentVideo == nil)
         } label: {
-            transportSymbol(sleepTimer.isActive ? "moon.zzz.fill" : "moon.zzz", isActive: sleepTimer.isActive)
+            transportValue(sleepTimerText, color: sleepTimer.isActive ? nowPlayingAccent : .secondary)
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "player.nowPlaying.sleepTimer"))
-        .accessibilityValue(sleepTimer.caption ?? String(localized: "common.off"))
+        .accessibilityValue(sleepTimerAccessibilityValue)
     }
 
-    private func transportSymbol(_ name: String, isActive: Bool = false) -> some View {
+    private var sleepTimerText: String {
+        switch sleepTimer.mode {
+        case .off:
+            return String(localized: "common.off")
+        case .duration:
+            let seconds = sleepTimer.remainingSeconds
+            if seconds >= 3600 {
+                return TimeInterval(seconds).formattedAsTimestamp
+            }
+            return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+        case .endOfVideo:
+            return String(localized: "End")
+        }
+    }
+
+    private var sleepTimerAccessibilityValue: String {
+        switch sleepTimer.mode {
+        case .off:
+            return String(localized: "common.off")
+        case .duration:
+            let remainingTime = Duration.seconds(sleepTimer.remainingSeconds)
+                .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
+            return String(localized: "\(remainingTime) left")
+        case .endOfVideo:
+            return String(localized: "End of video")
+        }
+    }
+
+    private func transportValue(_ value: String, color: Color) -> some View {
+        Text(verbatim: value)
+            .font(.system(size: 15, weight: .semibold).monospacedDigit())
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .frame(width: 56, height: 44, alignment: .center)
+            .contentShape(Rectangle())
+    }
+
+    private func transportSymbol(_ name: String) -> some View {
         Image(systemName: name)
             .symbolVariant(.none)
             .font(.system(size: 24, weight: .regular))
-            .foregroundStyle(isActive ? nowPlayingAccent : Color.primary)
+            .foregroundStyle(.primary)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
     }
