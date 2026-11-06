@@ -169,6 +169,11 @@ struct OnTheGoPanel: View {
         }
     }
 
+    private var videoTitle: String {
+        guard let video = state.currentVideo else { return "" }
+        return appEnvironment?.deArrowBrandingProvider.title(for: video) ?? video.title
+    }
+
     private var videoInfo: some View {
         Button {
             showingDetails = true
@@ -178,17 +183,16 @@ struct OnTheGoPanel: View {
         }
         .buttonStyle(.plain)
         .disabled(state.currentVideo == nil)
+        .accessibilityLabel(videoTitle)
         .accessibilityHint("Shows details")
     }
 
     private var videoInfoText: some View {
         VStack(alignment: .leading, spacing: Layout.smallSpacing) {
             if let video = state.currentVideo {
-                Text(appEnvironment?.deArrowBrandingProvider.title(for: video) ?? video.title)
+                PlayerMarqueeText(text: videoTitle)
                     .font(.title3.bold())
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(video.id)
 
                 Text(video.author.name)
                     .font(.subheadline)
