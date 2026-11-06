@@ -77,6 +77,8 @@ struct OnTheGoPanel: View {
         static let seekTrackHeight: CGFloat = 6
         static let coverSeekTrackHeight: CGFloat = 5
         static let coverSeekScrubbingTrackHeight: CGFloat = 8
+        static let coverSeekBottomInset: CGFloat = 16
+        static let coverInfoSeekSpacing: CGFloat = 10
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
     }
@@ -587,9 +589,13 @@ struct OnTheGoPanel: View {
             let coverBottom = coverGeometry.coverHeight
             var queue = normal
             queue[Element.pages.rawValue] = CGRect(x: 0, y: 0, width: width, height: coverGeometry.coverHeight)
-            queue[Element.info.rawValue].origin.y = coverBottom - Layout.mediumSpacing - normal[Element.info.rawValue].height
+            // Anchor the visible track inside the gradient, then stack the
+            // title/channel above it without changing the scrub target's size.
+            let coverSeekCenterY = coverBottom - Layout.coverSeekBottomInset - Layout.coverSeekTrackHeight / 2
+            queue[Element.info.rawValue].origin.y = coverSeekCenterY - Layout.coverSeekTrackHeight / 2
+                - Layout.coverInfoSeekSpacing - normal[Element.info.rawValue].height
             queue[Element.indicators.rawValue].origin.y = coverBottom
-            queue[Element.seek.rawValue].origin.y = coverBottom - Layout.seekHitHeight / 2
+            queue[Element.seek.rawValue].origin.y = coverSeekCenterY - Layout.seekHitHeight / 2
             queue[Element.time.rawValue].origin.y = coverBottom
             queue[Element.transport.rawValue].origin.y = coverGeometry.transportTop
             queue[Element.transport.rawValue].size.height = PlayerPanelCoverGeometry.transportHeight
@@ -1251,7 +1257,7 @@ struct OnTheGoPanel: View {
                     .opacity(Double(1 - queueMorphProgress))
                     .offset(x: min(max(0, trackWidth * progress - 10), trackWidth - 20))
             }
-            // Keep the full drag target even when the track sits on the cover's edge.
+            // Keep the full drag target around the thin visible track.
             .frame(width: trackWidth, height: Layout.seekHitHeight)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
