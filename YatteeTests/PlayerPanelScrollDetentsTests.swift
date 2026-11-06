@@ -81,7 +81,9 @@ struct PlayerPanelScrollDetentsTests {
             + 8 + 5 + 16 + rowsHeight + 16
         let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
         let contentHeight = naturalContentHeight + fillerHeight
-        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: contentHeight, containerHeight: 728, topInset: 80, bottomInset: 34
+        )
 
         #expect(viewportHeight == 614)
         #expect(abs(fillerHeight - expectedFillerHeight) < 0.001)
@@ -109,7 +111,7 @@ struct PlayerPanelScrollDetentsTests {
             + 8 + 5 + 16 + rowsHeight + 16
         let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
-            contentHeight: naturalContentHeight + fillerHeight, viewportHeight: viewportHeight
+            contentHeight: naturalContentHeight + fillerHeight, containerHeight: 728, topInset: 80, bottomInset: 34
         )
         let offset = PlayerPanelScrollDetents.clampedOffset(detents.halfOpenOffset, maximumOffset: maximumOffset)
 
@@ -135,7 +137,9 @@ struct PlayerPanelScrollDetentsTests {
         let naturalContentHeight = 500 + queueHeight
         let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
         let contentHeight = naturalContentHeight + fillerHeight
-        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: contentHeight, containerHeight: 728, topInset: 80, bottomInset: 34
+        )
 
         #expect(fillerHeight == 0)
         #expect(maximumOffset == 1086)
@@ -194,7 +198,8 @@ struct PlayerPanelScrollDetentsTests {
             + 8 + 5 + 16 + 52 + 16
         let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
-            contentHeight: naturalContentHeight + fillerHeight, viewportHeight: viewportHeight
+            contentHeight: naturalContentHeight + fillerHeight,
+            containerHeight: insets[0], topInset: insets[1], bottomInset: insets[2]
         )
         let target = detents.targetOffset(
             startOffset: detents.halfOpenOffset, releaseOffset: detents.halfOpenOffset + 340,
@@ -226,6 +231,52 @@ struct PlayerPanelScrollDetentsTests {
         ) == sample[2])
     }
 
+    @Test("Logged one-item geometry keeps A, B and C inside the scroll range")
+    func loggedSingleItemScrollRange() {
+        let contentHeight: CGFloat = 1041.67
+        let containerHeight: CGFloat = 648
+        let topInset: CGFloat = 130 // 80pt reserved header + 50pt system safe area.
+        let bottomInset: CGFloat = 34
+        let viewportHeight = PlayerPanelScrollDetents.viewportHeight(
+            containerHeight: containerHeight, topInset: topInset, bottomInset: bottomInset
+        )
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: contentHeight, containerHeight: containerHeight, topInset: topInset, bottomInset: bottomInset
+        )
+        // Geometry offsets start at -topInset. Adding topInset gives the panel
+        // coordinate used by targets: A = 0, B = 130 and C = 477.76.
+        let rawBottomOffset = contentHeight + bottomInset - containerHeight
+
+        #expect(viewportHeight == 484)
+        #expect(abs(maximumOffset - 557.67) < 0.001)
+        #expect(abs(maximumOffset - (rawBottomOffset + topInset)) < 0.001)
+        #expect(abs(maximumOffset - 477.76 - 79.91) < 0.001)
+        for offset: CGFloat in [0, 130, 477.76] {
+            #expect(PlayerPanelScrollDetents.clampedOffset(offset, maximumOffset: maximumOffset) == offset)
+        }
+    }
+
+    @Test("One-item proposals reach C past the midpoint or on an upward flick", arguments: [
+        [CGFloat(303), 0, 130],
+        [304, 0, 477.76],
+        [393.67, 0, 477.76], // Native proposal clamped using the old, incorrect range.
+        [557.67, 0, 477.76],
+        [130, 600, 477.76],
+        [150, 251, 477.76],
+        [150, 249, 130]
+    ])
+    func loggedSingleItemProposal(sample: [CGFloat]) {
+        let detents = PlayerPanelScrollDetents(halfOpenOffset: 130, fullQueueOffset: 477.76)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: 1041.67, containerHeight: 648, topInset: 130, bottomInset: 34
+        )
+
+        #expect(detents.targetOffset(
+            startOffset: 130, releaseOffset: 130, velocity: sample[1],
+            maximumOffset: maximumOffset, proposedOffset: sample[0]
+        ) == sample[2])
+    }
+
     @Test("Native proposals are not projected twice or replaced by the release coordinate")
     func nativeProposalSelection() {
         // At this velocity, projecting 220 again would incorrectly skip B.
@@ -254,7 +305,8 @@ struct PlayerPanelScrollDetentsTests {
     @Test("Small content and excessive insets cannot produce negative scroll ranges")
     func nonnegativeScrollRange() {
         #expect(PlayerPanelScrollDetents.viewportHeight(containerHeight: 100, topInset: 80, bottomInset: 34) == 0)
-        #expect(PlayerPanelScrollDetents.maximumOffset(contentHeight: 100, viewportHeight: 614) == 0)
+        #expect(PlayerPanelScrollDetents.maximumOffset(contentHeight: 100, containerHeight: 728, topInset: 80, bottomInset: 34) == 0)
+        #expect(PlayerPanelScrollDetents.maximumOffset(contentHeight: 100, containerHeight: 100, topInset: 80, bottomInset: 34) == 100)
         #expect(PlayerPanelScrollDetents.clampedOffset(-40, maximumOffset: 500) == 0)
         #expect(PlayerPanelScrollDetents.clampedOffset(40, maximumOffset: 0) == 0)
     }

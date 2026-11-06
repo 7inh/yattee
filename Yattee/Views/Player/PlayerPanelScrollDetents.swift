@@ -29,8 +29,13 @@ struct PlayerPanelScrollDetents: Sendable {
         max(0, containerHeight - topInset - bottomInset)
     }
 
-    static func maximumOffset(contentHeight: CGFloat, viewportHeight: CGFloat) -> CGFloat {
-        max(0, contentHeight - max(0, viewportHeight))
+    /// Panel offsets and native targets start at A = 0 (contentOffset.y + topInset).
+    /// Subtract both insets from the container, including for target proposals.
+    static func maximumOffset(
+        contentHeight: CGFloat, containerHeight: CGFloat, topInset: CGFloat, bottomInset: CGFloat
+    ) -> CGFloat {
+        let viewportHeight = viewportHeight(containerHeight: containerHeight, topInset: topInset, bottomInset: bottomInset)
+        return max(0, contentHeight - viewportHeight)
     }
 
     static func clampedOffset(_ offset: CGFloat, maximumOffset: CGFloat) -> CGFloat {

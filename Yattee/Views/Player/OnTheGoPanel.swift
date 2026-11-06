@@ -421,14 +421,11 @@ struct OnTheGoPanel: View {
             ))
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
-                let measuredViewportHeight = PlayerPanelScrollDetents.viewportHeight(
+                let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+                    contentHeight: context.geometry.contentSize.height,
                     containerHeight: context.geometry.containerSize.height,
                     topInset: context.geometry.contentInsets.top,
                     bottomInset: context.geometry.contentInsets.bottom
-                )
-                let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
-                    contentHeight: context.geometry.contentSize.height,
-                    viewportHeight: measuredViewportHeight
                 )
                 defer {
                     if newPhase == .idle {
@@ -476,6 +473,9 @@ struct OnTheGoPanel: View {
                 panelScrollGeometry = value
             }
             .safeAreaInset(edge: .top, spacing: 0) {
+                // Reserve the pinned header in addition to the system safe area.
+                // The resulting top inset equals B (headerHeight + topSafeArea)
+                // by design; it does not change with the scroll offset.
                 Color.clear
                     .frame(height: Layout.headerHeight)
                     .allowsHitTesting(false)
@@ -1447,20 +1447,22 @@ private struct PanelDetentsDiagnostics: Sendable {
         _ event: String,
         geometry: ScrollGeometry,
         contentHeight: CGFloat? = nil,
-        viewportHeight: CGFloat? = nil,
+        containerHeight: CGFloat? = nil,
         details: String
     ) {
         let contentHeight = contentHeight ?? geometry.contentSize.height
-        let viewportHeight = viewportHeight ?? PlayerPanelScrollDetents.viewportHeight(
-            containerHeight: geometry.containerSize.height,
+        let containerHeight = containerHeight ?? geometry.containerSize.height
+        let viewportHeight = PlayerPanelScrollDetents.viewportHeight(
+            containerHeight: containerHeight,
             topInset: geometry.contentInsets.top,
             bottomInset: geometry.contentInsets.bottom
         )
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
-            contentHeight: contentHeight, viewportHeight: viewportHeight
+            contentHeight: contentHeight, containerHeight: containerHeight,
+            topInset: geometry.contentInsets.top, bottomInset: geometry.contentInsets.bottom
         )
         let offset = geometry.contentOffset.y + geometry.contentInsets.top
-        let message = "Player panel \(event): contentHeight=\(contentHeight), naturalContentHeight=\(naturalContentHeight), viewportHeight=\(viewportHeight), containerHeight=\(geometry.containerSize.height), topInset=\(geometry.contentInsets.top), bottomInset=\(geometry.contentInsets.bottom), filler=\(max(0, contentHeight - naturalContentHeight)), requestedFiller=\(requestedFiller), requiredHeight=\(detents.minimumContentHeight(viewportHeight: viewportHeight)), offsetB=\(detents.halfOpenOffset), offsetC=\(detents.fullQueueOffset), maxOffset=\(maximumOffset), cHeadroom=\(maximumOffset - detents.fullQueueOffset), offset=\(offset), sticky=\(offset >= detents.fullQueueOffset - 1), queueCount=\(queueCount), \(details)"
+        let message = "Player panel \(event): contentHeight=\(contentHeight), naturalContentHeight=\(naturalContentHeight), viewportHeight=\(viewportHeight), containerHeight=\(containerHeight), topInset=\(geometry.contentInsets.top), bottomInset=\(geometry.contentInsets.bottom), filler=\(max(0, contentHeight - naturalContentHeight)), requestedFiller=\(requestedFiller), requiredHeight=\(detents.minimumContentHeight(viewportHeight: viewportHeight)), offsetB=\(detents.halfOpenOffset), offsetC=\(detents.fullQueueOffset), maxOffset=\(maximumOffset), cHeadroom=\(maximumOffset - detents.fullQueueOffset), rawOffset=\(geometry.contentOffset.y), offset=\(offset), sticky=\(offset >= detents.fullQueueOffset - 1), queueCount=\(queueCount), \(details)"
         LoggingService.shared.debug(message, category: .player)
         #if DEBUG
         // Deliberately bypass the in-app logging toggle for simulator diagnosis.
@@ -1479,11 +1481,16 @@ private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
         let detents = diagnostics.detents
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
             contentHeight: context.contentSize.height,
-            // TargetContext already subtracts the scroll view's insets. Use
-            // its current measurement rather than a previous geometry update.
-            viewportHeight: context.containerSize.height
+            // TargetContext includes the insets in its container height, just
+            // like ScrollGeometry. Use the same effective viewport for both.
+            containerHeight: context.containerSize.height,
+            topInset: geometry.contentInsets.top,
+            bottomInset: geometry.contentInsets.bottom
         )
         let proposedOffset = target.rect.minY
+        // Native target rects already use A = 0, matching the inset-adjusted
+        // geometry offset. Preserve even a bottom-clamped native proposal so
+        // it can still select C using the full inset-aware scroll range.
         let chosenOffset = detents.targetOffset(
             startOffset: context.originalTarget.rect.minY,
             releaseOffset: geometry.contentOffset.y + geometry.contentInsets.top,
@@ -1493,7 +1500,7 @@ private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
         )
         diagnostics.log(
             "targetContentOffset proposal", geometry: geometry,
-            contentHeight: context.contentSize.height, viewportHeight: context.containerSize.height,
+            contentHeight: context.contentSize.height, containerHeight: context.containerSize.height,
             details: "start=\(context.originalTarget.rect.minY), velocity=\(context.velocity.dy), proposedTarget=\(proposedOffset), chosenTarget=\(chosenOffset ?? proposedOffset), native=\(chosenOffset == nil)"
         )
         // Queue scrolling beyond C and top-edge dismissal keep native targets.
