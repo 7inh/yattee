@@ -38,7 +38,9 @@ struct OnTheGoPanel: View {
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var panelScrollOffset: CGFloat = 0
     @State private var isPanelAtTop = true
-    @State private var playerContentHeight: CGFloat = 0
+    @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
+        screenHeight: 0, topSafeArea: 0, headerHeight: Layout.headerHeight, noticesHeight: 0
+    )
     @State private var playbackNoticesHeight: CGFloat = 0
     @State private var scrollGestureStartOffset: CGFloat = 0
     @State private var selectedPage = PlayerPage.artwork
@@ -65,12 +67,6 @@ struct OnTheGoPanel: View {
         static let coverSeekScrubbingTrackHeight: CGFloat = 8
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
-        static let queueMorphDistance: CGFloat = 140
-
-        static func queueContentHeight(coverHeight: CGFloat, topSafeArea: CGFloat, noticesHeight: CGFloat) -> CGFloat {
-            queueMorphDistance - headerHeight - topSafeArea + coverHeight
-                + smallSpacing + transportHeight + noticesHeight + mediumSpacing
-        }
     }
 
     private enum MenuLayout {
@@ -87,15 +83,12 @@ struct OnTheGoPanel: View {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
     private var isStickyPlayerVisible: Bool {
-        guard !state.queue.isEmpty, state.currentVideo != nil, playerContentHeight > 0 else { return false }
-        // The layout's bottom padding follows transport/notices. Use content
-        // coordinates from the ScrollView, rather than a transformed child's
-        // frame inside the custom morph layout, to detect the full queue state.
-        return panelScrollOffset >= max(Layout.queueMorphDistance, playerContentHeight - Layout.mediumSpacing) - 1
+        guard !state.queue.isEmpty, state.currentVideo != nil, panelCoverGeometry.screenHeight > 0 else { return false }
+        return panelScrollOffset >= panelCoverGeometry.detents.fullQueueOffset - 1
     }
     private var queueMorphProgress: CGFloat {
         guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
-        return min(1, max(0, panelScrollOffset / Layout.queueMorphDistance))
+        return panelCoverGeometry.morphProgress(at: panelScrollOffset)
     }
     private var visibleLyricsProgress: CGFloat {
         lyricsPageProgress * (1 - queueMorphProgress)
@@ -188,7 +181,7 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: isStickyPlayerVisible) { _, visible in
                 LoggingService.shared.debug(
-                    "Player queue sticky header: \(visible), offset=\(panelScrollOffset), contentHeight=\(playerContentHeight)",
+                    "Player queue sticky header: \(visible), offset=\(panelScrollOffset), fullQueue=\(panelCoverGeometry.detents.fullQueueOffset)",
                     category: .player
                 )
             }
@@ -334,35 +327,26 @@ struct OnTheGoPanel: View {
     private var panelContent: some View {
         GeometryReader { geometry in
             let viewportHeight = max(0, geometry.size.height - Layout.headerHeight)
-            // Keep enough room below the cover for transport and queue rows,
-            // including in landscape and on wider presentations.
-            let coverHeight = min(geometry.size.width, (geometry.size.height + geometry.safeAreaInsets.top) * 0.5)
-            let coverHeaderProgress = queueMorphProgress * min(1, max(0,
-                (Layout.queueMorphDistance + coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
-            ))
-            // Measure the final layout independently of the in-flight morph.
-            // Its current height shrinks while the cover morphs.
-            let detents = PlayerPanelScrollDetents(
-                halfOpenOffset: Layout.queueMorphDistance,
-                fullQueueOffset: max(Layout.queueMorphDistance, Layout.queueContentHeight(
-                    coverHeight: coverHeight,
-                    topSafeArea: geometry.safeAreaInsets.top,
-                    noticesHeight: playbackNoticesHeight
-                ) - Layout.mediumSpacing)
+            let coverGeometry = PlayerPanelCoverGeometry(
+                screenHeight: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom,
+                topSafeArea: geometry.safeAreaInsets.top,
+                headerHeight: Layout.headerHeight,
+                noticesHeight: playbackNoticesHeight
             )
+            let coverHeaderProgress = queueMorphProgress * min(1, max(0,
+                (coverGeometry.halfOpenOffset + coverGeometry.coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
+            ))
+            let detents = coverGeometry.detents
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    playerContent(viewportHeight: viewportHeight, coverHeight: coverHeight, topSafeArea: geometry.safeAreaInsets.top)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                            playerContentHeight = $0
-                        }
+                    playerContent(viewportHeight: viewportHeight, coverGeometry: coverGeometry)
 
                     if !state.queue.isEmpty {
                         inlineQueue
                             .frame(maxWidth: 560)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, Layout.horizontalPadding)
-                            .padding(.top, Layout.mediumSpacing)
+                            .padding(.top, coverGeometry.queueTopPadding(at: panelScrollOffset))
                             .padding(.bottom, Layout.mediumSpacing)
                             // A short queue still needs enough scroll range to
                             // move all player controls behind the sticky header.
@@ -375,12 +359,21 @@ struct OnTheGoPanel: View {
             .scrollClipDisabled(!state.queue.isEmpty && state.currentVideo != nil)
             .scrollBounceBehavior(.basedOnSize)
             .scrollPosition($scrollPosition)
+            // Reflow moves the queue up as the player morphs. Keep the scroll
+            // coordinate fixed instead of preserving a position near its end.
+            .defaultScrollAnchor(.top, for: .sizeChanges)
             .scrollTargetBehavior(QueueTopScrollTargetBehavior(
                 isEnabled: !state.queue.isEmpty && state.currentVideo != nil,
                 detents: detents
             ))
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
+                if newPhase == .idle, !state.queue.isEmpty, state.currentVideo != nil {
+                    LoggingService.shared.debug(
+                        "Player panel settled: offset=\(offset), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
+                        category: .player
+                    )
+                }
                 if newPhase == .tracking || (newPhase == .interacting && oldPhase != .tracking) {
                     scrollGestureStartOffset = max(0, offset)
                 }
@@ -393,7 +386,7 @@ struct OnTheGoPanel: View {
                       ) else { return }
 
                 LoggingService.shared.debug(
-                    "Player panel snap: start=\(scrollGestureStartOffset), release=\(offset), velocity=\(context.velocity?.dy ?? 0), target=\(target)",
+                    "Player panel snap: start=\(scrollGestureStartOffset), release=\(offset), velocity=\(context.velocity?.dy ?? 0), target=\(target), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), coverHeight=\(coverGeometry.coverHeight)",
                     category: .player
                 )
                 // Replace panel deceleration with a spring immediately on
@@ -402,9 +395,14 @@ struct OnTheGoPanel: View {
                     if target == 0 {
                         scrollPosition.scrollTo(edge: .top)
                     } else {
-                        scrollPosition.scrollTo(y: target - context.geometry.contentInsets.top)
+                        // ScrollPosition uses distance from the inset-adjusted
+                        // top, the same coordinates as our detents and offset.
+                        scrollPosition.scrollTo(y: target)
                     }
                 }
+            }
+            .onChange(of: coverGeometry, initial: true) { _, value in
+                panelCoverGeometry = value
             }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, geometry.contentOffset.y + geometry.contentInsets.top)
@@ -426,12 +424,11 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private func playerContent(viewportHeight: CGFloat, coverHeight: CGFloat, topSafeArea: CGFloat) -> some View {
+    private func playerContent(viewportHeight: CGFloat, coverGeometry: PlayerPanelCoverGeometry) -> some View {
         PlayerContentLayout(
             progress: queueMorphProgress,
             viewportHeight: viewportHeight,
-            coverHeight: coverHeight,
-            topSafeArea: topSafeArea
+            coverGeometry: coverGeometry
         ) {
             pagedContent
             videoInfo
@@ -461,8 +458,7 @@ struct OnTheGoPanel: View {
     private struct PlayerContentLayout: SwiftUI.Layout, Sendable {
         let progress: CGFloat
         let viewportHeight: CGFloat
-        let coverHeight: CGFloat
-        let topSafeArea: CGFloat
+        let coverGeometry: PlayerPanelCoverGeometry
 
         // Matches the seven children in playerContent.
         private enum Element: Int, CaseIterable, Sendable {
@@ -499,7 +495,12 @@ struct OnTheGoPanel: View {
                 case .seek: y += Layout.smallSpacing
                 default: break
                 }
-                let height = element == .pages ? contentWidth : subviews[element.rawValue].sizeThatFits(proposal).height
+                let height: CGFloat
+                switch element {
+                case .pages: height = contentWidth
+                case .transport: height = Layout.transportHeight
+                default: height = subviews[element.rawValue].sizeThatFits(proposal).height
+                }
                 normal.append(CGRect(x: contentX, y: y, width: contentWidth, height: height))
                 y += height
             }
@@ -511,21 +512,19 @@ struct OnTheGoPanel: View {
 
             // At the end of the morph the cover begins at the physical top of
             // the screen. Further scrolling carries it away with the controls.
-            let coverTop = Layout.queueMorphDistance - Layout.headerHeight - topSafeArea
-            let coverBottom = coverTop + coverHeight
+            let coverBottom = coverGeometry.coverHeight
             var queue = normal
-            queue[Element.pages.rawValue] = CGRect(x: 0, y: coverTop, width: width, height: coverHeight)
+            queue[Element.pages.rawValue] = CGRect(x: 0, y: 0, width: width, height: coverGeometry.coverHeight)
             queue[Element.info.rawValue].origin.y = coverBottom - Layout.mediumSpacing - normal[Element.info.rawValue].height
             queue[Element.indicators.rawValue].origin.y = coverBottom
             queue[Element.seek.rawValue].origin.y = coverBottom - Layout.seekHitHeight / 2
             queue[Element.time.rawValue].origin.y = coverBottom
-            queue[Element.transport.rawValue].origin.y = coverBottom + Layout.smallSpacing
+            queue[Element.transport.rawValue].origin.y = coverGeometry.transportTop
+            queue[Element.transport.rawValue].size.height = PlayerPanelCoverGeometry.transportHeight
             queue[Element.notices.rawValue].origin.y = queue[Element.transport.rawValue].maxY
-            let queueHeight = Layout.queueContentHeight(
-                coverHeight: coverHeight,
-                topSafeArea: topSafeArea,
-                noticesHeight: normal[Element.notices.rawValue].height
-            )
+            // No normal-player bottom padding in B: the queue supplies the
+            // only spacing after transport/notices.
+            let queueHeight = queue[Element.notices.rawValue].maxY
 
             let frames = zip(normal, queue).map { start, end in
                 CGRect(
@@ -1195,7 +1194,7 @@ struct OnTheGoPanel: View {
             sleepTimerMenu
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Layout.transportHeight)
+        .frame(height: Layout.transportHeight + (PlayerPanelCoverGeometry.transportHeight - Layout.transportHeight) * queueMorphProgress)
     }
 
     private var playPauseLabel: some View {
