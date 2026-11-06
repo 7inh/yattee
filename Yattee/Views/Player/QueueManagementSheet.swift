@@ -114,7 +114,7 @@ struct QueueManagementSheet: View {
     private var queueListView: some View {
         QueueListView(onPlay: {
             performDismiss()
-        })
+        }, usesTransparentBackground: true)
     }
 
 

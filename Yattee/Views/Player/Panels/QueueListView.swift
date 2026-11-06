@@ -122,6 +122,9 @@ struct QueueListView: View {
     /// When false, hides the now-playing section (queue page setting).
     var showNowPlaying: Bool = true
 
+    /// Lets the system sheet background show through the list and its rows.
+    var usesTransparentBackground: Bool = false
+
     private var queueManager: QueueManager? { appEnvironment?.queueManager }
     private var playerState: PlayerState? { appEnvironment?.playerService.state }
 
@@ -168,6 +171,7 @@ struct QueueListView: View {
                             )
                             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                             .listRowSeparator(.hidden)
+                            .listRowBackground(usesTransparentBackground ? Color.clear : nil)
                         }
                     } header: {
                         sectionHeader("queue.section.previously", count: history.count)
@@ -184,6 +188,7 @@ struct QueueListView: View {
                         )
                         .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                         .listRowSeparator(.hidden)
+                        .listRowBackground(usesTransparentBackground ? Color.clear : nil)
                     } header: {
                         sectionHeader("queue.section.nowPlaying")
                     }
@@ -209,6 +214,7 @@ struct QueueListView: View {
                             )
                             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                             .listRowSeparator(.hidden)
+                            .listRowBackground(usesTransparentBackground ? Color.clear : nil)
                         }
                         .onMove { source, destination in
                             guard let fromIndex = source.first else { return }
@@ -248,6 +254,7 @@ struct QueueListView: View {
             }, else: { view in
                 view.listStyle(.insetGrouped)
             })
+            .scrollContentBackground(usesTransparentBackground ? .hidden : .automatic)
             .listSectionSpacing(12)
             .environment(\.defaultMinListRowHeight, 48)
             .onAppear {

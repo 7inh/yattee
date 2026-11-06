@@ -54,7 +54,6 @@ struct CommentsView: View {
             }
             .id(sort)
         }
-        .background(Color(.systemBackground))
         .foregroundStyle(.primary)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -85,6 +84,7 @@ struct CommentsView: View {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
+                .modifier(CommentsHeaderButtonStyleModifier())
                 .accessibilityLabel("Show details")
             }
             Button { dismiss() } label: {
@@ -93,9 +93,9 @@ struct CommentsView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            .modifier(CommentsHeaderButtonStyleModifier())
             .accessibilityLabel("Close comments")
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.top, 28)
         .padding(.bottom, 16)
@@ -104,20 +104,40 @@ struct CommentsView: View {
     private var sortChips: some View {
         HStack(spacing: 10) {
             ForEach(CommentSort.allCases, id: \.self) { option in
-                Button { sort = option } label: {
-                    Text(option.title)
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .foregroundStyle(sort == option ? Color(.systemBackground) : .primary)
-                        .background(sort == option ? Color.primary : Color(.secondarySystemBackground), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(sort == option ? .isSelected : [])
+                sortChip(for: option)
+                    .accessibilityAddTraits(sort == option ? .isSelected : [])
             }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private func sortChip(for option: CommentSort) -> some View {
+        let isSelected = sort == option
+        let label = Text(option.title)
+            .font(.subheadline.weight(.medium))
+
+        if #available(iOS 26, *) {
+            let button = Button { sort = option } label: { label }
+            Group {
+                if isSelected {
+                    button.buttonStyle(.glassProminent)
+                } else {
+                    button.buttonStyle(.glass)
+                }
+            }
+            .buttonBorderShape(.capsule)
+        } else {
+            Button { sort = option } label: {
+                label
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
+                    .background(isSelected ? Color.primary : Color(.secondarySystemBackground), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Loading States
@@ -174,5 +194,21 @@ struct CommentsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+}
+
+// MARK: - Header Button Styling
+
+private struct CommentsHeaderButtonStyleModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .buttonSizing(.flexible)
+                .frame(width: 44, height: 44)
+        } else {
+            content.buttonStyle(.plain)
+        }
     }
 }
