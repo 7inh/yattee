@@ -16,6 +16,7 @@ struct LyricsView: View {
     let playerState: PlayerState
     let isSeekDisabled: Bool
     let isActive: Bool
+    let isPaging: Bool
     let onSeek: (TimeInterval) -> Void
 
     @State private var currentIndex: Int?
@@ -64,7 +65,7 @@ struct LyricsView: View {
     private var syncedLines: some View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
-                ScrollView {
+                ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 24) {
                         ForEach(model.lines.indices, id: \.self) { index in
                             let line = model.lines[index]
@@ -94,6 +95,7 @@ struct LyricsView: View {
                     .padding(.bottom, geometry.size.height * 2 / 3)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDisabled(isPaging)
                 .onChange(of: geometry.size) { _, _ in
                     lastScrolledIndex = nil
                 }
@@ -114,10 +116,10 @@ struct LyricsView: View {
                         .init(color: .clear, location: 1)
                     ], startPoint: .top, endPoint: .bottom)
                 }
-                .task(id: scenePhase == .active && isActive) {
+                .task(id: scenePhase == .active && isActive && !isPaging) {
                     // Keep the page mounted during transitions without polling
-                    // or moving its scroll position while it is hidden.
-                    guard scenePhase == .active, isActive else { return }
+                    // or moving its scroll position while hidden or paging.
+                    guard scenePhase == .active, isActive, !isPaging else { return }
                     while !Task.isCancelled {
                         followPlayback(using: proxy)
                         do {
@@ -157,8 +159,8 @@ private struct LyricsSeekButtonStyle: PrimitiveButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        // Paging runs simultaneously with the lyrics' gestures. Require a tap
-        // so a horizontal drag cannot also activate a line's seek button.
+        // Require a tap so neither paging nor vertical scrolling can also
+        // activate a line's seek button.
         configuration.label
             .onTapGesture {
                 guard isEnabled else { return }

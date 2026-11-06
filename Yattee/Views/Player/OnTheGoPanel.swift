@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import Nuke
 import NukeUI
 
@@ -39,7 +40,7 @@ struct OnTheGoPanel: View {
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
-    @GestureState private var isPaging = false
+    @State private var isPaging = false
 
     private enum PlayerPage: Hashable, Sendable {
         case artwork
@@ -132,16 +133,16 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
+                isPaging = false
                 selectPage(.artwork, animated: false)
                 lyricsArtworkColor = .fallback
             }
             .onChange(of: hasLyrics) { _, available in
                 if !available { selectPage(.artwork, animated: false) }
             }
-            .onChange(of: isPaging) { _, paging in
-                // GestureState also resets on cancellation, which must settle
-                // the background and controls along with the content.
-                if !paging { selectPage(selectedPage) }
+            .onDisappear {
+                isPaging = false
+                selectPage(selectedPage, animated: false)
             }
             .onChange(of: selectedPage) { _, page in
                 let backendID = playerService.currentBackend.map { String(describing: ObjectIdentifier($0)) } ?? "none"
@@ -197,35 +198,38 @@ struct OnTheGoPanel: View {
     }
 
     // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
-    private func lyricsPageGesture(width: CGFloat) -> some Gesture {
-        let gesture = DragGesture(minimumDistance: 15, coordinateSpace: .global)
-            .updating($isPaging) { value, paging, _ in
-                let translation = value.translation
-                guard hasLyrics, !state.isControlsLocked,
-                      abs(translation.width) > abs(translation.height) * 1.5 else { return }
-                paging = true
-            }
-            .onChanged { value in
-                let translation = value.translation
-                guard hasLyrics, !state.isControlsLocked,
-                      isPaging || abs(translation.width) > abs(translation.height) * 1.5 else { return }
+    private func lyricsPageGesture(width: CGFloat) -> LyricsPageDragGesture {
+        LyricsPageDragGesture(
+            onChanged: { translation in
+                if !isPaging {
+                    isPaging = true
+                    LoggingService.shared.debug(
+                        "Player paging began: \(selectedPage), translation: \(translation)", category: .player
+                    )
+                }
+                guard hasLyrics, !state.isControlsLocked else { return }
                 // Never ease or spring while tracking the finger.
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    lyricsPageProgress = pageProgress(translation: translation.width, width: width)
+                    lyricsPageProgress = pageProgress(translation: translation, width: width)
                 }
-            }
-            .onEnded { value in
-                guard hasLyrics, !state.isControlsLocked,
-                      isPaging || abs(value.translation.width) > abs(value.translation.height) * 1.5 else {
+            },
+            onEnded: { projectedTranslation in
+                isPaging = false
+                guard hasLyrics, !state.isControlsLocked else {
                     selectPage(selectedPage)
                     return
                 }
-                let projectedProgress = pageProgress(translation: value.predictedEndTranslation.width, width: width)
+                let projectedProgress = pageProgress(translation: projectedTranslation, width: width)
                 selectPage(projectedProgress > 0.5 ? .lyrics : .artwork)
+            },
+            onCancelled: {
+                isPaging = false
+                selectPage(selectedPage)
+                LoggingService.shared.debug("Player paging cancelled: \(selectedPage)", category: .player)
             }
-        return hasLyrics && !state.isControlsLocked ? gesture : nil
+        )
     }
 
     @ViewBuilder
@@ -359,6 +363,7 @@ struct OnTheGoPanel: View {
                                 playerState: state,
                                 isSeekDisabled: isSeekDisabled,
                                 isActive: progress > 0 || showingLyrics,
+                                isPaging: isPaging,
                                 onSeek: seek
                             )
                             .environment(\.colorScheme, .dark)
@@ -371,7 +376,7 @@ struct OnTheGoPanel: View {
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .contentShape(Rectangle())
-                    .simultaneousGesture(lyricsPageGesture(width: geometry.size.width))
+                    .gesture(lyricsPageGesture(width: geometry.size.width))
                 }
             }
             .clipped()
@@ -1096,6 +1101,68 @@ struct OnTheGoPanel: View {
                     Image(systemName: "checkmark")
                 }
             }
+        }
+    }
+}
+
+// MARK: - Paging Gesture Arbitration
+
+@MainActor
+private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat) -> Void
+    let onCancelled: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.maximumNumberOfTouches = 1
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {}
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let translation = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .began, .changed:
+            onChanged(translation)
+        case .ended:
+            // Project a short flick ahead, just as DragGesture's predicted end
+            // translation did, while keeping tracking tied to the actual finger.
+            onEnded(translation + recognizer.velocity(in: recognizer.view).x * 0.2)
+        case .cancelled:
+            onCancelled()
+        default:
+            break
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let translation = pan.translation(in: pan.view)
+            // Decide once, before recognition. Filtering inside onChanged is
+            // too late to stop a ScrollView or native zoom back-swipe winning.
+            // Reserve diagonal starts for paging too; only predominantly
+            // vertical drags may reach scrolling or downward dismissal.
+            return abs(translation.x) * 1.5 > abs(translation.y)
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            // Both scroll pans and the presentation's dismiss/edge recognizers
+            // must wait for our direction decision. A horizontal start belongs
+            // to the pager for the entire touch, including at either endpoint;
+            // vertical starts fail immediately and keep normal scroll/dismiss.
+            true
         }
     }
 }
