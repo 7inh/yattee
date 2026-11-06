@@ -163,7 +163,7 @@ struct OnTheGoPanel: View {
                 topBarSymbol("chevron.down")
             }
             .buttonStyle(.plain)
-            .fixedSize()
+            .topBarCircle()
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -179,8 +179,8 @@ struct OnTheGoPanel: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
-            .fixedSize()
             .menuOrder(.fixed)
+            .topBarCircle()
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
@@ -195,10 +195,7 @@ struct OnTheGoPanel: View {
         Image(systemName: name)
             .font(.system(size: 14, weight: .semibold))
             .frame(width: 34, height: 34, alignment: .center)
-            .modifier(OnTheGoTopBarStyleModifier())
-            .fixedSize()
-            .frame(width: 44, height: 44, alignment: .center)
-            .contentShape(Rectangle())
+            .contentShape(Circle())
     }
 
     @ViewBuilder
@@ -735,6 +732,18 @@ struct OnTheGoPanel: View {
 }
 
 // MARK: - Top Bar Styling
+
+private extension View {
+    /// Glass is applied outside Button/Menu so both get an identical 34pt circle;
+    /// the outer frame keeps a 44pt hit area.
+    func topBarCircle() -> some View {
+        self
+            .frame(width: 34, height: 34)
+            .modifier(OnTheGoTopBarStyleModifier())
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+    }
+}
 
 private struct OnTheGoTopBarStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
