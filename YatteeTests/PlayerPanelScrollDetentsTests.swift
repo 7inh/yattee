@@ -52,6 +52,70 @@ struct PlayerPanelScrollDetentsTests {
         #expect(detents.targetOffset(startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2]) == sample[3])
     }
 
+    @Test("Downward drags from B can always target A", arguments: [
+        [CGFloat(140), -60, 0], // A 200pt drag from B, before top-edge clamping.
+        [140, 0, 0],
+        [140, 40, 0],
+        [140, 69, 0],
+        [140.5, 0, 0],
+        [139.5, 0, 0],
+        [140, 120, -600]
+    ])
+    func collapsingHalfOpen(sample: [CGFloat]) {
+        #expect(detents.targetOffset(
+            startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2], maximumOffset: 500
+        ) == 0)
+    }
+
+    @Test("Short queues add exactly enough content to reach C", arguments: [CGFloat(0), 130, 400])
+    func shortQueueScrollRange(queueHeight: CGFloat) {
+        let viewportHeight = PlayerPanelScrollDetents.viewportHeight(containerHeight: 728, topInset: 80, bottomInset: 34)
+        let minimumHeight = detents.minimumContentHeight(viewportHeight: viewportHeight)
+        let contentHeight = max(minimumHeight, detents.fullQueueOffset + queueHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
+
+        #expect(viewportHeight == 614)
+        #expect(minimumHeight == 1114)
+        #expect(maximumOffset == detents.fullQueueOffset)
+        #expect(PlayerPanelScrollDetents.clampedOffset(500 + 340, maximumOffset: maximumOffset) == 500)
+    }
+
+    @Test("Long queues stop at the last row plus their bottom inset")
+    func longQueueScrollRange() {
+        let viewportHeight: CGFloat = 614
+        let queueHeight: CGFloat = 1200 // Includes the normal queue padding.
+        let contentHeight = max(detents.minimumContentHeight(viewportHeight: viewportHeight), 500 + queueHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
+
+        #expect(maximumOffset == 1086)
+        #expect(PlayerPanelScrollDetents.clampedOffset(840, maximumOffset: maximumOffset) == 840)
+        #expect(PlayerPanelScrollDetents.clampedOffset(1500, maximumOffset: maximumOffset) == maximumOffset)
+        #expect(maximumOffset + viewportHeight == contentHeight)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 950, velocity: 600, maximumOffset: maximumOffset) == nil)
+        #expect(detents.targetOffset(startOffset: 800, releaseOffset: 1200, velocity: 600, maximumOffset: maximumOffset) == maximumOffset)
+    }
+
+    @Test("Snaps and queue overscroll respect the maximum offset", arguments: [
+        [CGFloat(500), 840, 600, 500, 500],
+        [500, 840, 0, 500, 500],
+        [500, 480, -600, 500, 140],
+        [140, 160, 600, 300, 300],
+        [0, 20, 2400, 100, 100]
+    ])
+    func clampedTargets(sample: [CGFloat]) {
+        #expect(detents.targetOffset(
+            startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2], maximumOffset: sample[3]
+        ) == sample[4])
+    }
+
+    @Test("Small content and excessive insets cannot produce negative scroll ranges")
+    func nonnegativeScrollRange() {
+        #expect(PlayerPanelScrollDetents.viewportHeight(containerHeight: 100, topInset: 80, bottomInset: 34) == 0)
+        #expect(PlayerPanelScrollDetents.maximumOffset(contentHeight: 100, viewportHeight: 614) == 0)
+        #expect(PlayerPanelScrollDetents.clampedOffset(-40, maximumOffset: 500) == 0)
+        #expect(PlayerPanelScrollDetents.clampedOffset(40, maximumOffset: 0) == 0)
+    }
+
     @Test("Queue content scrolls freely beyond the full queue detent")
     func freeQueueScrolling() {
         #expect(detents.targetOffset(startOffset: 500, releaseOffset: 540, velocity: 600) == nil)

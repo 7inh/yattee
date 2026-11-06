@@ -49,6 +49,7 @@ struct CompactPlayerCard: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .accessibilityLabel(actionLabel)
@@ -75,6 +76,7 @@ struct CompactPlayerCard: View {
             progressLine
                 .padding(.horizontal, Self.cornerRadius)
                 .padding(.bottom, 1)
+                .allowsHitTesting(false)
         }
         .compactPlayerBackground()
     }

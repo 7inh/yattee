@@ -25,7 +25,7 @@ struct OnTheGoPanel: View {
     let playerService: PlayerService
     let onClose: () -> Void
 
-    @GestureState private var scrubTime: TimeInterval? = nil
+    @State private var scrubTime: TimeInterval?
     @State private var pendingSeekTime: TimeInterval?
     @State private var transportFeedbackTrigger = false
     @State private var showingPlayerMenu = false
@@ -35,8 +35,9 @@ struct OnTheGoPanel: View {
     @State private var showingCommentDetails = false
     @State private var showingDeleteDownloadConfirmation = false
     @State private var downloadToDelete: Download?
-    @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var scrollPosition = ScrollPosition(y: 0)
     @State private var panelScrollOffset: CGFloat = 0
+    @State private var scrollViewportHeight: CGFloat = 0
     @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
         screenHeight: 0, topSafeArea: 0, headerHeight: Layout.headerHeight, noticesHeight: 0
     )
@@ -52,6 +53,11 @@ struct OnTheGoPanel: View {
     private enum PlayerPage: Hashable, Sendable {
         case artwork
         case lyrics
+    }
+
+    private struct ScrollMetrics: Equatable, Sendable {
+        let offset: CGFloat
+        let viewportHeight: CGFloat
     }
 
     private enum Layout {
@@ -165,6 +171,7 @@ struct OnTheGoPanel: View {
                 }
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
+                scrubTime = nil
                 pendingSeekTime = nil
                 isPaging = false
                 selectPage(.artwork, animated: false)
@@ -180,7 +187,10 @@ struct OnTheGoPanel: View {
                 if locked { cancelPaging() }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { cancelPaging() }
+                if phase != .active {
+                    scrubTime = nil
+                    cancelPaging()
+                }
             }
             .onChange(of: queueMorphProgress > 0) { _, openingQueue in
                 if openingQueue { cancelPaging() }
@@ -258,8 +268,8 @@ struct OnTheGoPanel: View {
     }
 
     // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
-    private func lyricsPageGesture(width: CGFloat) -> LyricsPageDragGesture {
-        LyricsPageDragGesture(
+    private func lyricsPageGesture(width: CGFloat) -> PlayerHorizontalDragGesture {
+        PlayerHorizontalDragGesture(
             isEnabled: hasLyrics && queueMorphProgress == 0 && !state.isControlsLocked && scenePhase == .active,
             onChanged: { translation in
                 guard hasLyrics, queueMorphProgress == 0, !state.isControlsLocked else { return }
@@ -343,6 +353,7 @@ struct OnTheGoPanel: View {
                 (coverGeometry.halfOpenOffset + coverGeometry.coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
             ))
             let detents = coverGeometry.detents
+            let visibleHeight = scrollViewportHeight > 0 ? scrollViewportHeight : viewportHeight
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent(viewportHeight: viewportHeight, coverGeometry: coverGeometry)
@@ -354,11 +365,15 @@ struct OnTheGoPanel: View {
                             .padding(.horizontal, Layout.horizontalPadding)
                             .padding(.top, coverGeometry.queueTopPadding(at: panelScrollOffset))
                             .padding(.bottom, Layout.mediumSpacing)
-                            // A short queue still needs enough scroll range to
-                            // move all player controls behind the sticky header.
-                            .frame(minHeight: viewportHeight, alignment: .top)
                     }
                 }
+                // Apply the minimum to the entire content, using the actual
+                // inset-adjusted viewport. A queue-sized spacer can otherwise
+                // leave empty scrollable space after the last row.
+                .frame(
+                    minHeight: state.queue.isEmpty ? 0 : detents.minimumContentHeight(viewportHeight: visibleHeight),
+                    alignment: .top
+                )
             }
             .scrollIndicators(.hidden)
             // The morphing cover can draw behind the reserved header and status bar.
@@ -368,10 +383,19 @@ struct OnTheGoPanel: View {
             // Reflow moves the queue up as the player morphs. Keep the scroll
             // coordinate fixed instead of preserving a position near its end.
             .defaultScrollAnchor(.top, for: .sizeChanges)
-            // Snap on release, not during layout reflow: a scroll target floor
-            // at C would prevent the same drag from returning into the panel.
+            // Bound only the end. A floor at C would block downward drags from
+            // queue rows continuing into B/A.
+            .scrollTargetBehavior(QueueEndScrollTargetBehavior(viewportHeight: visibleHeight))
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
+                let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+                    contentHeight: context.geometry.contentSize.height,
+                    viewportHeight: PlayerPanelScrollDetents.viewportHeight(
+                        containerHeight: context.geometry.containerSize.height,
+                        topInset: context.geometry.contentInsets.top,
+                        bottomInset: context.geometry.contentInsets.bottom
+                    )
+                )
                 defer {
                     if newPhase == .idle {
                         scrollGestureStartOffset = nil
@@ -381,7 +405,7 @@ struct OnTheGoPanel: View {
                 if newPhase == .animating { isQueueDecelerating = false }
                 if newPhase == .idle, !state.queue.isEmpty, state.currentVideo != nil {
                     LoggingService.shared.debug(
-                        "Player panel settled: offset=\(offset), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
+                        "Player panel settled: offset=\(offset), maxOffset=\(maximumOffset), contentHeight=\(context.geometry.contentSize.height), viewport=\(visibleHeight), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
                         category: .player
                     )
                 }
@@ -404,7 +428,8 @@ struct OnTheGoPanel: View {
                 let target = detents.targetOffset(
                     startOffset: startOffset,
                     releaseOffset: offset,
-                    velocity: velocity
+                    velocity: velocity,
+                    maximumOffset: maximumOffset
                 )
                 if isRelease {
                     isQueueDecelerating = target == nil && offset > detents.fullQueueOffset && newPhase == .decelerating
@@ -417,23 +442,23 @@ struct OnTheGoPanel: View {
                 guard let target, isRelease || abs(target - offset) > 0.5 else { return }
                 // Replace panel deceleration with a spring immediately on
                 // release. Queue-only gestures retain native scrolling.
-                withAnimation(pageSnapAnimation) {
-                    if target == 0 {
-                        scrollPosition.scrollTo(edge: .top)
-                    } else {
-                        // ScrollPosition uses distance from the inset-adjusted
-                        // top, the same coordinates as our detents and offset.
-                        scrollPosition.scrollTo(y: target)
-                    }
-                }
+                scrollPanel(to: target)
             }
             .onChange(of: coverGeometry, initial: true) { _, value in
                 panelCoverGeometry = value
             }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-            } action: { _, offset in
-                panelScrollOffset = offset
+            .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
+                ScrollMetrics(
+                    offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                    viewportHeight: PlayerPanelScrollDetents.viewportHeight(
+                        containerHeight: geometry.containerSize.height,
+                        topInset: geometry.contentInsets.top,
+                        bottomInset: geometry.contentInsets.bottom
+                    )
+                )
+            } action: { _, metrics in
+                panelScrollOffset = metrics.offset
+                scrollViewportHeight = metrics.viewportHeight
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
@@ -446,6 +471,15 @@ struct OnTheGoPanel: View {
                 // scrolling is allowed to draw beyond the viewport's bounds.
                 playerHeader(coverProgress: coverHeaderProgress)
             }
+        }
+    }
+
+    private func scrollPanel(to offset: CGFloat) {
+        isQueueDecelerating = false
+        withAnimation(pageSnapAnimation) {
+            // A uses the same explicit coordinate as B/C. An edge request can
+            // remain anchored while the morph changes the content's size.
+            scrollPosition.scrollTo(y: offset)
         }
     }
 
@@ -639,14 +673,11 @@ struct OnTheGoPanel: View {
                     actionLabel: "player.nowPlaying.title",
                     actionHint: "Returns to the player controls"
                 ) {
-                    isQueueDecelerating = false
                     LoggingService.shared.debug(
                         "Player pinned card: returning to A from offset=\(panelScrollOffset)",
                         category: .player
                     )
-                    withAnimation(pageSnapAnimation) {
-                        scrollPosition.scrollTo(edge: .top)
-                    }
+                    scrollPanel(to: 0)
                 }
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
@@ -1134,11 +1165,24 @@ struct OnTheGoPanel: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($scrubTime) { value, time, _ in
-                        guard !isSeekDisabled else { return }
-                        time = seekTime(at: value.location.x, trackWidth: trackWidth)
-                    }
+                PlayerHorizontalDragGesture(
+                    isEnabled: !isSeekDisabled && scenePhase == .active,
+                    coordinate: .location,
+                    onChanged: { position in
+                        if scrubTime == nil {
+                            LoggingService.shared.debug("Player seek: horizontal drag began", category: .player)
+                        }
+                        scrubTime = seekTime(at: position, trackWidth: trackWidth)
+                    },
+                    onEnded: { position in
+                        scrubTime = nil
+                        seek(to: seekTime(at: position, trackWidth: trackWidth))
+                    },
+                    onCancelled: { scrubTime = nil }
+                )
+            )
+            .simultaneousGesture(
+                SpatialTapGesture()
                     .onEnded { value in
                         seek(to: seekTime(at: value.location.x, trackWidth: trackWidth))
                     }
@@ -1376,11 +1420,37 @@ struct OnTheGoPanel: View {
     }
 }
 
-// MARK: - Paging Gesture Arbitration
+// MARK: - Queue Scroll Boundary
+
+private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
+    let viewportHeight: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: context.contentSize.height,
+            viewportHeight: viewportHeight
+        )
+        // Preserve native scrolling and dismissal below the upper limit. In
+        // particular, never add a lower bound at the full-queue detent.
+        guard target.rect.minY > maximumOffset else { return }
+        target.rect.origin.y = PlayerPanelScrollDetents.clampedOffset(
+            target.rect.minY, maximumOffset: maximumOffset
+        )
+        target.anchor = .top
+    }
+}
+
+// MARK: - Horizontal Gesture Arbitration
 
 @MainActor
-private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
+private struct PlayerHorizontalDragGesture: UIGestureRecognizerRepresentable {
+    enum Coordinate: Sendable {
+        case projectedTranslation
+        case location
+    }
+
     let isEnabled: Bool
+    var coordinate: Coordinate = .projectedTranslation
     let onChanged: (CGFloat) -> Void
     let onEnded: (CGFloat) -> Void
     let onCancelled: () -> Void
@@ -1398,8 +1468,8 @@ private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
     }
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        // Disabling an active pan cancels it, including when lyrics disappear
-        // or the app leaves the foreground during a drag.
+        // Disabling an active pan cancels paging/scrubbing, including when
+        // controls become unavailable or the app leaves the foreground.
         if recognizer.isEnabled != isEnabled {
             recognizer.isEnabled = isEnabled
         }
@@ -1407,13 +1477,14 @@ private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
         let translation = recognizer.translation(in: recognizer.view).x
+        let location = recognizer.location(in: recognizer.view).x
         switch recognizer.state {
         case .began, .changed:
-            onChanged(translation)
+            onChanged(coordinate == .location ? location : translation)
         case .ended:
             // Project a short flick ahead, just as DragGesture's predicted end
             // translation did, while keeping tracking tied to the actual finger.
-            onEnded(translation + recognizer.velocity(in: recognizer.view).x * 0.2)
+            onEnded(coordinate == .location ? location : translation + recognizer.velocity(in: recognizer.view).x * 0.2)
         case .cancelled, .failed:
             onCancelled()
         default:
