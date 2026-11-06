@@ -18,6 +18,7 @@ struct OnTheGoPanel: View {
     @Environment(\.presentAppSheet) private var presentAppSheet
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     let playerService: PlayerService
     let onClose: () -> Void
@@ -66,7 +67,7 @@ struct OnTheGoPanel: View {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
     private var isStickyPlayerVisible: Bool {
-        !showingLyrics && hasScrolledPastTransport && state.currentVideo != nil
+        hasScrolledPastTransport && state.currentVideo != nil
     }
     private var sleepTimer: SleepTimer { .shared }
     private var isAutoPlayNextEnabled: Bool {
@@ -94,6 +95,8 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
+            // Scope lyrics' dark appearance to this panel and restore the inherited scheme on artwork.
+            .environment(\.colorScheme, showingLyrics ? .dark : colorScheme)
             .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(.primary)
             .tint(nowPlayingAccent)
@@ -149,26 +152,7 @@ struct OnTheGoPanel: View {
             .accessibilityAction(.escape, onClose)
     }
 
-    private var panelContent: some View {
-        GeometryReader { geometry in
-            ZStack {
-                if showingLyrics {
-                    lyricsPanelContent
-                        .transition(pageTransition(from: .trailing))
-                } else {
-                    standardPanelContent
-                        .transition(pageTransition(from: .leading))
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .offset(x: reduceMotion ? 0 : lyricsPageOffset)
-            .opacity(1 - min(abs(lyricsPageOffset) / max(1, geometry.size.width), 1) * 0.15)
-        }
-        .clipped()
-        .animation(reduceMotion ? .linear(duration: 0) : .spring(response: 0.38, dampingFraction: 0.85), value: showingLyrics)
-    }
-
-    // Only the artwork/title and lyrics accept paging; controls and queue keep their gestures.
+    // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
     private var lyricsPageGesture: some Gesture {
         let gesture = DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .updating($lyricsPageOffset) { value, offset, transaction in
@@ -229,7 +213,7 @@ struct OnTheGoPanel: View {
         .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: lyricsArtworkColor)
     }
 
-    private var standardPanelContent: some View {
+    private var panelContent: some View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -258,9 +242,7 @@ struct OnTheGoPanel: View {
 
     private var playerContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Center the artwork and controls as one group, with fixed gaps
-            // that leave room for full-width artwork on smaller phones.
-            artwork
+            pagedContent
                 .padding(.bottom, Layout.mediumSpacing)
             playerControls
         }
@@ -302,59 +284,32 @@ struct OnTheGoPanel: View {
         }
     }
 
-    // MARK: - Full-Screen Lyrics
+    // MARK: - Paged Content
 
-    private var lyricsPanelContent: some View {
-        VStack(spacing: 0) {
-            topBar
-
-            VStack(spacing: 0) {
-                LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
-                    .padding(.top, Layout.smallSpacing)
-                    .frame(maxHeight: .infinity)
-                    .layoutPriority(1)
-                    .contentShape(Rectangle())
-                    .simultaneousGesture(lyricsPageGesture)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    lyricsPageIndicator
-                    seekControls
-                    transportControls
-                        .padding(.top, Layout.mediumSpacing)
-                    playbackNotices
+    private var pagedContent: some View {
+        // Both pages occupy the artwork's square, so paging cannot resize or replace the controls.
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                GeometryReader { geometry in
+                    ZStack {
+                        if showingLyrics {
+                            LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
+                                .transition(pageTransition(from: .trailing))
+                        } else {
+                            artwork
+                                .transition(pageTransition(from: .leading))
+                        }
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .offset(x: reduceMotion ? 0 : lyricsPageOffset)
+                    .opacity(1 - min(abs(lyricsPageOffset) / max(1, geometry.size.width), 1) * 0.15)
                 }
-                .padding(.bottom, Layout.mediumSpacing)
             }
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, Layout.horizontalPadding)
-        }
-        // Keep dark styling local: a sheet-wide preferredColorScheme can persist after paging back.
-        .environment(\.colorScheme, .dark)
-    }
-
-    private var lyricsVideoInfo: some View {
-        HStack(spacing: 8) {
-            artworkImage(placeholderSize: 14)
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(videoTitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Text(state.currentVideo?.author.name ?? "")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            .contentShape(Rectangle())
+            .simultaneousGesture(lyricsPageGesture)
+            .animation(reduceMotion ? .linear(duration: 0) : .spring(response: 0.38, dampingFraction: 0.85), value: showingLyrics)
     }
 
     // MARK: - Top Bar
@@ -396,11 +351,7 @@ struct OnTheGoPanel: View {
             .topBarCircle()
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
-            if showingLyrics {
-                lyricsVideoInfo
-            } else {
-                Spacer()
-            }
+            Spacer()
 
             Button {
                 showingPlayerMenu = true
@@ -712,7 +663,6 @@ struct OnTheGoPanel: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
-            .simultaneousGesture(lyricsPageGesture)
             .accessibilityHidden(true)
     }
 
@@ -775,7 +725,6 @@ struct OnTheGoPanel: View {
         }
         .buttonStyle(.plain)
         .disabled(state.currentVideo == nil)
-        .simultaneousGesture(lyricsPageGesture)
         .accessibilityLabel(videoTitle)
         .accessibilityHint("Shows details")
     }
