@@ -820,7 +820,11 @@ struct OnTheGoPanel: View {
             }
             .disabled(state.currentVideo == nil)
         } label: {
-            transportValue(sleepTimerText, color: sleepTimer.isActive ? nowPlayingAccent : .secondary)
+            if sleepTimer.mode == .off {
+                sleepOffSymbol
+            } else {
+                transportValue(sleepTimerText, color: nowPlayingAccent)
+            }
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
@@ -854,6 +858,23 @@ struct OnTheGoPanel: View {
         case .endOfVideo:
             return String(localized: "End of video")
         }
+    }
+
+    /// SF Symbols has no slashed moon, so draw the slash the way SF does
+    /// (a stroke with a background-colored cutout beside it).
+    private var sleepOffSymbol: some View {
+        Image(systemName: "moon.zzz")
+            .font(.system(size: 22, weight: .regular))
+            .foregroundStyle(.primary)
+            .overlay {
+                Capsule()
+                    .fill(.primary)
+                    .frame(width: 2, height: 30)
+                    .background(Capsule().fill(Color(.systemBackground)).frame(width: 5).offset(x: 2))
+                    .rotationEffect(.degrees(-45))
+            }
+            .frame(width: 56, height: 44, alignment: .center)
+            .contentShape(Rectangle())
     }
 
     private func transportValue(_ value: String, color: Color) -> some View {
