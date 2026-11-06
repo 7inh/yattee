@@ -38,6 +38,8 @@ struct OnTheGoPanel: View {
     @State private var showingLyrics = false
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
+    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.38, dampingFraction: 0.85)))
+    private var lyricsPageOffset: CGFloat = 0
 
     private enum ScrollCoordinateSpace: Hashable, Sendable {
         case player
@@ -138,16 +140,71 @@ struct OnTheGoPanel: View {
     }
 
     private var panelContent: some View {
-        ZStack {
-            if showingLyrics {
-                lyricsPanelContent
-                    .transition(.opacity)
-            } else {
-                standardPanelContent
-                    .transition(.opacity)
+        GeometryReader { geometry in
+            ZStack {
+                if showingLyrics {
+                    lyricsPanelContent
+                        .transition(pageTransition(from: .trailing))
+                } else {
+                    standardPanelContent
+                        .transition(pageTransition(from: .leading))
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .offset(x: reduceMotion ? 0 : lyricsPageOffset)
+            .opacity(1 - min(abs(lyricsPageOffset) / max(1, geometry.size.width), 1) * 0.15)
         }
-        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.3), value: showingLyrics)
+        .clipped()
+        .animation(reduceMotion ? .linear(duration: 0) : .spring(response: 0.38, dampingFraction: 0.85), value: showingLyrics)
+    }
+
+    // Only the artwork/title and lyrics accept paging; controls and queue keep their gestures.
+    private var lyricsPageGesture: some Gesture {
+        let gesture = DragGesture(minimumDistance: 15, coordinateSpace: .global)
+            .updating($lyricsPageOffset) { value, offset, transaction in
+                transaction.animation = nil
+                let translation = value.translation
+                guard hasLyrics, !state.isControlsLocked,
+                      abs(translation.width) > abs(translation.height) * 1.5 else {
+                    offset = 0
+                    return
+                }
+                let isForward = showingLyrics ? translation.width > 0 : translation.width < 0
+                offset = isForward ? translation.width : translation.width * 0.15
+            }
+            .onEnded { value in
+                guard hasLyrics, !state.isControlsLocked,
+                      abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                let direction: CGFloat = showingLyrics ? 1 : -1
+                let distance = value.translation.width * direction
+                let predictedDistance = value.predictedEndTranslation.width * direction
+                if distance > 0, max(distance, predictedDistance) >= 60 {
+                    showingLyrics.toggle()
+                }
+            }
+        return hasLyrics && !state.isControlsLocked ? gesture : nil
+    }
+
+    private func pageTransition(from edge: Edge) -> AnyTransition {
+        reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
+    }
+
+    @ViewBuilder
+    private var lyricsPageIndicator: some View {
+        if hasLyrics {
+            HStack(spacing: 6) {
+                ForEach(0..<2) { page in
+                    Circle()
+                        .fill(Color.primary.opacity((page == 1) == showingLyrics ? 0.85 : 0.25))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Layout.smallSpacing)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Player pages")
+            .accessibilityValue(showingLyrics ? "Lyrics" : "Artwork")
+        }
     }
 
     private var panelBackground: some View {
@@ -204,6 +261,7 @@ struct OnTheGoPanel: View {
     private var playerControls: some View {
         VStack(alignment: .leading, spacing: 0) {
             videoInfo
+            lyricsPageIndicator
             seekControls
                 .id(state.currentVideo?.id)
                 .padding(.top, Layout.smallSpacing)
@@ -243,8 +301,11 @@ struct OnTheGoPanel: View {
                     .padding(.top, Layout.smallSpacing)
                     .frame(maxHeight: .infinity)
                     .layoutPriority(1)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(lyricsPageGesture)
 
                 VStack(alignment: .leading, spacing: 0) {
+                    lyricsPageIndicator
                     seekControls
                     transportControls
                         .padding(.top, Layout.mediumSpacing)
@@ -329,30 +390,6 @@ struct OnTheGoPanel: View {
             }
 
             Button {
-                showingLyrics.toggle()
-            } label: {
-                topBarSymbol(showingLyrics ? "quote.bubble.fill" : "quote.bubble")
-            }
-            .buttonStyle(.plain)
-            .topBarCircle()
-            .contextMenu {
-                if lyrics.tracks.count > 1 {
-                    Section("Lyrics language") {
-                        LyricsTrackOptions(model: lyrics)
-                    }
-                }
-            }
-            .disabled(!hasLyrics || state.isControlsLocked)
-            .opacity(hasLyrics ? 1 : 0)
-            .accessibilityHidden(!hasLyrics)
-            .accessibilityLabel("Lyrics")
-            .accessibilityValue(showingLyrics ? "On" : "Off")
-
-            if !showingLyrics {
-                Spacer()
-            }
-
-            Button {
                 showingPlayerMenu = true
             } label: {
                 topBarSymbol("ellipsis")
@@ -408,6 +445,14 @@ struct OnTheGoPanel: View {
                 playerMenuRow(String(localized: "Lyrics"), systemImage: showingLyrics ? "quote.bubble.fill" : "quote.bubble")
             }
             .disabled(!hasLyrics || state.isControlsLocked)
+            .accessibilityValue(showingLyrics ? "On" : "Off")
+            .contextMenu {
+                if lyrics.tracks.count > 1 {
+                    Section("Lyrics language") {
+                        LyricsTrackOptions(model: lyrics)
+                    }
+                }
+            }
 
             if lyrics.tracks.count > 1 {
                 Menu {
@@ -653,6 +698,8 @@ struct OnTheGoPanel: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .simultaneousGesture(lyricsPageGesture)
             .accessibilityHidden(true)
     }
 
@@ -715,6 +762,7 @@ struct OnTheGoPanel: View {
         }
         .buttonStyle(.plain)
         .disabled(state.currentVideo == nil)
+        .simultaneousGesture(lyricsPageGesture)
         .accessibilityLabel(videoTitle)
         .accessibilityHint("Shows details")
     }
