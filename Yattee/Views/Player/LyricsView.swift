@@ -15,6 +15,7 @@ struct LyricsView: View {
     @Bindable var model: LyricsViewModel
     let playerState: PlayerState
     let isSeekDisabled: Bool
+    let isActive: Bool
     let onSeek: (TimeInterval) -> Void
 
     @State private var currentIndex: Int?
@@ -113,8 +114,10 @@ struct LyricsView: View {
                         .init(color: .clear, location: 1)
                     ], startPoint: .top, endPoint: .bottom)
                 }
-                .task(id: scenePhase) {
-                    guard scenePhase == .active else { return }
+                .task(id: scenePhase == .active && isActive) {
+                    // Keep the page mounted during transitions without polling
+                    // or moving its scroll position while it is hidden.
+                    guard scenePhase == .active, isActive else { return }
                     while !Task.isCancelled {
                         followPlayback(using: proxy)
                         do {

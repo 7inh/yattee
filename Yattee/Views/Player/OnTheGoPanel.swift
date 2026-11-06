@@ -36,10 +36,10 @@ struct OnTheGoPanel: View {
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var hasScrolledPastTransport = false
     @State private var selectedPage = PlayerPage.artwork
+    @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
-    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.38, dampingFraction: 0.85)))
-    private var lyricsPageOffset: CGFloat = 0
+    @GestureState private var isPaging = false
 
     private enum PlayerPage: Hashable, Sendable {
         case artwork
@@ -95,10 +95,11 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
-            // Scope lyrics' dark appearance to this panel and restore the inherited scheme on artwork.
-            .environment(\.colorScheme, showingLyrics ? .dark : colorScheme)
+            // System presentations use the nearer page's scheme. Visible controls
+            // resolve their original colors separately so this never flips them.
+            .environment(\.colorScheme, lyricsPageProgress > 0.5 ? .dark : colorScheme)
             .background(panelBackground.ignoresSafeArea())
-            .foregroundStyle(.primary)
+            .foregroundStyle(controlPrimaryColor)
             .tint(nowPlayingAccent)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
@@ -131,8 +132,16 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
-                selectedPage = .artwork
+                selectPage(.artwork, animated: false)
                 lyricsArtworkColor = .fallback
+            }
+            .onChange(of: hasLyrics) { _, available in
+                if !available { selectPage(.artwork, animated: false) }
+            }
+            .onChange(of: isPaging) { _, paging in
+                // GestureState also resets on cancellation, which must settle
+                // the background and controls along with the content.
+                if !paging { selectPage(selectedPage) }
             }
             .onChange(of: selectedPage) { _, page in
                 let backendID = playerService.currentBackend.map { String(describing: ObjectIdentifier($0)) } ?? "none"
@@ -152,35 +161,71 @@ struct OnTheGoPanel: View {
             .accessibilityAction(.escape, onClose)
     }
 
+    // MARK: - Page Progress and Appearance
+
+    private var pageSnapAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.38)
+    }
+
+    private var controlPrimaryColor: Color {
+        pageColor(from: .primary, to: .white)
+    }
+
+    private var controlSecondaryColor: Color {
+        pageColor(from: .secondary, to: .white.opacity(0.6))
+    }
+
+    private func pageColor(from normalColor: Color, to lyricsColor: Color) -> Color {
+        // Resolve before the panel's forced dark scheme. This is inexpensive
+        // color interpolation; artwork sampling stays in the image-loading task.
+        var environment = EnvironmentValues()
+        environment.colorScheme = colorScheme
+        let normalColor = Color(normalColor.resolve(in: environment))
+        return normalColor.mix(with: lyricsColor, by: Double(lyricsPageProgress))
+    }
+
+    private func selectPage(_ page: PlayerPage, animated: Bool = true) {
+        withAnimation(animated ? pageSnapAnimation : nil) {
+            selectedPage = page
+            lyricsPageProgress = page == .lyrics ? 1 : 0
+        }
+    }
+
+    private func pageProgress(translation: CGFloat, width: CGFloat) -> CGFloat {
+        let start: CGFloat = showingLyrics ? 1 : 0
+        return min(1, max(0, start - translation / max(1, width)))
+    }
+
     // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
-    private var lyricsPageGesture: some Gesture {
+    private func lyricsPageGesture(width: CGFloat) -> some Gesture {
         let gesture = DragGesture(minimumDistance: 15, coordinateSpace: .global)
-            .updating($lyricsPageOffset) { value, offset, transaction in
-                transaction.animation = nil
+            .updating($isPaging) { value, paging, _ in
                 let translation = value.translation
                 guard hasLyrics, !state.isControlsLocked,
-                      abs(translation.width) > abs(translation.height) * 1.5 else {
-                    offset = 0
-                    return
+                      abs(translation.width) > abs(translation.height) * 1.5 else { return }
+                paging = true
+            }
+            .onChanged { value in
+                let translation = value.translation
+                guard hasLyrics, !state.isControlsLocked,
+                      isPaging || abs(translation.width) > abs(translation.height) * 1.5 else { return }
+                // Never ease or spring while tracking the finger.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    lyricsPageProgress = pageProgress(translation: translation.width, width: width)
                 }
-                let isForward = showingLyrics ? translation.width > 0 : translation.width < 0
-                offset = isForward ? translation.width : translation.width * 0.15
             }
             .onEnded { value in
                 guard hasLyrics, !state.isControlsLocked,
-                      abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                let direction: CGFloat = showingLyrics ? 1 : -1
-                let distance = value.translation.width * direction
-                let predictedDistance = value.predictedEndTranslation.width * direction
-                if distance > 0, max(distance, predictedDistance) >= 60 {
-                    selectedPage = showingLyrics ? .artwork : .lyrics
+                      isPaging || abs(value.translation.width) > abs(value.translation.height) * 1.5 else {
+                    selectPage(selectedPage)
+                    return
                 }
+                let projectedProgress = pageProgress(translation: value.predictedEndTranslation.width, width: width)
+                selectPage(projectedProgress > 0.5 ? .lyrics : .artwork)
             }
         return hasLyrics && !state.isControlsLocked ? gesture : nil
-    }
-
-    private func pageTransition(from edge: Edge) -> AnyTransition {
-        reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
     }
 
     @ViewBuilder
@@ -189,7 +234,9 @@ struct OnTheGoPanel: View {
             HStack(spacing: 6) {
                 ForEach(0..<2) { page in
                     Circle()
-                        .fill(Color.primary.opacity((page == 1) == showingLyrics ? 0.85 : 0.25))
+                        .fill(controlPrimaryColor.opacity(page == 0
+                            ? 0.85 - 0.6 * Double(lyricsPageProgress)
+                            : 0.25 + 0.6 * Double(lyricsPageProgress)))
                         .frame(width: 6, height: 6)
                 }
             }
@@ -198,19 +245,25 @@ struct OnTheGoPanel: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Player pages")
             .accessibilityValue(showingLyrics ? "Lyrics" : "Artwork")
+            .accessibilityAdjustableAction { direction in
+                guard !state.isControlsLocked else { return }
+                switch direction {
+                case .increment: selectPage(.lyrics)
+                case .decrement: selectPage(.artwork)
+                @unknown default: break
+                }
+            }
         }
     }
 
     private var panelBackground: some View {
         ZStack {
             Color(.systemBackground)
-            if showingLyrics {
-                lyricsArtworkColor.color
-                    .transition(.opacity)
-            }
+            lyricsArtworkColor.color
+                .animation(.easeInOut(duration: 0.4), value: lyricsArtworkColor)
+                .opacity(Double(lyricsPageProgress))
         }
-        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: showingLyrics)
-        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: lyricsArtworkColor)
+        .environment(\.colorScheme, colorScheme)
     }
 
     private var panelContent: some View {
@@ -272,7 +325,7 @@ struct OnTheGoPanel: View {
     @ViewBuilder
     private var playbackNotices: some View {
         if case .failed(let error) = state.playbackState {
-            Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
+            Text(error.localizedDescription).font(.caption).foregroundStyle(controlSecondaryColor)
             Button("Retry") { Task { await playerService.replayCurrentVideo() } }
         }
         if let segment = state.currentSegment {
@@ -292,24 +345,36 @@ struct OnTheGoPanel: View {
             .aspectRatio(1, contentMode: .fit)
             .overlay {
                 GeometryReader { geometry in
+                    let progress = lyricsPageProgress
                     ZStack {
-                        if showingLyrics {
-                            LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
-                                .transition(pageTransition(from: .trailing))
-                        } else {
-                            artwork
-                                .transition(pageTransition(from: .leading))
+                        artwork
+                            .environment(\.colorScheme, colorScheme)
+                            .scaleEffect(reduceMotion ? 1 : 1 - 0.1 * progress)
+                            .opacity(Double(1 - progress))
+                            .offset(x: reduceMotion ? 0 : -geometry.size.width * progress)
+
+                        if hasLyrics {
+                            LyricsView(
+                                model: lyrics,
+                                playerState: state,
+                                isSeekDisabled: isSeekDisabled,
+                                isActive: progress > 0 || showingLyrics,
+                                onSeek: seek
+                            )
+                            .environment(\.colorScheme, .dark)
+                            .scaleEffect(reduceMotion ? 1 : 0.95 + 0.05 * progress)
+                            .opacity(Double(progress))
+                            .offset(x: reduceMotion ? 0 : geometry.size.width * (1 - progress))
+                            .allowsHitTesting(showingLyrics)
+                            .accessibilityHidden(!showingLyrics)
                         }
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
-                    .offset(x: reduceMotion ? 0 : lyricsPageOffset)
-                    .opacity(1 - min(abs(lyricsPageOffset) / max(1, geometry.size.width), 1) * 0.15)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(lyricsPageGesture(width: geometry.size.width))
                 }
             }
             .clipped()
-            .contentShape(Rectangle())
-            .simultaneousGesture(lyricsPageGesture)
-            .animation(reduceMotion ? .linear(duration: 0) : .spring(response: 0.38, dampingFraction: 0.85), value: showingLyrics)
     }
 
     // MARK: - Top Bar
@@ -348,7 +413,7 @@ struct OnTheGoPanel: View {
                 topBarSymbol("chevron.down")
             }
             .buttonStyle(.plain)
-            .topBarCircle()
+            .topBarCircle(colorScheme: colorScheme, lyricsProgress: Double(lyricsPageProgress))
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -359,7 +424,7 @@ struct OnTheGoPanel: View {
                 topBarSymbol("ellipsis")
             }
             .buttonStyle(.plain)
-            .topBarCircle()
+            .topBarCircle(colorScheme: colorScheme, lyricsProgress: Double(lyricsPageProgress))
             .background {
                 if let video = state.currentVideo {
                     // Keep the share presenter attached after the popover disappears.
@@ -380,7 +445,7 @@ struct OnTheGoPanel: View {
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
-        .tint(.primary)
+        .tint(controlPrimaryColor)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Layout.horizontalPadding)
@@ -390,6 +455,7 @@ struct OnTheGoPanel: View {
     private func topBarSymbol(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(controlPrimaryColor)
             .frame(width: 34, height: 34, alignment: .center)
             .contentShape(Circle())
     }
@@ -404,7 +470,7 @@ struct OnTheGoPanel: View {
             playerMenuSeparator
 
             Button {
-                dismissPlayerMenu { selectedPage = showingLyrics ? .artwork : .lyrics }
+                dismissPlayerMenu { selectPage(showingLyrics ? .artwork : .lyrics) }
             } label: {
                 playerMenuRow(String(localized: "Lyrics"), systemImage: showingLyrics ? "quote.bubble.fill" : "quote.bubble")
             }
@@ -734,11 +800,12 @@ struct OnTheGoPanel: View {
             if let video = state.currentVideo {
                 PlayerMarqueeText(text: videoTitle)
                     .font(.title3.bold())
+                    .foregroundStyle(controlPrimaryColor)
                     .id(video.id)
 
                 Text(video.author.name)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(controlSecondaryColor)
                     .lineLimit(1)
             }
         }
@@ -754,7 +821,7 @@ struct OnTheGoPanel: View {
 
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.secondary.opacity(0.25))
+                        .fill(controlSecondaryColor.opacity(0.25))
                         .frame(height: Layout.seekTrackHeight)
                     Capsule()
                         .fill(nowPlayingAccent)
@@ -804,7 +871,7 @@ struct OnTheGoPanel: View {
                 }
             }
             .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(controlSecondaryColor)
             .accessibilityHidden(true)
         }
     }
@@ -858,6 +925,7 @@ struct OnTheGoPanel: View {
                 playPauseLabel
             }
             .modifier(OnTheGoPlayPauseStyleModifier())
+            .environment(\.colorScheme, colorScheme)
             .disabled(isTransportDisabled)
             .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
@@ -923,7 +991,7 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : .primary)
+            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : controlPrimaryColor)
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
@@ -997,7 +1065,7 @@ struct OnTheGoPanel: View {
     private var sleepOffSymbol: some View {
         Image(systemName: "moon.zzz")
             .font(.system(size: 22, weight: .regular))
-            .foregroundStyle(.primary)
+            .foregroundStyle(controlPrimaryColor)
             .frame(width: 56, height: 44, alignment: .center)
             .contentShape(Rectangle())
     }
@@ -1015,7 +1083,7 @@ struct OnTheGoPanel: View {
         Image(systemName: name)
             .symbolVariant(.none)
             .font(.system(size: 32, weight: .regular))
-            .foregroundStyle(.primary)
+            .foregroundStyle(controlPrimaryColor)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
     }
@@ -1061,22 +1129,41 @@ private struct OnTheGoShareLinkStyle: PrimitiveButtonStyle {
 private extension View {
     /// Glass is applied outside Button/Menu so both get an identical 34pt circle;
     /// the outer frame keeps a 44pt hit area.
-    func topBarCircle() -> some View {
+    func topBarCircle(colorScheme: ColorScheme, lyricsProgress: Double) -> some View {
         self
             .frame(width: 34, height: 34)
-            .modifier(OnTheGoTopBarStyleModifier())
+            .modifier(OnTheGoTopBarStyleModifier(colorScheme: colorScheme, lyricsProgress: lyricsProgress))
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
     }
 }
 
 private struct OnTheGoTopBarStyleModifier: ViewModifier {
+    let colorScheme: ColorScheme
+    let lyricsProgress: Double
+
     func body(content: Content) -> some View {
+        // Crossfade only the decoration: there is still one interactive button.
+        content.background {
+            ZStack {
+                circleBackground
+                    .environment(\.colorScheme, colorScheme)
+                    .opacity(1 - lyricsProgress)
+                circleBackground
+                    .environment(\.colorScheme, .dark)
+                    .opacity(lyricsProgress)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private var circleBackground: some View {
         if #available(iOS 26, *) {
-            content
+            Circle().fill(.clear)
                 .glassEffect(.regular.interactive(), in: .circle)
         } else {
-            content.background(.quaternary, in: Circle())
+            Circle().fill(.quaternary)
         }
     }
 }
