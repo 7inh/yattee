@@ -113,13 +113,11 @@ struct OnTheGoPanel: View {
                     playerContent
                         .frame(minHeight: geometry.size.height, alignment: .center)
 
-                    if !state.queue.isEmpty {
-                        inlineQueue
-                            .frame(maxWidth: 560)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, Layout.horizontalPadding)
-                            .padding(.bottom, Layout.mediumSpacing)
-                    }
+                    inlineQueue
+                        .frame(maxWidth: 560)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, Layout.horizontalPadding)
+                        .padding(.bottom, Layout.mediumSpacing)
                 }
             }
             .scrollIndicators(.hidden)
@@ -208,14 +206,6 @@ struct OnTheGoPanel: View {
         Section {
             playbackSpeedMenu
             sleepTimerMenu
-
-            Toggle(isOn: Binding(
-                get: { isAutoPlayNextEnabled },
-                set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
-            )) {
-                Label(String(localized: "player.nowPlaying.autoplay"), systemImage: "play.square.stack")
-            }
-            .disabled(state.isControlsLocked || appEnvironment == nil)
         }
 
         Section {
@@ -342,36 +332,69 @@ struct OnTheGoPanel: View {
                 .accessibilityLabel(String(localized: "controls.button.queue"))
             }
 
-            LazyVStack(spacing: 4) {
-                if let currentVideo = state.currentVideo {
-                    QueueItemRow(
-                        video: currentVideo,
-                        isCurrentlyPlaying: true,
-                        onReorder: { presentAppSheet(.queue(reordering: true)) },
-                        onTap: {
-                            if !isTransportDisabled, state.playbackState != .playing {
-                                playerService.togglePlayPause()
-                            }
-                        }
-                    )
-                }
+            autoplayRow
 
-                ForEach(state.queue) { item in
-                    QueueItemRow(
-                        video: item.video,
-                        isCurrentlyPlaying: false,
-                        onRemove: {
-                            withAnimation {
-                                appEnvironment?.queueManager.removeFromQueue(id: item.id)
-                            }
-                        },
-                        onReorder: { presentAppSheet(.queue(reordering: true)) },
-                        onTap: {
-                            guard let index = state.queue.firstIndex(where: { $0.id == item.id }) else { return }
-                            QueuePlaybackActions.playVideo(at: index, appEnvironment: appEnvironment)
-                        }
-                    )
+            if !state.queue.isEmpty {
+                inlineQueueItems
+            }
+        }
+    }
+
+    private var autoplayRow: some View {
+        Toggle(isOn: Binding(
+            get: { isAutoPlayNextEnabled },
+            set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
+        )) {
+            HStack(spacing: Layout.mediumSpacing) {
+                Image(systemName: "infinity")
+                    .font(.title2)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "player.nowPlaying.autoplay"))
+                        .font(.body.weight(.semibold))
+                    Text("Play similar audio when the queue ends")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+        }
+        .toggleStyle(.switch)
+        .tint(nowPlayingAccent)
+        .disabled(state.isControlsLocked || appEnvironment == nil)
+    }
+
+    private var inlineQueueItems: some View {
+        LazyVStack(spacing: 4) {
+            if let currentVideo = state.currentVideo {
+                QueueItemRow(
+                    video: currentVideo,
+                    isCurrentlyPlaying: true,
+                    onReorder: { presentAppSheet(.queue(reordering: true)) },
+                    onTap: {
+                        if !isTransportDisabled, state.playbackState != .playing {
+                            playerService.togglePlayPause()
+                        }
+                    }
+                )
+            }
+
+            ForEach(state.queue) { item in
+                QueueItemRow(
+                    video: item.video,
+                    isCurrentlyPlaying: false,
+                    onRemove: {
+                        withAnimation {
+                            appEnvironment?.queueManager.removeFromQueue(id: item.id)
+                        }
+                    },
+                    onReorder: { presentAppSheet(.queue(reordering: true)) },
+                    onTap: {
+                        guard let index = state.queue.firstIndex(where: { $0.id == item.id }) else { return }
+                        QueuePlaybackActions.playVideo(at: index, appEnvironment: appEnvironment)
+                    }
+                )
             }
         }
     }
