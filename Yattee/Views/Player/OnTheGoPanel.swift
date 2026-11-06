@@ -61,6 +61,8 @@ struct OnTheGoPanel: View {
         // Keeps the enlarged thumb inside the seek control at both endpoints.
         static let seekInset: CGFloat = 12
         static let seekTrackHeight: CGFloat = 6
+        static let coverSeekTrackHeight: CGFloat = 5
+        static let coverSeekScrubbingTrackHeight: CGFloat = 8
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
         static let queueMorphDistance: CGFloat = 140
@@ -1075,11 +1077,14 @@ struct OnTheGoPanel: View {
         GeometryReader { geometry in
             let trackWidth = max(1, geometry.size.width)
             let progress = duration > 0 ? CGFloat(displayedTime / duration) : 0
-            let trackHeight = Layout.seekTrackHeight + (2 - Layout.seekTrackHeight) * queueMorphProgress
+            let coverTrackHeight = scrubTime == nil ? Layout.coverSeekTrackHeight : Layout.coverSeekScrubbingTrackHeight
+            let trackHeight = Layout.seekTrackHeight + (coverTrackHeight - Layout.seekTrackHeight) * queueMorphProgress
+            let trackColor = controlSecondaryColor.opacity(0.25)
+                .mix(with: .white.opacity(0.45), by: Double(queueMorphProgress))
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(controlSecondaryColor.opacity(0.25))
+                    .fill(trackColor)
                     .frame(height: trackHeight)
                 Capsule()
                     .fill(nowPlayingAccent)
@@ -1092,6 +1097,7 @@ struct OnTheGoPanel: View {
                     .opacity(Double(1 - queueMorphProgress))
                     .offset(x: min(max(0, trackWidth * progress - 10), trackWidth - 20))
             }
+            // Keep the full drag target even when the track sits on the cover's edge.
             .frame(width: trackWidth, height: Layout.seekHitHeight)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
