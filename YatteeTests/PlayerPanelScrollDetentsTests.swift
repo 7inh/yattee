@@ -67,8 +67,8 @@ struct PlayerPanelScrollDetentsTests {
         ) == 0)
     }
 
-    @Test("Queues add only the bottom filler needed to reach C", arguments: [
-        (0, CGFloat(487)), (1, 431), (3, 319), (16, 0)
+    @Test("Short queues reserve headroom beyond C without padding long queues", arguments: [
+        (0, CGFloat(565)), (1, 509), (3, 397), (16, 0)
     ])
     func queueBottomFiller(queueCount: Int, expectedFillerHeight: CGFloat) {
         let viewportHeight = PlayerPanelScrollDetents.viewportHeight(containerHeight: 728, topInset: 80, bottomInset: 34)
@@ -92,7 +92,7 @@ struct PlayerPanelScrollDetentsTests {
             velocity: 600, maximumOffset: maximumOffset
         ) == detents.fullQueueOffset)
         if queueCount < 16 {
-            #expect(abs(maximumOffset - detents.fullQueueOffset - 2) < 0.001)
+            #expect(abs(maximumOffset - detents.fullQueueOffset - 80) < 0.001)
         } else {
             #expect(contentHeight == naturalContentHeight)
             #expect(maximumOffset + viewportHeight == naturalContentHeight)
@@ -201,13 +201,54 @@ struct PlayerPanelScrollDetentsTests {
             velocity: 0, maximumOffset: maximumOffset
         )
 
-        #expect(abs(maximumOffset - detents.fullQueueOffset - 2) < 0.001)
+        #expect(abs(maximumOffset - detents.fullQueueOffset - 80) < 0.001)
         #expect(target == detents.fullQueueOffset)
         #expect((target ?? 0) >= detents.fullQueueOffset - 1) // The pinned card's threshold.
         #expect(detents.targetOffset(
             startOffset: detents.fullQueueOffset, releaseOffset: detents.fullQueueOffset - 200,
             velocity: 0, maximumOffset: maximumOffset
         ) == detents.halfOpenOffset)
+    }
+
+    @Test("Native proposals open B to C at the midpoint or on an upward flick", arguments: [
+        [CGFloat(319.99), 0, 140],
+        [320, 0, 500],
+        [480, 0, 500],
+        [580, 0, 500], // System proposal clamped exactly to maxOffset.
+        [840, 0, 500], // Proposal before native bottom clamping.
+        [140, 251, 500], // Flick even if the proposal has not advanced.
+        [160, 600, 500]
+    ])
+    func nativeProposalFromHalfOpen(sample: [CGFloat]) {
+        #expect(detents.targetOffset(
+            startOffset: 140, releaseOffset: 140, velocity: sample[1],
+            maximumOffset: 580, proposedOffset: sample[0]
+        ) == sample[2])
+    }
+
+    @Test("Native proposals are not projected twice or replaced by the release coordinate")
+    func nativeProposalSelection() {
+        // At this velocity, projecting 220 again would incorrectly skip B.
+        #expect(detents.targetOffset(
+            startOffset: 0, releaseOffset: 20, velocity: 600,
+            maximumOffset: 580, proposedOffset: 220
+        ) == 140)
+        #expect(detents.targetOffset(
+            startOffset: 0, releaseOffset: 20, velocity: 600,
+            maximumOffset: 580, proposedOffset: 420
+        ) == 500)
+        #expect(detents.targetOffset(
+            startOffset: 500, releaseOffset: 480, velocity: 0,
+            maximumOffset: 580, proposedOffset: 300
+        ) == 140)
+        #expect(detents.targetOffset(
+            startOffset: 140, releaseOffset: 160, velocity: 600,
+            maximumOffset: 300, proposedOffset: 480
+        ) == 140)
+        #expect(detents.targetOffset(
+            startOffset: 800, releaseOffset: 800, velocity: -600,
+            maximumOffset: 1200, proposedOffset: 650
+        ) == nil)
     }
 
     @Test("Small content and excessive insets cannot produce negative scroll ranges")

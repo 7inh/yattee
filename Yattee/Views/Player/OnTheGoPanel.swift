@@ -10,8 +10,15 @@ import SwiftUI
 import UIKit
 import Nuke
 import NukeUI
+#if DEBUG
+import OSLog
+#endif
 
 private let nowPlayingAccent = Color.red
+
+#if DEBUG
+private let panelDetentsLogger = Logger(subsystem: "stream.yattee.app", category: "PanelDetents")
+#endif
 
 @MainActor
 struct OnTheGoPanel: View {
@@ -37,7 +44,9 @@ struct OnTheGoPanel: View {
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(y: 0)
     @State private var panelScrollOffset: CGFloat = 0
-    @State private var scrollViewportHeight: CGFloat = 0
+    @State private var panelScrollGeometry = ScrollGeometry(
+        contentOffset: .zero, contentSize: .zero, contentInsets: EdgeInsets(), containerSize: .zero
+    )
     @State private var naturalScrollContentHeight: CGFloat = 0
     @State private var proposedSnapTarget: CGFloat?
     @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
@@ -54,11 +63,6 @@ struct OnTheGoPanel: View {
     private enum PlayerPage: Hashable, Sendable {
         case artwork
         case lyrics
-    }
-
-    private struct ScrollMetrics: Equatable, Sendable {
-        let offset: CGFloat
-        let viewportHeight: CGFloat
     }
 
     private enum Layout {
@@ -354,14 +358,23 @@ struct OnTheGoPanel: View {
                 (coverGeometry.halfOpenOffset + coverGeometry.coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
             ))
             let detents = coverGeometry.detents
-            // Only scroll geometry determines the filler. The outer reader is
-            // still used to lay out A and the full-bleed cover.
-            let visibleHeight = scrollViewportHeight
+            let measuredHeight = PlayerPanelScrollDetents.viewportHeight(
+                containerHeight: panelScrollGeometry.containerSize.height,
+                topInset: panelScrollGeometry.contentInsets.top,
+                bottomInset: panelScrollGeometry.contentInsets.bottom
+            )
+            // Bootstrap before the first scroll measurement so the initial
+            // drag also has headroom. Subsequent layouts use actual insets.
+            let visibleHeight = measuredHeight > 0 ? measuredHeight : viewportHeight
             let minimumContentHeight = state.currentVideo != nil
                 ? detents.minimumContentHeight(viewportHeight: visibleHeight) : 0
             let fillerHeight = state.currentVideo != nil ? detents.bottomFillerHeight(
                 naturalContentHeight: naturalScrollContentHeight, viewportHeight: visibleHeight
             ) : 0
+            let diagnostics = PanelDetentsDiagnostics(
+                detents: detents, naturalContentHeight: naturalScrollContentHeight,
+                requestedFiller: fillerHeight, queueCount: state.queue.count
+            )
             ScrollView {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -402,9 +415,10 @@ struct OnTheGoPanel: View {
             // Reflow moves the queue up as the player morphs. Keep the scroll
             // coordinate fixed instead of preserving a position near its end.
             .defaultScrollAnchor(.top, for: .sizeChanges)
-            // Bound only the end. A floor at C would block downward drags from
-            // queue rows continuing into B/A.
-            .scrollTargetBehavior(QueueEndScrollTargetBehavior(detents: detents))
+            .scrollTargetBehavior(QueueEndScrollTargetBehavior(
+                diagnostics: diagnostics, geometry: panelScrollGeometry,
+                isEnabled: state.currentVideo != nil
+            ))
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
                 let measuredViewportHeight = PlayerPanelScrollDetents.viewportHeight(
@@ -423,57 +437,43 @@ struct OnTheGoPanel: View {
                 }
                 if newPhase == .idle, state.currentVideo != nil {
                     panelScrollOffset = max(0, offset)
-                    LoggingService.shared.debug(
-                        "Player panel settled: contentHeight=\(context.geometry.contentSize.height), naturalContentHeight=\(naturalScrollContentHeight), viewportHeight=\(measuredViewportHeight), containerHeight=\(context.geometry.containerSize.height), topInset=\(context.geometry.contentInsets.top), bottomInset=\(context.geometry.contentInsets.bottom), filler=\(max(0, context.geometry.contentSize.height - naturalScrollContentHeight)), requestedFiller=\(fillerHeight), requiredHeight=\(detents.minimumContentHeight(viewportHeight: measuredViewportHeight)), offsetB=\(detents.halfOpenOffset), offsetC=\(detents.fullQueueOffset), maxOffset=\(maximumOffset), cHeadroom=\(maximumOffset - detents.fullQueueOffset), proposedTarget=\(proposedSnapTarget.map { String(describing: $0) } ?? "native"), settledTarget=\(offset), sticky=\(offset >= detents.fullQueueOffset - 1), queueCount=\(state.queue.count)",
-                        category: .player
+                    diagnostics.log(
+                        "settled", geometry: context.geometry,
+                        details: "start=\(scrollGestureStartOffset.map { String(describing: $0) } ?? "none"), requestedTarget=\(proposedSnapTarget.map { String(describing: $0) } ?? "native"), settledTarget=\(offset)"
                     )
                 }
                 if newPhase == .tracking || (newPhase == .interacting && oldPhase != .tracking) {
                     scrollGestureStartOffset = max(0, offset)
                     proposedSnapTarget = nil
-                    LoggingService.shared.debug(
-                        "Player panel gesture began: offset=\(offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset), dismissalAllowed=\(isPanelDismissalAllowed)",
-                        category: .player
+                    diagnostics.log(
+                        "gesture began", geometry: context.geometry,
+                        details: "start=\(offset), dismissalAllowed=\(isPanelDismissalAllowed)"
                     )
                 }
-                let isRelease = oldPhase == .interacting && (newPhase == .decelerating || newPhase == .idle)
-                // Repair native momentum and programmatic snaps alike if they
-                // stop between detents. Never leave the morph at rest.
-                let isSettling = newPhase == .idle
-                guard isRelease || isSettling,
-                      state.currentVideo != nil else { return }
+                // The target behavior owns release snapping. A second decision
+                // here, using the current offset instead of the native proposal,
+                // can replace its C destination with B. Only repair idle rests.
+                guard newPhase == .idle, state.currentVideo != nil else { return }
                 let startOffset = scrollGestureStartOffset ?? max(0, offset)
-                let velocity = isRelease ? context.velocity?.dy ?? 0 : 0
                 let target = detents.targetOffset(
                     startOffset: startOffset,
                     releaseOffset: offset,
-                    velocity: velocity,
+                    velocity: 0,
                     maximumOffset: maximumOffset
                 )
-                LoggingService.shared.debug(
-                    "Player panel \(isRelease ? "release" : "settle check"): start=\(startOffset), offset=\(offset), velocity=\(velocity), target=\(target.map { String(describing: $0) } ?? "native"), maxOffset=\(maximumOffset), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
-                    category: .player
+                guard let target, abs(target - offset) > 0.5 else { return }
+                diagnostics.log(
+                    "idle repair", geometry: context.geometry,
+                    details: "start=\(startOffset), proposedTarget=\(offset), chosenTarget=\(target)"
                 )
-                guard let target, isRelease || abs(target - offset) > 0.5 else { return }
-                // Replace panel deceleration with a spring immediately on
-                // release. Queue-only gestures retain native scrolling.
                 scrollPanel(to: target)
             }
             .onChange(of: coverGeometry, initial: true) { _, value in
                 panelCoverGeometry = value
             }
-            .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
-                ScrollMetrics(
-                    offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
-                    viewportHeight: PlayerPanelScrollDetents.viewportHeight(
-                        containerHeight: geometry.containerSize.height,
-                        topInset: geometry.contentInsets.top,
-                        bottomInset: geometry.contentInsets.bottom
-                    )
-                )
-            } action: { _, metrics in
-                panelScrollOffset = metrics.offset
-                scrollViewportHeight = metrics.viewportHeight
+            .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, value in
+                panelScrollOffset = max(0, value.contentOffset.y + value.contentInsets.top)
+                panelScrollGeometry = value
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
@@ -1437,25 +1437,69 @@ struct OnTheGoPanel: View {
 
 // MARK: - Queue Scroll Boundary
 
-private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
+private struct PanelDetentsDiagnostics: Sendable {
     let detents: PlayerPanelScrollDetents
+    let naturalContentHeight: CGFloat
+    let requestedFiller: CGFloat
+    let queueCount: Int
+
+    func log(
+        _ event: String,
+        geometry: ScrollGeometry,
+        contentHeight: CGFloat? = nil,
+        viewportHeight: CGFloat? = nil,
+        details: String
+    ) {
+        let contentHeight = contentHeight ?? geometry.contentSize.height
+        let viewportHeight = viewportHeight ?? PlayerPanelScrollDetents.viewportHeight(
+            containerHeight: geometry.containerSize.height,
+            topInset: geometry.contentInsets.top,
+            bottomInset: geometry.contentInsets.bottom
+        )
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: contentHeight, viewportHeight: viewportHeight
+        )
+        let offset = geometry.contentOffset.y + geometry.contentInsets.top
+        let message = "Player panel \(event): contentHeight=\(contentHeight), naturalContentHeight=\(naturalContentHeight), viewportHeight=\(viewportHeight), containerHeight=\(geometry.containerSize.height), topInset=\(geometry.contentInsets.top), bottomInset=\(geometry.contentInsets.bottom), filler=\(max(0, contentHeight - naturalContentHeight)), requestedFiller=\(requestedFiller), requiredHeight=\(detents.minimumContentHeight(viewportHeight: viewportHeight)), offsetB=\(detents.halfOpenOffset), offsetC=\(detents.fullQueueOffset), maxOffset=\(maximumOffset), cHeadroom=\(maximumOffset - detents.fullQueueOffset), offset=\(offset), sticky=\(offset >= detents.fullQueueOffset - 1), queueCount=\(queueCount), \(details)"
+        LoggingService.shared.debug(message, category: .player)
+        #if DEBUG
+        // Deliberately bypass the in-app logging toggle for simulator diagnosis.
+        panelDetentsLogger.notice("\(message, privacy: .public)")
+        #endif
+    }
+}
+
+private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
+    let diagnostics: PanelDetentsDiagnostics
+    let geometry: ScrollGeometry
+    let isEnabled: Bool
 
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        guard isEnabled else { return }
+        let detents = diagnostics.detents
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
             contentHeight: context.contentSize.height,
             // TargetContext already subtracts the scroll view's insets. Use
             // its current measurement rather than a previous geometry update.
             viewportHeight: context.containerSize.height
         )
-        // Preserve native scrolling and dismissal below the upper limit. In
-        // particular, never add a lower bound at the full-queue detent.
-        guard target.rect.minY > maximumOffset else { return }
-        target.rect.origin.y = detents.targetOffset(
+        let proposedOffset = target.rect.minY
+        let chosenOffset = detents.targetOffset(
             startOffset: context.originalTarget.rect.minY,
-            releaseOffset: target.rect.minY,
-            velocity: 0,
-            maximumOffset: maximumOffset
-        ) ?? maximumOffset
+            releaseOffset: geometry.contentOffset.y + geometry.contentInsets.top,
+            velocity: context.velocity.dy,
+            maximumOffset: maximumOffset,
+            proposedOffset: proposedOffset
+        )
+        diagnostics.log(
+            "targetContentOffset proposal", geometry: geometry,
+            contentHeight: context.contentSize.height, viewportHeight: context.containerSize.height,
+            details: "start=\(context.originalTarget.rect.minY), velocity=\(context.velocity.dy), proposedTarget=\(proposedOffset), chosenTarget=\(chosenOffset ?? proposedOffset), native=\(chosenOffset == nil)"
+        )
+        // Queue scrolling beyond C and top-edge dismissal keep native targets.
+        // There is deliberately no lower bound at C for downward gestures.
+        guard let chosenOffset else { return }
+        target.rect.origin.y = chosenOffset
         target.anchor = .top
     }
 }

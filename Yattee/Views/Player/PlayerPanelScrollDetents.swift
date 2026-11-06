@@ -8,8 +8,9 @@
 import Foundation
 
 struct PlayerPanelScrollDetents: Sendable {
-    // Leave C inside the scroll range despite pixel rounding at the bottom edge.
-    static let fullQueueScrollMargin: CGFloat = 2
+    // Keep C well inside the range while native proposals and content reflow
+    // are being resolved. Long queues supply this headroom without filler.
+    static let fullQueueScrollMargin: CGFloat = 80
 
     let halfOpenOffset: CGFloat
     let fullQueueOffset: CGFloat
@@ -46,36 +47,48 @@ struct PlayerPanelScrollDetents: Sendable {
         startOffset: CGFloat,
         releaseOffset: CGFloat,
         velocity: CGFloat,
-        maximumOffset: CGFloat = .greatestFiniteMagnitude
+        maximumOffset: CGFloat = .greatestFiniteMagnitude,
+        proposedOffset: CGFloat? = nil
     ) -> CGFloat? {
         let tolerance: CGFloat = 1
         let flickVelocity: CGFloat = 250
+        // Native target proposals already include momentum; do not project
+        // them a second time. Idle repairs use the actual release coordinate.
+        let destinationOffset = proposedOffset ?? releaseOffset
 
         // Clamp free queue scrolling only beyond C. An undersized content range
         // must never turn its bottom edge into a fourth panel detent.
         if maximumOffset >= fullQueueOffset, startOffset >= fullQueueOffset - tolerance,
-           releaseOffset > fullQueueOffset, releaseOffset > maximumOffset {
-            return Self.clampedOffset(releaseOffset, maximumOffset: maximumOffset)
+           destinationOffset > fullQueueOffset, destinationOffset > maximumOffset {
+            return Self.clampedOffset(destinationOffset, maximumOffset: maximumOffset)
         }
 
         // Only releases still inside the queue retain native scrolling. Once
         // the finger crosses C, the same gesture can collapse the panel.
-        if maximumOffset >= fullQueueOffset, startOffset >= fullQueueOffset - tolerance, releaseOffset > fullQueueOffset {
+        if maximumOffset >= fullQueueOffset, startOffset >= fullQueueOffset - tolerance, destinationOffset > fullQueueOffset {
             return nil
         }
-        if startOffset <= tolerance, releaseOffset <= 0 {
+        if startOffset <= tolerance, destinationOffset <= 0 {
             return nil
+        }
+
+        // A proposal clamped to the bottom still selects C from B. At the
+        // midpoint, prefer opening; an upward flick need not reach it first.
+        let queueMidpoint = halfOpenOffset + (fullQueueOffset - halfOpenOffset) / 2
+        if maximumOffset >= fullQueueOffset, abs(startOffset - halfOpenOffset) <= tolerance,
+           velocity >= flickVelocity || (abs(velocity) < flickVelocity && destinationOffset >= queueMidpoint) {
+            return fullQueueOffset
         }
 
         // Keep the real coordinates. During a geometry update, fall back to a
         // reachable detent instead of resting in the B-to-C transition.
         let offsets: [CGFloat] = [0, halfOpenOffset, fullQueueOffset].filter { $0 <= max(0, maximumOffset) }
-        let nearestOffset = offsets.min { abs($0 - releaseOffset) < abs($1 - releaseOffset) }
+        let nearestOffset = offsets.min { abs($0 - destinationOffset) < abs($1 - destinationOffset) }
         guard abs(velocity) >= flickVelocity else { return nearestOffset }
 
         // A flick advances at least one detent. Project from the release so a
         // long drag or fast flick can also pass B on its way between A and C.
-        let projectedOffset = releaseOffset + velocity * 0.2
+        let projectedOffset = proposedOffset ?? (releaseOffset + velocity * 0.2)
         let projectedDetent = offsets.min { abs($0 - projectedOffset) < abs($1 - projectedOffset) } ?? 0
         let panelStartOffset = min(fullQueueOffset, max(0, startOffset))
         if velocity >= flickVelocity {
