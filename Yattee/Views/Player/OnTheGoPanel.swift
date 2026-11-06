@@ -31,7 +31,6 @@ struct OnTheGoPanel: View {
 
     private enum Layout {
         static let horizontalPadding: CGFloat = 16
-        static let compactSpacing: CGFloat = 4
         static let smallSpacing: CGFloat = 8
         static let mediumSpacing: CGFloat = 16
         // Keeps the enlarged thumb inside the seek control at both endpoints.
@@ -112,7 +111,7 @@ struct OnTheGoPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent
-                        .frame(minHeight: geometry.size.height, alignment: .top)
+                        .frame(minHeight: geometry.size.height, alignment: .center)
 
                     if !state.queue.isEmpty {
                         inlineQueue
@@ -130,19 +129,16 @@ struct OnTheGoPanel: View {
 
     private var playerContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Compact gaps leave room for full-width square artwork and
-            // the action row on smaller phones without shrinking controls.
-            Spacer(minLength: Layout.compactSpacing)
+            // Center the artwork and controls as one group, with fixed gaps
+            // that leave room for full-width artwork on smaller phones.
             artwork
-                .padding(.bottom, Layout.smallSpacing)
+                .padding(.bottom, Layout.mediumSpacing)
             videoInfo
-            Spacer(minLength: Layout.compactSpacing)
             seekControls
                 .id(state.currentVideo?.id)
-            Spacer(minLength: Layout.compactSpacing)
+                .padding(.top, Layout.smallSpacing)
             transportControls
-            Spacer(minLength: Layout.compactSpacing)
-            accessoryBar
+                .padding(.top, Layout.mediumSpacing)
             if case .failed(let error) = state.playbackState {
                 Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
                 Button("Retry") { Task { await playerService.replayCurrentVideo() } }
@@ -158,7 +154,7 @@ struct OnTheGoPanel: View {
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Layout.horizontalPadding)
-        .padding(.vertical, Layout.compactSpacing)
+        .padding(.vertical, Layout.mediumSpacing)
     }
 
     // MARK: - Top Bar
@@ -206,52 +202,75 @@ struct OnTheGoPanel: View {
     private func playerMenuItems(for video: Video) -> some View {
         let shareURL = appEnvironment?.shareURL(for: video) ?? video.shareURL
 
-        ShareLink(item: shareURL) {
-            Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+        Section {
+            playbackSpeedMenu
+            sleepTimerMenu
+
+            Toggle(isOn: Binding(
+                get: { isAutoPlayNextEnabled },
+                set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
+            )) {
+                Label(String(localized: "player.nowPlaying.autoplay"), systemImage: "play.square.stack")
+            }
+            .disabled(state.isControlsLocked || appEnvironment == nil)
         }
 
-        if video.id.youtubeURL() != nil {
+        Section {
             Button {
-                if let url = video.id.youtubeURL(startTime: state.currentTime) {
-                    openURL(url)
-                }
+                presentAppSheet(.queue())
             } label: {
-                Label(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
+                Label(String(localized: "controls.button.queue"), systemImage: "list.bullet")
+            }
+
+            Button {
+                showingComments = true
+            } label: {
+                Label(String(localized: "videoInfo.section.comments"), systemImage: "text.bubble")
+            }
+            .disabled(!video.supportsComments)
+
+            Button {
+                showingDetails = true
+            } label: {
+                Label("Details", systemImage: "info.circle")
             }
         }
 
-        Button {
-            presentAppSheet(.addToPlaylist(video))
-        } label: {
-            Label(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
-        }
+        Section {
+            downloadMenuItem(for: video)
 
-        Button {
-            appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
-        } label: {
-            Label(String(localized: "video.context.goToChannel"), systemImage: "person.circle")
-        }
-        .disabled(!video.author.hasRealChannelInfo)
+            Button {
+                presentAppSheet(.addToPlaylist(video))
+            } label: {
+                Label(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
+            }
 
-        downloadMenuItem(for: video)
+            ShareLink(item: shareURL) {
+                Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+            }
 
-        Button {
-            showingDetails = true
-        } label: {
-            Label("Details", systemImage: "info.circle")
-        }
+            Button {
+                UIPasteboard.general.string = shareURL.absoluteString
+            } label: {
+                Label(String(localized: "video.context.copyLink"), systemImage: "doc.on.doc")
+            }
 
-        Button {
-            showingComments = true
-        } label: {
-            Label(String(localized: "videoInfo.section.comments"), systemImage: "text.bubble")
-        }
-        .disabled(!video.supportsComments)
+            if video.id.youtubeURL() != nil {
+                Button {
+                    if let url = video.id.youtubeURL(startTime: state.currentTime) {
+                        openURL(url)
+                    }
+                } label: {
+                    Label(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
+                }
+            }
 
-        Button {
-            UIPasteboard.general.string = shareURL.absoluteString
-        } label: {
-            Label(String(localized: "video.context.copyLink"), systemImage: "doc.on.doc")
+            Button {
+                appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+            } label: {
+                Label(String(localized: "video.context.goToChannel"), systemImage: "person.circle")
+            }
+            .disabled(!video.author.hasRealChannelInfo)
         }
     }
 
@@ -615,73 +634,30 @@ struct OnTheGoPanel: View {
         .accessibilityLabel(label)
     }
 
-    // MARK: - Accessories
+    // MARK: - Playback Menus
 
-    private var accessoryBar: some View {
-        HStack(spacing: 0) {
-            Menu {
-                PlaybackSpeedMenuContent(currentRate: state.rate) { rate in
+    private var playbackSpeedMenu: some View {
+        Menu {
+            Picker(String(localized: "controls.button.speed"), selection: Binding(
+                get: { state.rate },
+                set: { rate in
                     state.rate = rate
                     playerService.currentBackend?.rate = Float(rate.rawValue)
                 }
-            } label: {
-                accessoryLabel(speedSymbol, caption: state.rate.compactDisplayText, isActive: state.rate != .x1)
-            }
-            .frame(maxWidth: .infinity)
-            .menuIndicator(.hidden)
-            .tint(state.rate != .x1 ? nowPlayingAccent : .primary)
-            .disabled(state.isControlsLocked)
-            .accessibilityLabel(String(localized: "controls.button.speed"))
-            .accessibilityValue(state.rate.displayText)
-
-            sleepTimerMenu
-                .frame(maxWidth: .infinity)
-
-            Button {
-                showingComments = true
-            } label: {
-                accessoryLabel("text.bubble", caption: String(localized: "videoInfo.section.comments"))
-            }
-            .frame(maxWidth: .infinity)
-            .disabled(state.currentVideo?.supportsComments != true)
-            .accessibilityLabel(String(localized: "videoInfo.section.comments"))
-
-            Button {
-                appEnvironment?.settingsManager.queueAutoPlayNext.toggle()
-            } label: {
-                accessoryLabel(
-                    "play.square.stack",
-                    caption: String(localized: "player.nowPlaying.autoplay"),
-                    isActive: isAutoPlayNextEnabled,
-                    iconColor: .secondary
-                )
-            }
-            .frame(maxWidth: .infinity)
-            .disabled(state.isControlsLocked || appEnvironment == nil)
-            .accessibilityLabel(String(localized: "controls.button.autoPlayNext"))
-            .accessibilityValue(isAutoPlayNextEnabled ? String(localized: "common.on") : String(localized: "common.off"))
-
-            Button {
-                presentAppSheet(.queue())
-            } label: {
-                accessoryLabel("list.bullet", caption: String(localized: "controls.button.queue"))
-            }
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel(String(localized: "controls.button.queue"))
-
-            if let video = state.currentVideo,
-               appEnvironment?.downloadManager.isDownloaded(video.id) != true,
-               appEnvironment?.downloadManager.isDownloading(video.id) != true {
-                Button {
-                    presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, dislikeCount: state.dislikeCount))
-                } label: {
-                    accessoryLabel("arrow.down", caption: String(localized: "video.context.download"))
+            )) {
+                ForEach(PlaybackRate.allCases) { rate in
+                    Text(rate.displayText).tag(rate)
                 }
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel(String(localized: "video.context.download"))
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            let rate = state.rate.compactDisplayText.replacingOccurrences(of: "x", with: "×")
+            Label("Speed \(rate)", systemImage: speedSymbol)
         }
-        .buttonStyle(.plain)
+        .disabled(state.isControlsLocked)
+        .accessibilityLabel(String(localized: "controls.button.speed"))
+        .accessibilityValue(state.rate.displayText)
     }
 
     /// Gauge needle position reflects the current speed.
@@ -710,14 +686,9 @@ struct OnTheGoPanel: View {
             }
             .disabled(state.currentVideo == nil)
         } label: {
-            accessoryLabel(
-                "moon.zzz",
-                caption: sleepTimer.caption ?? String(localized: "player.nowPlaying.sleep"),
-                isActive: sleepTimer.isActive
-            )
+            let status = sleepTimer.caption ?? String(localized: "common.off")
+            Label("\(String(localized: "player.nowPlaying.sleepTimer")): \(status)", systemImage: "moon.zzz")
         }
-        .menuIndicator(.hidden)
-        .tint(sleepTimer.isActive ? nowPlayingAccent : .primary)
         .disabled(state.isControlsLocked)
         .accessibilityLabel(String(localized: "player.nowPlaying.sleepTimer"))
         .accessibilityValue(sleepTimer.caption ?? String(localized: "common.off"))
@@ -732,26 +703,6 @@ struct OnTheGoPanel: View {
                 }
             }
         }
-    }
-
-    private func accessoryLabel(_ image: String, caption: String, isActive: Bool = false, iconColor: Color = .primary, showsCaptionInsteadOfIcon: Bool = false) -> some View {
-        Group {
-            if showsCaptionInsteadOfIcon {
-                Text(verbatim: caption)
-                    .font(.system(size: 19, weight: .semibold).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            } else {
-                Image(systemName: image)
-                    .symbolVariant(.none)
-                    .font(.system(size: 25, weight: .regular))
-                    .contentTransition(.symbolEffect(.replace))
-                    .animation(.snappy, value: image)
-            }
-        }
-        .foregroundStyle(isActive ? nowPlayingAccent : iconColor)
-        .frame(maxWidth: .infinity, minHeight: 48)
-        .contentShape(Rectangle())
     }
 }
 
