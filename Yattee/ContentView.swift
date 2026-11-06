@@ -99,7 +99,7 @@ struct AdaptiveTabView: View {
     }
 
     private static var usesTabBottomAccessory: Bool {
-        if #available(iOS 26.1, *) { true } else { false }
+        false
     }
 
     @ViewBuilder
@@ -114,9 +114,8 @@ struct AdaptiveTabView: View {
                 Spacer()
                 MiniPlayerView()
             }
-            .padding(.horizontal, 16)
-            // Clear the bottom tab bar (49pt)
-            .padding(.bottom, 49 + 8)
+            .padding(.horizontal, MiniPlayerView.horizontalInset)
+            .padding(.bottom, MiniPlayerView.tabBarClearance)
             // Use move-only transition (no opacity) to prevent thumbnail flash during collapse
             // The opacity transition caused video to appear faded during player sheet dismiss
             .transition(.move(edge: .bottom))

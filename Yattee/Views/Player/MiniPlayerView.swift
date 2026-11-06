@@ -13,7 +13,6 @@ import NukeUI
 struct MiniPlayerView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.playerTransitionNamespace) private var playerTransitionNamespace
-    var isTabAccessory = false
 
     private var service: PlayerService? { appEnvironment?.playerService }
     private var state: PlayerState? { service?.state }
@@ -26,34 +25,23 @@ struct MiniPlayerView: View {
             + video.thumbnailURLsByQuality
     }
 
+    static let height: CGFloat = 64
+    static let cornerRadius: CGFloat = 14
+    static let horizontalInset: CGFloat = 20
+    /// Distance from the bottom safe area to the card, clearing the floating tab bar.
+    static let tabBarClearance: CGFloat = 64
+
     var body: some View {
-        if isTabAccessory, #available(iOS 26, *) {
-            AccessoryContent(view: self)
-        } else {
-            content(compact: false)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-
-    @available(iOS 26, *)
-    private struct AccessoryContent: View {
-        let view: MiniPlayerView
-        @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-
-        var body: some View {
-            view.content(compact: placement == .inline)
-                .padding(.leading, 8)
-                .padding(.trailing, 6)
-                .padding(.vertical, placement == .inline ? 0 : 4)
-                .overlay(alignment: .bottom) {
-                    if placement != .inline {
-                        view.progressLine
-                            .padding(.horizontal, 18)
-                    }
-                }
-        }
+        content(compact: false)
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
+            .frame(height: Self.height)
+            .overlay(alignment: .bottom) {
+                progressLine
+                    .padding(.horizontal, Self.cornerRadius)
+                    .padding(.bottom, 1)
+            }
+            .miniPlayerBackground(cornerRadius: Self.cornerRadius)
     }
 
     private var isPlaying: Bool { state?.playbackState == .playing }
@@ -67,11 +55,12 @@ struct MiniPlayerView: View {
             }
         }
         .frame(height: 2.5)
+        .clipShape(Capsule())
         .accessibilityHidden(true)
     }
 
     fileprivate func content(compact: Bool) -> some View {
-        let art: CGFloat = compact ? 26 : 40
+        let art: CGFloat = compact ? 26 : 48
         return HStack(spacing: compact ? 8 : 10) {
             Button {
                 appEnvironment?.navigationCoordinator.expandPlayer()
@@ -86,16 +75,16 @@ struct MiniPlayerView: View {
                         }
                     }
                     .frame(width: art, height: art)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .playerTransitionSource(playerTransitionNamespace)
 
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(state?.currentVideo.map { appEnvironment?.deArrowBrandingProvider.title(for: $0) ?? $0.title } ?? "")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.callout.weight(.semibold))
                             .lineLimit(1)
                         if !compact {
                             Text(state?.currentVideo?.author.name ?? "")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -110,10 +99,10 @@ struct MiniPlayerView: View {
                 service?.togglePlayPause()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3)
+                    .font(.title2)
                     .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp)))
                     .animation(.snappy, value: isPlaying)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .disabled(state?.isTransportDisabled ?? true)
@@ -122,5 +111,28 @@ struct MiniPlayerView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func miniPlayerBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+        }
+    }
+}
+
+extension View {
+    /// Reserves room above the tab bar so scrolling content isn't hidden behind the mini player.
+    func miniPlayerInset(_ isVisible: Bool) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            if isVisible {
+                Color.clear.frame(height: MiniPlayerView.height + 8)
+            }
+        }
     }
 }

@@ -27,12 +27,9 @@ extension View {
     @ViewBuilder
     func iOS26TabFeatures(shouldShowAccessory: Bool, settingsManager: SettingsManager?) -> some View {
         if #available(iOS 26.1, *) {
-            let behavior = settingsManager?.miniPlayerMinimizeBehavior.tabBarMinimizeBehavior ?? .onScrollDown
+            // The mini player is a custom card overlay (see ContentView), so
+            // the tab bar keeps its full size instead of minimizing.
             self
-                .tabViewBottomAccessory(isEnabled: shouldShowAccessory) {
-                    MiniPlayerView(isTabAccessory: true)
-                }
-                .tabBarMinimizeBehavior(behavior)
                 // iOS 27 stopped focusing the search field when the search tab is
                 // selected; restore the iOS 26 behavior explicitly.
                 .tabViewSearchActivation(.searchTabSelection)

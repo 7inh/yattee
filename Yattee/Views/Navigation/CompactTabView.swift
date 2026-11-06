@@ -45,6 +45,7 @@ struct CompactTabView: View {
                     HomeView()
                         .withNavigationDestinations()
                 }
+                .miniPlayerInset(shouldShowAccessory)
             } label: {
                 Label(String(localized: "tabs.home"), systemImage: "house.fill")
             }
@@ -57,6 +58,7 @@ struct CompactTabView: View {
                         tabContent(for: item)
                             .withNavigationDestinations()
                     }
+                    .miniPlayerInset(shouldShowAccessory)
                 } label: {
                     Label(item.localizedTitle, systemImage: item.icon)
                 }
@@ -68,6 +70,7 @@ struct CompactTabView: View {
                     SearchView(searchText: $router.searchText)
                         .withNavigationDestinations()
                 }
+                .miniPlayerInset(shouldShowAccessory)
             } label: {
                 Label(String(localized: "tabs.search"), systemImage: "magnifyingglass")
             }
