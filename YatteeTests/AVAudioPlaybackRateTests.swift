@@ -2,7 +2,7 @@
 //  AVAudioPlaybackRateTests.swift
 //  Yattee
 //
-//  Exercises native M4A speed, pitch configuration and transport persistence.
+//  Exercises remote DASH adaptation, native audio speed and transport persistence.
 //
 
 import Foundation
@@ -10,10 +10,10 @@ import AVFoundation
 import Testing
 @testable import Yattee
 
-@Suite("Native audio playback speed", .serialized)
+@Suite("Audio asset selection and playback speed", .serialized)
 @MainActor
 struct AVAudioPlaybackRateTests {
-    @Test("Indexed M4A plays above 2x without the HLS adapter", arguments: [PlaybackRate.x25, .x3])
+    @Test("Local M4A preserves every speed without the HLS adapter", arguments: PlaybackRate.allCases)
     func highSpeedPlayback(rate: PlaybackRate) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -64,6 +64,49 @@ struct AVAudioPlaybackRateTests {
         try await expectActiveRate(rate, player: player)
     }
 
+    @Test("Remote indexed M4A uses HLS at every speed, including through a proxy", arguments: PlaybackRate.allCases)
+    func remoteDASHUsesHLS(rate: PlaybackRate) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AudioIndexResponse.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let backend = AVAudioBackend(dashPlaylistLoader: DASHAudioPlaylistLoader(session: session))
+        defer { backend.stop() }
+        backend.rate = Float(rate.rawValue)
+
+        // The proxy URL has no extension; API format/ranges identify the asset
+        // even when MIME metadata is missing or generic. Never probe it natively.
+        for mimeType: String? in [nil, "application/octet-stream", "audio/mp4; codecs=\"mp4a.40.2\""] {
+            let stream = Yattee.Stream(url: URL(string: "https://audio.invalid/proxy/videoplayback?itag=140")!,
+                                       format: "m4a", isAudioOnly: true, mimeType: mimeType,
+                                       httpHeaders: ["X-Audio-Test": "index"],
+                                       initRange: "0-722", indexRange: "723-766")
+            let asset = try await backend.makeAudioAsset(for: stream)
+            #expect(asset.url.scheme == "yattee-audio")
+            #expect(asset.url.pathExtension == "m3u8")
+            #expect(asset.resourceLoader.delegate != nil)
+        }
+    }
+
+    @Test("A rejected DASH range fails instead of retrying the broken native path")
+    func rejectedDASHRangeFails() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AudioIndexResponse.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let player = AVPlayer()
+        let backend = AVAudioBackend(player: player, dashPlaylistLoader: DASHAudioPlaylistLoader(session: session))
+        defer { backend.stop() }
+        let stream = Yattee.Stream(url: URL(string: "https://audio.invalid/reject-range")!,
+                                   format: "m4a", isAudioOnly: true, mimeType: "audio/mp4",
+                                   initRange: "0-722", indexRange: "723-766")
+
+        await #expect(throws: BackendError.loadFailed(DASHAudioError.invalidResponse.localizedDescription)) {
+            try await backend.load(stream: stream, audioStream: nil, autoplay: false)
+        }
+        #expect(player.currentItem == nil)
+    }
+
     private func expectActiveRate(_ rate: PlaybackRate, player: AVPlayer) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while ContinuousClock.now < deadline {
@@ -97,11 +140,40 @@ struct AVAudioPlaybackRateTests {
             }
             try file.write(from: buffer)
         }
-        // The native file is playable even if an API also supplies DASH ranges.
-        // Those ranges must not force a native rendition through the HLS adapter.
+        // Downloaded files may retain API DASH ranges. Local M4A must stay native.
         return Stream(url: url, format: "m4a", isAudioOnly: true, mimeType: "audio/mp4",
                       initRange: "0-722", indexRange: "723-766")
     }
+}
+
+private final class AudioIndexResponse: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let rejectsRange = url.path == "/reject-range"
+        if !rejectsRange {
+            #expect(request.value(forHTTPHeaderField: "Range") == "bytes=723-766")
+            #expect(request.value(forHTTPHeaderField: "Accept-Encoding") == "identity")
+            #expect(request.value(forHTTPHeaderField: "X-Audio-Test") == "index")
+        }
+        // A single sidx reference: 100 bytes of media, lasting one second.
+        let words: [UInt32] = [44, 0x73696478, 0, 1, 1_000, 0, 0, 1, 100, 1_000, 0x90000000]
+        let data = Data(words.flatMap { word in
+            [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: word >> $0) }
+        })
+        let response = HTTPURLResponse(url: url, statusCode: rejectsRange ? 200 : 206,
+                                       httpVersion: "HTTP/1.1", headerFields: [
+                                           "Content-Range": "bytes 723-766/867",
+                                           "Content-Length": "44"
+                                       ])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private final class UnexpectedAudioIndexRequest: URLProtocol, @unchecked Sendable {

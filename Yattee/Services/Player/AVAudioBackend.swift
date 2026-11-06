@@ -76,19 +76,18 @@ final class AVAudioBackend: PlayerBackend {
         do {
             try activateAudioSession()
             // Validation above prevents opening muxed/video assets or HLS masters.
-            let asset = try await makeAudioAsset(for: audio, generation: token)
+            let asset = try await makeAudioAsset(for: audio)
             loadingAsset = asset
-            guard try await asset.load(.isPlayable) else {
-                throw BackendError.loadFailed("The audio rendition is not playable")
-            }
             try checkLoad(token)
             let item = AVPlayerItem(asset: asset)
             item.audioTimePitchAlgorithm = .spectral
             installObservers(for: item, generation: token)
             player.replaceCurrentItem(with: item)
 
-            // Wait until seeking is possible. Cancellation or a replacement load
-            // must never publish ready or start playback for the previous item.
+            // Let the item validate and load the asset inside this bounded wait.
+            // An isPlayable/duration preflight can hang indefinitely on remote
+            // DASH renditions, before an item or its timeout even exists.
+            // Cancellation or replacement must never publish ready for an old item.
             let deadline = Date().addingTimeInterval(30)
             while item.status != .readyToPlay {
                 try checkLoad(token)
@@ -115,28 +114,18 @@ final class AVAudioBackend: PlayerBackend {
         }
     }
 
-    private func makeAudioAsset(for audio: Stream, generation token: UUID) async throws -> AVURLAsset {
+    func makeAudioAsset(for audio: Stream) async throws -> AVURLAsset {
+        let token = generation
+        try checkLoad(token)
         let options = audio.httpHeaders.map { ["AVURLAssetHTTPHeaderFieldsKey": $0] }
-        let directAsset = AVURLAsset(url: audio.url, options: options)
-        if !audio.isLive, audio.mimeType?.lowercased().hasPrefix("audio/mp4") == true,
+        let isMP4 = audio.mimeType?.lowercased().hasPrefix("audio/mp4") == true
+            || ["m4a", "mp4"].contains(audio.format.lowercased())
+        if !audio.url.isFileURL, !audio.isLive, isMP4,
            audio.initRange != nil, audio.indexRange != nil {
-            // Keep seekable M4A as a file-based asset. Wrapping it in HLS can
-            // switch AVPlayer to trick play above 2x, even with spectral pitch
-            // correction and a requested rate of 2.5 or 3. Only use the DASH HLS
-            // adapter when AVFoundation cannot read the native rendition.
-            loadingAsset = directAsset
-            do {
-                let (isPlayable, duration) = try await directAsset.load(.isPlayable, .duration)
-                try checkLoad(token)
-                if isPlayable, duration.isNumeric, duration.seconds > 0 {
-                    LoggingService.shared.logPlayer("Audio: using native M4A for pitch-preserving variable-speed playback")
-                    return directAsset
-                }
-            } catch {
-                try checkLoad(token)
-                LoggingService.shared.logPlayerError("Native M4A inspection failed; trying DASH HLS playlist", error: error)
-            }
-
+            // DASH fragments are not ordinary progressive M4A files. Successful
+            // metadata/range reads do not guarantee native playback will start.
+            // Always adapt remote indexed audio first, regardless of the speed;
+            // local/downloaded M4A remains native and supports rates above 2x.
             let task = Task { try await dashPlaylistLoader.playlist(for: audio) }
             playlistTask = task
             do {
@@ -156,11 +145,13 @@ final class AVAudioBackend: PlayerBackend {
             } catch {
                 try checkLoad(token)
                 playlistTask = nil
-                LoggingService.shared.logPlayerError("Audio DASH playlist failed; falling back to direct URL", error: error)
+                LoggingService.shared.logPlayerError("Audio DASH playlist failed", error: error)
+                throw error
             }
         }
         try checkLoad(token)
-        return directAsset
+        LoggingService.shared.logPlayer("Audio: using \(audio.url.isFileURL ? "local" : "progressive") native audio")
+        return AVURLAsset(url: audio.url, options: options)
     }
 
     func play() {
@@ -263,7 +254,11 @@ final class AVAudioBackend: PlayerBackend {
                       self.playbackState != .ended else { return }
                 if case .failed = self.playbackState { return }
                 switch self.player.timeControlStatus {
-                case .playing: self.setState(.playing)
+                case .playing:
+                    self.setState(.playing)
+                    if let timebase = self.player.currentItem?.timebase {
+                        LoggingService.shared.logPlayer("Audio playing: selected=\(self.rate)x, effective=\(CMTimebaseGetRate(timebase))x")
+                    }
                 case .waitingToPlayAtSpecifiedRate: self.setState(.buffering)
                 case .paused: self.setState(self.wantsToPlay ? .buffering : .paused)
                 @unknown default: break
@@ -341,6 +336,7 @@ final class AVAudioBackend: PlayerBackend {
     private func fail(_ error: BackendError) {
         wantsToPlay = false
         player.pause()
+        loadingAsset?.cancelLoading()
         if case .failed = playbackState { return }
         LoggingService.shared.logPlayerError("Audio backend failed", error: error)
         setState(.failed(error))
