@@ -47,7 +47,7 @@ struct CompactTabView: View {
                 }
                 .miniPlayerInset(shouldShowAccessory)
             } label: {
-                Label(String(localized: "tabs.home"), systemImage: "house.fill")
+                Label(String(localized: "tabs.home"), systemImage: "safari.fill")
             }
             .accessibilityIdentifier("tab.home")
 

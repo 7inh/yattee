@@ -132,7 +132,7 @@ enum SidebarItem: Hashable, Identifiable {
     var systemImage: String {
         switch self {
         case .home:
-            return "house.fill"
+            return "safari.fill"
         case .search:
             return "magnifyingglass"
         case .sources:

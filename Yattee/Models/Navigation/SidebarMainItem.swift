@@ -53,7 +53,7 @@ enum SidebarMainItem: String, CaseIterable, Codable, Identifiable, Sendable {
     var icon: String {
         switch self {
         case .search: "magnifyingglass"
-        case .home: "house.fill"
+        case .home: "safari.fill"
         case .subscriptions: "play.square.stack.fill"
         case .bookmarks: "bookmark.fill"
         case .history: "clock"
