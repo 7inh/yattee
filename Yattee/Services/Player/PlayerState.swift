@@ -455,7 +455,17 @@ final class PlayerState {
         videoAspectRatio ?? (16.0 / 9.0)
     }
 
-    /// Whether transport controls (play/pause, seek) should be blocked because
+    /// Shared optimistic intent for every local play/pause control.
+    let playbackIntent = PlaybackIntentController()
+
+    var isPlayingIntended: Bool { playbackIntent.isPlaying }
+
+    /// Once ready, playback can still be paused or resumed while waiting for data.
+    var isPlayPauseDisabled: Bool {
+        currentVideo == nil || playbackState == .loading || !isFirstFrameReady || !isBufferReady
+    }
+
+    /// Whether transport controls (seek) should be blocked because
     /// the player isn't ready yet — loading, buffering, or waiting for the
     /// first frame / initial buffer. Shared by iOS and tvOS control overlays.
     var isTransportDisabled: Bool {
@@ -518,6 +528,7 @@ final class PlayerState {
     /// Updates the playback state.
     func setPlaybackState(_ state: PlaybackState) {
         playbackState = state
+        playbackIntent.receive(state)
     }
 
     /// Updates the retry state.
@@ -535,6 +546,7 @@ final class PlayerState {
 
     /// Resets player state.
     func reset() {
+        playbackIntent.reset()
         currentTime = 0
         duration = 0
         bufferedTime = 0

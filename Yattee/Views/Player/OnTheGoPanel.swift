@@ -113,6 +113,9 @@ struct OnTheGoPanel: View {
     private var isTransportDisabled: Bool {
         state.isTransportDisabled || state.isControlsLocked
     }
+    private var isPlayPauseDisabled: Bool {
+        state.isPlayPauseDisabled || state.isControlsLocked
+    }
     private var isSeekDisabled: Bool {
         isTransportDisabled || state.isLive || duration <= 0
     }
@@ -934,7 +937,7 @@ struct OnTheGoPanel: View {
                     isCurrentlyPlaying: true,
                     onReorder: { presentAppSheet(.queue(reordering: true)) },
                     onTap: {
-                        if !isTransportDisabled, state.playbackState != .playing {
+                        if !isPlayPauseDisabled, !state.isPlayingIntended {
                             playerService.togglePlayPause()
                         }
                     }
@@ -1180,10 +1183,10 @@ struct OnTheGoPanel: View {
             } label: {
                 playPauseLabel
             }
-            .buttonStyle(OnTheGoTransportButtonStyle())
-            .disabled(isTransportDisabled)
-            .opacity(isTransportDisabled ? 0.4 : 1)
-            .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
+            .buttonStyle(PlayPauseButtonStyle())
+            .disabled(isPlayPauseDisabled)
+            .opacity(isPlayPauseDisabled ? 0.4 : 1)
+            .accessibilityLabel(state.isPlayingIntended ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
             transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
                 playerService.seekForward(by: 10)
@@ -1204,9 +1207,7 @@ struct OnTheGoPanel: View {
     }
 
     private var playPauseSymbol: some View {
-        Image(systemName: state.playbackState == .playing ? "pause.fill" : "play.fill")
-            .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp)))
-            .animation(.snappy, value: state.playbackState == .playing)
+        PlayPauseSymbol(isPlaying: state.isPlayingIntended)
     }
 
     private func transportButton(_ image: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {

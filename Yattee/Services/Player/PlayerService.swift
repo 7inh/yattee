@@ -221,6 +221,7 @@ final class PlayerService {
 
         // This load is the playback from here on
         playbackGeneration += 1
+        state.playbackIntent.reset()
         let loadGeneration = playbackGeneration
 
         // Reset flag for the new video
@@ -473,6 +474,7 @@ final class PlayerService {
             if isPausedBySleepTimer {
                 pause()
             } else {
+                state.playbackIntent.setPlaying(true)
                 backend.play()
             }
 
@@ -539,6 +541,7 @@ final class PlayerService {
     /// - Parameter shouldSaveProgress: Whether to save watch progress. Set to `false` when video has
     ///   already ended (100% was saved in `backendDidFinishPlaying`).
     func pause(saveProgress shouldSaveProgress: Bool = true) {
+        state.playbackIntent.setPlaying(false)
         sleepPreventionService.allowSleep()
         currentBackend?.pause()
         state.setPlaybackState(.paused)
@@ -571,6 +574,7 @@ final class PlayerService {
 
     /// Resumes playback.
     func resume() {
+        state.playbackIntent.setPlaying(true)
         if isPausedBySleepTimer && videoEndedNaturally {
             Task { await replayCurrentVideo() }
             return
@@ -583,18 +587,23 @@ final class PlayerService {
         nowPlayingService.updatePlaybackRate(isPlaying: true, currentTime: state.currentTime)
     }
 
-    /// Toggles play/pause.
+    /// Toggles shared intent immediately and coalesces rapid taps before commanding the backend.
     func togglePlayPause() {
-        if state.playbackState == .playing {
-            pause()
-        } else if state.playbackState == .ended {
-            // Restart from beginning when video has ended
-            Task {
-                await replayCurrentVideo()
+        guard state.currentVideo != nil else { return }
+        state.playbackIntent.toggle { [weak self] playing in
+            guard let self else { return }
+            LoggingService.shared.debug("Applying playback intent: playing=\(playing), backend=\(state.playbackState)", category: .player)
+            if playing {
+                if state.playbackState == .ended || videoEndedNaturally {
+                    await replayCurrentVideo()
+                } else {
+                    resume()
+                }
+            } else {
+                pause()
             }
-        } else {
-            resume()
         }
+        LoggingService.shared.debug("Playback intent changed: playing=\(state.isPlayingIntended), backend=\(state.playbackState)", category: .player)
     }
 
     /// Plays the current video again from the beginning, as a new watch.
@@ -628,7 +637,7 @@ final class PlayerService {
         // Only the replay that is still the current playback may resume and arm
         // the save timer — otherwise this would unpause a video the user paused
         // or is still loading, or time saves for a watch that is not this one.
-        guard let video, playbackGeneration == generation, state.currentVideo?.id == video.id else { return }
+        guard !Task.isCancelled, let video, playbackGeneration == generation, state.currentVideo?.id == video.id else { return }
 
         resume()
         startProgressSaveTimer()
@@ -871,6 +880,7 @@ final class PlayerService {
 
         // The opening owns the player from here, before the load task even runs
         playbackGeneration += 1
+        state.playbackIntent.reset()
 
         // Set video info before expanding so the sheet animates with content visible
         state.setPlaybackState(.loading)
@@ -914,6 +924,7 @@ final class PlayerService {
 
         // The opening owns the player from here, before the load task even runs
         playbackGeneration += 1
+        state.playbackIntent.reset()
 
         // Set video info before expanding so the sheet animates with content visible
         state.setPlaybackState(.loading)
@@ -1596,6 +1607,7 @@ final class PlayerService {
     private func cleanup() {
         // Whatever was playing is gone from here on
         playbackGeneration += 1
+        state.playbackIntent.reset()
 
         progressSaveTimer?.invalidate()
         progressSaveTimer = nil

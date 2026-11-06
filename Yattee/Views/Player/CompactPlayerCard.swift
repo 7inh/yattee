@@ -23,7 +23,7 @@ struct CompactPlayerCard: View {
     nonisolated static let cornerRadius: CGFloat = 14
 
     private var state: PlayerState { playerService.state }
-    private var isPlaying: Bool { state.playbackState == .playing }
+    private var isPlaying: Bool { state.isPlayingIntended }
     private var artworkURLs: [URL] {
         guard let appEnvironment, let video = state.currentVideo else { return [] }
         let local = appEnvironment.downloadManager.download(for: video.id)?.localThumbnailPath.map {
@@ -57,14 +57,13 @@ struct CompactPlayerCard: View {
             Button {
                 playerService.togglePlayPause()
             } label: {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                PlayPauseSymbol(isPlaying: isPlaying)
                     .font(.title2)
-                    .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp)))
-                    .animation(.snappy, value: isPlaying)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
-            .disabled(state.isTransportDisabled || state.isControlsLocked)
+            .buttonStyle(PlayPauseButtonStyle())
+            .disabled(state.isPlayPauseDisabled || state.isControlsLocked)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
         }
         .buttonStyle(.plain)
