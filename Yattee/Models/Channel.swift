@@ -78,6 +78,17 @@ struct ChannelID: Codable, Hashable, Sendable {
         self.channelID = channelID
     }
 
+    /// HTTPS link for opening this YouTube channel, including unresolved handles.
+    var youtubeURL: URL? {
+        guard source == .global(provider: ContentSource.youtubeProvider), !channelID.isEmpty else { return nil }
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.youtube.com"
+        components.path = channelID.hasPrefix("@") ? "/\(channelID)" : "/channel/\(channelID)"
+        return components.url
+    }
+
     /// Creates a global channel ID (e.g., YouTube).
     static func global(_ channelID: String, provider: String = ContentSource.youtubeProvider) -> ChannelID {
         ChannelID(source: .global(provider: provider), channelID: channelID)

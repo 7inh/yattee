@@ -292,6 +292,22 @@ struct VideoID: Codable, Hashable, Sendable {
         self.uuid = uuid
     }
 
+    /// HTTPS link for opening this YouTube video at a whole-second playback position.
+    func youtubeURL(startTime: TimeInterval = 0) -> URL? {
+        guard source == .global(provider: ContentSource.youtubeProvider), !videoID.isEmpty else { return nil }
+
+        let seconds = Int(exactly: max(0, startTime.rounded(.down))) ?? 0
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.youtube.com"
+        components.path = "/watch"
+        components.queryItems = [
+            URLQueryItem(name: "v", value: videoID),
+            URLQueryItem(name: "t", value: "\(seconds)s")
+        ]
+        return components.url
+    }
+
     /// Creates a global video ID (e.g., YouTube).
     static func global(_ videoID: String, provider: String = ContentSource.youtubeProvider) -> VideoID {
         VideoID(source: .global(provider: provider), videoID: videoID)

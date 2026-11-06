@@ -15,6 +15,7 @@ private let nowPlayingAccent = Color.red
 struct OnTheGoPanel: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
+    @Environment(\.openURL) private var openURL
 
     let playerService: PlayerService
     let onClose: () -> Void
@@ -203,6 +204,16 @@ struct OnTheGoPanel: View {
 
         ShareLink(item: shareURL) {
             Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+        }
+
+        if video.id.youtubeURL() != nil {
+            Button {
+                if let url = video.id.youtubeURL(startTime: state.currentTime) {
+                    openURL(url)
+                }
+            } label: {
+                Label(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
+            }
         }
 
         Button {

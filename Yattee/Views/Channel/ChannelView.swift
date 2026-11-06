@@ -11,6 +11,7 @@ import NukeUI
 struct ChannelView: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
 
     let channelID: String
     let source: ContentSource
@@ -724,7 +725,7 @@ struct ChannelView: View {
         return "person.badge.plus"
     }
 
-    /// Toolbar menu for subscribe/unsubscribe and notification actions
+    /// Toolbar menu for subscription, notification and YouTube actions.
     private var channelMenu: some View {
         Menu {
             // Subscribe/Unsubscribe button, naming the account it writes to —
@@ -771,6 +772,16 @@ struct ChannelView: View {
                             ? "bell.slash"
                             : "bell"
                     )
+                }
+            }
+
+            if let url = ChannelID(source: source, channelID: channel?.id.channelID ?? channelID).youtubeURL {
+                Divider()
+
+                Button {
+                    openURL(url)
+                } label: {
+                    Label(String(localized: "channel.menu.openInYouTube"), systemImage: "arrow.up.right.square")
                 }
             }
         } label: {

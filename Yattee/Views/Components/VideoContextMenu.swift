@@ -102,6 +102,7 @@ struct VideoContextMenuModifier: ViewModifier {
 struct VideoContextMenuContent: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
+    @Environment(\.openURL) private var openURL
 
     let video: Video
     var customActions: [VideoContextAction] = []
@@ -268,6 +269,20 @@ struct VideoContextMenuContent: View {
 
         ControlGroup {
             playDownloadShareButtons
+        }
+
+        if video.id.youtubeURL() != nil {
+            Button {
+                let playerState = appEnvironment?.playerService.state
+                let playbackTime = playerState?.currentVideo?.id == video.id
+                    ? (playerState?.currentTime ?? 0)
+                    : (startTime ?? 0)
+                if let url = video.id.youtubeURL(startTime: playbackTime) {
+                    openURL(url)
+                }
+            } label: {
+                Label(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
+            }
         }
 
         // Play from Beginning (only shown when there's saved progress)

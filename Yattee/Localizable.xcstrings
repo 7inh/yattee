@@ -1057,6 +1057,16 @@
         }
       }
     },
+    "channel.menu.openInYouTube" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open channel in YouTube"
+          }
+        }
+      }
+    },
     "channel.menu.subscribe" : {
       "localizations" : {
         "en" : {
@@ -20175,6 +20185,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move to %@"
+          }
+        }
+      }
+    },
+    "video.context.openInYouTube" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in YouTube"
           }
         }
       }
