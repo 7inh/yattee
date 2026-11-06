@@ -32,6 +32,9 @@ struct OnTheGoPanel: View {
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var hasScrolledPastTransport = false
+    @State private var showingLyrics = false
+    @State private var lyrics = LyricsViewModel()
+    @State private var playerControlsHeight: CGFloat = 250
 
     private enum ScrollCoordinateSpace: Hashable, Sendable {
         case player
@@ -49,6 +52,9 @@ struct OnTheGoPanel: View {
     }
 
     private var state: PlayerState { playerService.state }
+    private var hasLyrics: Bool {
+        lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
+    }
     private var isStickyPlayerVisible: Bool {
         hasScrolledPastTransport && state.currentVideo != nil
     }
@@ -112,6 +118,15 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
+                showingLyrics = false
+            }
+            .task(id: state.currentVideo?.id) {
+                let video = state.currentVideo
+                await lyrics.loadTracks(
+                    videoID: video?.id.videoID,
+                    instance: video.flatMap { appEnvironment?.instancesManager.instance(for: $0) },
+                    contentService: appEnvironment?.contentService
+                )
             }
             .accessibilityAction(.escape, onClose)
     }
@@ -120,7 +135,7 @@ struct OnTheGoPanel: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    playerContent
+                    playerContent(availableHeight: max(0, geometry.size.height - Layout.headerHeight))
                         .frame(minHeight: max(0, geometry.size.height - Layout.headerHeight), alignment: .center)
 
                     if !state.queue.isEmpty {
@@ -143,12 +158,33 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private var playerContent: some View {
+    private func playerContent(availableHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Center the artwork and controls as one group, with fixed gaps
             // that leave room for full-width artwork on smaller phones.
-            artwork
-                .padding(.bottom, Layout.mediumSpacing)
+            Group {
+                if showingLyrics && hasLyrics {
+                    LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
+                        .frame(height: max(220, availableHeight - playerControlsHeight - Layout.mediumSpacing * 3))
+                        .transition(.opacity)
+                } else {
+                    artwork
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: showingLyrics)
+            .padding(.bottom, Layout.mediumSpacing)
+            playerControls
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { playerControlsHeight = $0 }
+        }
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Layout.horizontalPadding)
+        .padding(.vertical, Layout.mediumSpacing)
+    }
+
+    private var playerControls: some View {
+        VStack(alignment: .leading, spacing: 0) {
             videoInfo
             seekControls
                 .id(state.currentVideo?.id)
@@ -171,10 +207,6 @@ struct OnTheGoPanel: View {
                 }
             }
         }
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, Layout.horizontalPadding)
-        .padding(.vertical, Layout.mediumSpacing)
     }
 
     // MARK: - Top Bar
@@ -215,6 +247,21 @@ struct OnTheGoPanel: View {
             .buttonStyle(.plain)
             .topBarCircle()
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
+
+            Spacer()
+
+            Button {
+                showingLyrics.toggle()
+            } label: {
+                topBarSymbol(showingLyrics ? "quote.bubble.fill" : "quote.bubble")
+            }
+            .buttonStyle(.plain)
+            .topBarCircle()
+            .disabled(!hasLyrics || state.isControlsLocked)
+            .opacity(hasLyrics ? 1 : 0)
+            .accessibilityHidden(!hasLyrics)
+            .accessibilityLabel("Lyrics")
+            .accessibilityValue(showingLyrics ? "On" : "Off")
 
             Spacer()
 
@@ -267,6 +314,13 @@ struct OnTheGoPanel: View {
             autoplayMenuRow
 
             playerMenuSeparator
+
+            Button {
+                dismissPlayerMenu { showingLyrics.toggle() }
+            } label: {
+                playerMenuRow(String(localized: "Lyrics"), systemImage: showingLyrics ? "quote.bubble.fill" : "quote.bubble")
+            }
+            .disabled(!hasLyrics || state.isControlsLocked)
 
             Button {
                 dismissPlayerMenu { presentAppSheet(.queue()) }

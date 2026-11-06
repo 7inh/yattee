@@ -413,9 +413,19 @@ actor InvidiousAPI: InstanceAPI {
     }
 
     func captions(videoID: String, instance: Instance) async throws -> [Caption] {
-        let endpoint = GenericEndpoint.get("/api/v1/videos/\(videoID)")
-        let response: InvidiousVideoDetails = try await httpClient.fetch(endpoint, baseURL: instance.url)
-        return response.toCaptions(baseURL: instance.url)
+        let endpoint = GenericEndpoint.get("/api/v1/captions/\(videoID)")
+        let response: InvidiousCaptions = try await httpClient.fetch(endpoint, baseURL: instance.url)
+        return response.captions.compactMap { $0.toCaption(baseURL: instance.url) }
+    }
+
+    func captionText(_ caption: Caption) async throws -> String {
+        var request = URLRequest(url: caption.url)
+        request.setValue("text/vtt", forHTTPHeaderField: "Accept")
+        let data = try await httpClient.performRaw(request)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw APIError.decodingError("Caption content is not UTF-8 WebVTT")
+        }
+        return text
     }
 
     func channelSearch(id: String, query: String, instance: Instance, page: Int) async throws -> ChannelSearchPage {
@@ -1377,15 +1387,18 @@ private struct InvidiousVideoDetails: Decodable, Sendable {
     }
 }
 
+private struct InvidiousCaptions: Decodable, Sendable {
+    let captions: [InvidiousCaption]
+}
+
 private struct InvidiousCaption: Decodable, Sendable {
     let label: String
     let languageCode: String
     let url: String
 
     nonisolated func toCaption(baseURL: URL) -> Caption? {
-        // Prepend /companion to route through companion service
-        let companionURL = "/companion" + url
-        guard let fullURL = URL(string: companionURL, relativeTo: baseURL) else { return nil }
+        guard let fullURL = URL(string: url, relativeTo: baseURL)?.absoluteURL,
+              ["http", "https"].contains(fullURL.scheme?.lowercased() ?? "") else { return nil }
         return Caption(
             label: label,
             languageCode: languageCode,

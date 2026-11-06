@@ -20,6 +20,13 @@ actor ContentService: ContentServiceProtocol {
     // Cached API instances for default SSL mode
     private let defaultInvidiousAPI: InvidiousAPI
 
+    private struct LyricsCacheKey: Hashable, Sendable {
+        let videoID: String
+        let caption: Caption
+    }
+    private var lyricsCache: [LyricsCacheKey: [LyricLine]] = [:]
+    private var lyricsCacheOrder: [LyricsCacheKey] = []
+
     /// Credentials manager for fetching basic auth headers on demand.
     private let basicAuthCredentialsManager: BasicAuthCredentialsManager?
 
@@ -170,6 +177,23 @@ actor ContentService: ContentServiceProtocol {
 
     func captions(videoID: String, instance: Instance) async throws -> [Caption] {
         try await api(for: instance).captions(videoID: videoID, instance: instance)
+    }
+
+    /// Keep parsed tracks across panel presentations and track switches, bounded to 32 tracks.
+    func lyrics(videoID: String, caption: Caption, instance: Instance) async throws -> [LyricLine] {
+        let key = LyricsCacheKey(videoID: videoID, caption: caption)
+        if let cached = lyricsCache[key] { return cached }
+        let text = try await invidiousAPI(for: instance).captionText(caption)
+        guard !Task.isCancelled else { throw APIError.cancelled }
+        let lines = WebVTTParser.parse(text)
+        if lyricsCache[key] == nil {
+            lyricsCacheOrder.append(key)
+        }
+        lyricsCache[key] = lines
+        if lyricsCacheOrder.count > 32 {
+            lyricsCache.removeValue(forKey: lyricsCacheOrder.removeFirst())
+        }
+        return lines
     }
 
     func channelSearch(id: String, query: String, instance: Instance, page: Int = 1) async throws -> ChannelSearchPage {
