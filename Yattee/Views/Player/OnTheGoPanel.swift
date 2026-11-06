@@ -164,6 +164,7 @@ struct OnTheGoPanel: View {
             Button(action: onClose) {
                 topBarSymbol("chevron.down", alignment: .leading)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -175,12 +176,14 @@ struct OnTheGoPanel: View {
             } label: {
                 topBarSymbol("ellipsis", alignment: .trailing)
             }
+            // Let the shared label define the glass instead of the menu style.
+            .menuStyle(.button)
+            .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .menuOrder(.fixed)
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
-        .buttonStyle(.plain)
         .tint(.primary)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
