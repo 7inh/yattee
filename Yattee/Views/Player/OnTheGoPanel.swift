@@ -25,6 +25,8 @@ struct OnTheGoPanel: View {
     @State private var showingDetails = false
     @State private var showingComments = false
     @State private var showingCommentDetails = false
+    @State private var showingDeleteDownloadConfirmation = false
+    @State private var downloadToDelete: Download?
 
     private enum Layout {
         static let smallSpacing: CGFloat = 8
@@ -61,11 +63,26 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
+            .safeAreaInset(edge: .top, spacing: 0) {
+                topBar
+            }
             .background(Color(.systemBackground).ignoresSafeArea())
             .foregroundStyle(.primary)
             .tint(nowPlayingAccent)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
+            }
+            .alert(String(localized: "videoInfo.download.remove.title"), isPresented: $showingDeleteDownloadConfirmation) {
+                Button(String(localized: "common.cancel"), role: .cancel) {}
+                Button(String(localized: "videoInfo.download.remove.confirm"), role: .destructive) {
+                    if let download = downloadToDelete {
+                        Task {
+                            await appEnvironment?.downloadManager.delete(download)
+                        }
+                    }
+                }
+            } message: {
+                Text(String(localized: "videoInfo.download.remove.message"))
             }
             .sheet(isPresented: $showingDetails) {
                 detailsSheet { showingDetails = false }
@@ -114,8 +131,7 @@ struct OnTheGoPanel: View {
             // and large text can scroll without shrinking the controls.
             Spacer(minLength: Layout.smallSpacing)
             artwork
-                .padding(.top, 8)
-                .padding(.bottom, 16)
+                .padding(.bottom, Layout.smallSpacing)
             videoInfo
             Spacer(minLength: Layout.smallSpacing)
             seekControls
@@ -140,6 +156,114 @@ struct OnTheGoPanel: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Layout.mediumSpacing)
         .padding(.vertical, Layout.smallSpacing)
+    }
+
+    // MARK: - Top Bar
+
+    private var topBar: some View {
+        HStack {
+            Button(action: onClose) {
+                topBarSymbol("chevron.down")
+            }
+            .modifier(OnTheGoTopBarStyleModifier())
+            .accessibilityLabel(String(localized: "player.nowPlaying.close"))
+
+            Spacer()
+
+            Menu {
+                if let video = state.currentVideo {
+                    playerMenuItems(for: video)
+                }
+            } label: {
+                topBarSymbol("ellipsis")
+            }
+            .modifier(OnTheGoTopBarStyleModifier())
+            .menuIndicator(.hidden)
+            .menuOrder(.fixed)
+            .disabled(state.currentVideo == nil)
+            .accessibilityLabel(String(localized: "controls.button.more"))
+        }
+        .tint(.primary)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Layout.mediumSpacing)
+        .padding(.vertical, Layout.smallSpacing)
+    }
+
+    private func topBarSymbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 18, weight: .semibold))
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
+    }
+
+    @ViewBuilder
+    private func playerMenuItems(for video: Video) -> some View {
+        let shareURL = appEnvironment?.shareURL(for: video) ?? video.shareURL
+
+        ShareLink(item: shareURL) {
+            Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+        }
+
+        Button {
+            presentAppSheet(.addToPlaylist(video))
+        } label: {
+            Label(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
+        }
+
+        Button {
+            appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+        } label: {
+            Label(String(localized: "video.context.goToChannel"), systemImage: "person.circle")
+        }
+        .disabled(!video.author.hasRealChannelInfo)
+
+        downloadMenuItem(for: video)
+
+        Button {
+            showingDetails = true
+        } label: {
+            Label("Details", systemImage: "info.circle")
+        }
+
+        Button {
+            showingComments = true
+        } label: {
+            Label(String(localized: "videoInfo.section.comments"), systemImage: "text.bubble")
+        }
+        .disabled(!video.supportsComments)
+
+        Button {
+            UIPasteboard.general.string = shareURL.absoluteString
+        } label: {
+            Label(String(localized: "video.context.copyLink"), systemImage: "doc.on.doc")
+        }
+    }
+
+    @ViewBuilder
+    private func downloadMenuItem(for video: Video) -> some View {
+        if let manager = appEnvironment?.downloadManager,
+           manager.isDownloading(video.id), let download = manager.download(for: video.id) {
+            Button(role: .destructive) {
+                Task { await manager.cancel(download) }
+            } label: {
+                Label(String(localized: "video.context.cancelDownload"), systemImage: "xmark.circle")
+            }
+        } else if let manager = appEnvironment?.downloadManager,
+                  manager.isDownloaded(video.id), let download = manager.download(for: video.id) {
+            Button {
+                downloadToDelete = download
+                showingDeleteDownloadConfirmation = true
+            } label: {
+                Label(String(localized: "video.context.downloaded"), systemImage: "checkmark.circle.fill")
+            }
+        } else {
+            Button {
+                presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, dislikeCount: state.dislikeCount))
+            } label: {
+                Label(String(localized: "video.context.download"), systemImage: "arrow.down.circle")
+            }
+        }
     }
 
     // MARK: - Inline Queue
@@ -619,6 +743,22 @@ struct OnTheGoPanel: View {
         .foregroundStyle(isActive ? nowPlayingAccent : iconColor)
         .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Top Bar Styling
+
+private struct OnTheGoTopBarStyleModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .buttonSizing(.flexible)
+                .frame(width: 44, height: 44)
+        } else {
+            content.buttonStyle(.plain)
+        }
     }
 }
 
