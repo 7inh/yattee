@@ -26,9 +26,9 @@ enum TabBarItem: String, CaseIterable, Codable, Identifiable, Sendable {
         [.subscriptions, .channels, .bookmarks, .playlists, .history, .continueWatching, .sources, .downloads, .settings]
     }
 
-    /// Default visibility (History and Downloads visible by default).
+    /// Default visibility (History, Downloads, and Settings visible by default).
     static var defaultVisibility: [TabBarItem: Bool] {
-        [.subscriptions: false, .channels: false, .bookmarks: false, .playlists: false, .history: true, .downloads: true, .sources: false, .settings: false, .continueWatching: false]
+        [.subscriptions: false, .channels: false, .bookmarks: false, .playlists: false, .history: true, .downloads: true, .sources: false, .settings: true, .continueWatching: false]
     }
 
     /// SF Symbol icon name.
@@ -41,7 +41,7 @@ enum TabBarItem: String, CaseIterable, Codable, Identifiable, Sendable {
         case .history: "clock"
         case .downloads: "arrow.down.circle"
         case .sources: "server.rack"
-        case .settings: "gear"
+        case .settings: "gearshape"
         case .continueWatching: "play.circle"
         }
     }

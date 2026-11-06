@@ -12,7 +12,6 @@ struct HomeView: View {
     @Environment(\.presentAppSheet) private var presentAppSheet
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
-    @Namespace private var sheetTransition
     /// The device's own playlists. In an account context the card reads the
     /// remote playlists cache instead — the same store the playlists screen
     /// this shortcut leads to shows.
@@ -147,29 +146,8 @@ struct HomeView: View {
                 : nil
         )
         .toolbarTitleDisplayMode(.inlineLarge)
-        .toolbar {
-            // No switcher wherever a sidebar shows one: the macOS sidebar row
-            // and the iPad sidebar's bottom bar are the persistent switcher
-            // surfaces there, so the toolbar menu is compact-width-only.
-            if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
-                ToolbarItem(placement: .primaryAction) {
-                    DataContextSwitcherMenu()
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingSettings = true
-                } label: {
-                    Image(systemName: "gear")
-                }
-                .accessibilityIdentifier("home.settingsButton")
-                .accessibilityLabel(String(localized: "settings.title"))
-                .liquidGlassTransitionSource(id: "homeSettings", in: sheetTransition)
-            }
-        }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .liquidGlassSheetContent(sourceID: "homeSettings", in: sheetTransition)
         }
         .dismissesOnExternalNavigation($showingSettings)
         .onAppear { presentPendingSettingsSheet() }

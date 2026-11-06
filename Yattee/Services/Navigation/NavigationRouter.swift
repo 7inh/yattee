@@ -33,8 +33,8 @@ final class NavigationRouter {
     let sidebarManager = SidebarManager()
 
     /// Set when Settings was requested in a layout without a Settings section
-    /// (the iPhone tab bar, unless the user added the tab). Home presents its
-    /// Settings sheet and clears it.
+    /// (for example, after the user hides the iPhone Settings tab). Home presents
+    /// its Settings sheet and clears it.
     var pendingSettingsSheet = false
 
     @ObservationIgnored private var hasAppliedStartupTab = false

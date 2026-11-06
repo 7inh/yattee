@@ -10,24 +10,43 @@ import Foundation
 extension SettingsManager {
     private static let migrationFlagKey = "didMigratePlatformSpecificLayoutKeys_v1"
     private static let compactTabBarHistoryMigrationFlagKey = "didMigrateCompactTabBarHistory_v1"
+    private static let compactTabBarSettingsMigrationFlagKey = "didMigrateCompactTabBarSettings_v1"
 
-    /// Replaces Sources with History in saved compact tab visibility once, preserving
-    /// item order and all other visibility choices. Later user customizations are kept.
+    /// Replaces Sources with History and adds Settings after Downloads once.
+    /// Independent flags let existing installs receive each migration, while later
+    /// user customizations are kept.
     /// Run after the initial iCloud refresh so it cannot restore the old visibility.
-    func migrateCompactTabBarHistoryIfNeeded() {
-        guard !localDefaults.bool(forKey: Self.compactTabBarHistoryMigrationFlagKey) else { return }
+    func migrateCompactTabBarIfNeeded() {
+        if !localDefaults.bool(forKey: Self.compactTabBarHistoryMigrationFlagKey) {
+            var visibility = tabBarItemVisibility
+            visibility[.sources] = false
+            visibility[.history] = true
+            tabBarItemVisibility = visibility
 
-        var visibility = tabBarItemVisibility
-        visibility[.sources] = false
-        visibility[.history] = true
-        tabBarItemVisibility = visibility
+            if tabBarStartupTab == .sources {
+                tabBarStartupTab = .home
+            }
 
-        if tabBarStartupTab == .sources {
-            tabBarStartupTab = .home
+            localDefaults.set(true, forKey: Self.compactTabBarHistoryMigrationFlagKey)
+            LoggingService.shared.logCloudKit("Migrated compact tab bar visibility from Sources to History")
         }
 
-        localDefaults.set(true, forKey: Self.compactTabBarHistoryMigrationFlagKey)
-        LoggingService.shared.logCloudKit("Migrated compact tab bar visibility from Sources to History")
+        guard !localDefaults.bool(forKey: Self.compactTabBarSettingsMigrationFlagKey) else { return }
+
+        var visibility = tabBarItemVisibility
+        visibility[.settings] = true
+        tabBarItemVisibility = visibility
+
+        var order = tabBarItemOrder.filter { $0 != .settings }
+        if let downloadsIndex = order.firstIndex(of: .downloads) {
+            order.insert(.settings, at: downloadsIndex + 1)
+        } else {
+            order.append(.settings)
+        }
+        tabBarItemOrder = order
+
+        localDefaults.set(true, forKey: Self.compactTabBarSettingsMigrationFlagKey)
+        LoggingService.shared.logCloudKit("Added Settings after Downloads in the compact tab bar")
     }
 
     // Mirrors `SettingsManager+CloudSync.protectedVisibilityKeys`. Kept in sync manually

@@ -11,6 +11,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appEnvironment) private var appEnvironment
 
+    @State private var credentialRevision = 0
+
     var showCloseButton: Bool = true
 
     var body: some View {
@@ -27,32 +29,22 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 if let appEnvironment {
-                    Section {
-                    NavigationLink {
-                        SourcesListView()
-                    } label: {
-                        HStack {
-                            Label(String(localized: "sources.title"), systemImage: "server.rack")
-                            Spacer()
+                    if AccountsListView.showsSettingsEntry(in: appEnvironment) {
+                        Section {
+                            accountRow
                         }
                     }
-                    .accessibilityIdentifier("settings.row.sources")
 
-                    if AccountsListView.showsSettingsEntry(in: appEnvironment) {
+                    Section {
                         NavigationLink {
-                            AccountsListView()
+                            SourcesListView()
                         } label: {
                             HStack {
-                                Label(String(localized: "accounts.title"), systemImage: "person.crop.circle")
+                                Label(String(localized: "sources.title"), systemImage: "server.rack")
                                 Spacer()
-                                if AccountsListView.needsAttention(in: appEnvironment) {
-                                    Image(systemName: "exclamationmark.circle.fill")
-                                        .foregroundStyle(.orange)
-                                }
                             }
                         }
-                        .accessibilityIdentifier("settings.row.accounts")
-                    }
+                        .accessibilityIdentifier("settings.row.sources")
                     }
 
                     Section {
@@ -154,6 +146,46 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("settings.view")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .accountCredentialDidChange)) { _ in
+            // Login names live in the Keychain, outside observable account metadata.
+            credentialRevision &+= 1
+        }
+    }
+
+    // MARK: - Account
+
+    private var accountRow: some View {
+        NavigationLink {
+            AccountsListView()
+        } label: {
+            HStack(spacing: 12) {
+                DataContextSwitcherIcon()
+                    .font(.largeTitle)
+                    .foregroundStyle(.tint)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "accounts.title"))
+                        .font(.headline)
+                    Text(DataContextSwitcherLabels.title(
+                        for: appEnvironment?.accountsManager.currentContext ?? .local,
+                        in: appEnvironment
+                    ))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .id(credentialRevision)
+                }
+
+                Spacer()
+
+                if AccountsListView.needsAttention(in: appEnvironment) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .accessibilityIdentifier("settings.row.accounts")
     }
 
     // MARK: - App Info
