@@ -48,7 +48,9 @@ struct OnTheGoPanel: View {
     @GestureState private var isDraggingPanel = false
     @State private var queueScrollPosition = ScrollPosition(y: 0)
     @State private var isQueueAtTop = true
+    @State private var isQueueScrolling = false
     @State private var queueDragStartedAtTop: Bool?
+    @State private var queueTapSuppressedUntil = ContinuousClock.now
     @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
         screenHeight: 0, topSafeArea: 0, headerHeight: Layout.headerHeight, noticesHeight: 0
     )
@@ -196,8 +198,11 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: isDraggingPanel) { _, dragging in
                 // GestureState also resets when the system cancels a gesture.
-                if !dragging, let drag = panelDrag {
-                    settlePanel(at: drag.start)
+                if !dragging {
+                    suppressQueueRowTaps()
+                    if let drag = panelDrag {
+                        settlePanel(at: drag.start)
+                    }
                 }
             }
             .onChange(of: detent) { _, target in
@@ -368,6 +373,7 @@ struct OnTheGoPanel: View {
             .updating($isDraggingPanel) { _, dragging, _ in dragging = true }
             .onChanged { value in
                 if panelDrag == nil {
+                    suppressQueueRowTaps()
                     let translation = value.translation
                     let route: PanelDrag.Route
                     if abs(translation.height) <= abs(translation.width) || isPaging {
@@ -393,6 +399,7 @@ struct OnTheGoPanel: View {
                 }
             }
             .onEnded { value in
+                suppressQueueRowTaps()
                 guard let drag = panelDrag else { return }
                 // Our pan can prevent the native zoom pan from beginning even
                 // on the dismissal route. Fall back to the chevron's action.
@@ -973,6 +980,24 @@ struct OnTheGoPanel: View {
 
     // MARK: - Inline Queue
 
+    private func suppressQueueRowTaps() {
+        // A simultaneous pan can finish before a moving row's Button fires.
+        // Keep its release suppressed even after the drag state has reset.
+        queueTapSuppressedUntil = ContinuousClock.now.advanced(by: .milliseconds(250))
+    }
+
+    private func canActivateQueueRow() -> Bool {
+        guard !isDraggingPanel, panelDrag == nil, !isQueueScrolling,
+              ContinuousClock.now >= queueTapSuppressedUntil else {
+            LoggingService.shared.debug(
+                "Ignored queue row tap during or just after a player/queue drag",
+                category: .player
+            )
+            return false
+        }
+        return true
+    }
+
     private func inlineQueue(handleBottomSpacing: CGFloat) -> some View {
         VStack(spacing: 0) {
             // The grabber is outside the rows' ScrollView so it can always
@@ -1007,7 +1032,11 @@ struct OnTheGoPanel: View {
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= 0 } action: { _, atTop in
                 isQueueAtTop = atTop
             }
-            .onScrollPhaseChange { _, phase, context in
+            .onScrollPhaseChange { oldPhase, phase, context in
+                isQueueScrolling = phase.isScrolling
+                if oldPhase.isScrolling || phase.isScrolling {
+                    suppressQueueRowTaps()
+                }
                 if phase == .tracking {
                     queueDragStartedAtTop = context.geometry.contentOffset.y <= 0
                 } else if phase == .idle {
@@ -1027,6 +1056,7 @@ struct OnTheGoPanel: View {
                     isCurrentlyPlaying: true,
                     onReorder: { presentAppSheet(.queue(reordering: true)) },
                     onTap: {
+                        guard canActivateQueueRow() else { return }
                         if !isPlayPauseDisabled, !state.isPlayingIntended {
                             playerService.togglePlayPause()
                         }
@@ -1045,6 +1075,7 @@ struct OnTheGoPanel: View {
                     },
                     onReorder: { presentAppSheet(.queue(reordering: true)) },
                     onTap: {
+                        guard canActivateQueueRow() else { return }
                         guard let index = state.queue.firstIndex(where: { $0.id == item.id }) else { return }
                         QueuePlaybackActions.playVideo(at: index, appEnvironment: appEnvironment)
                     }
