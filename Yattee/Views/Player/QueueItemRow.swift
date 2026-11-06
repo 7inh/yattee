@@ -10,6 +10,7 @@ import SwiftUI
 
 struct QueueItemRow: View {
     @Environment(\.appEnvironment) private var appEnvironment
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let video: Video
     let isCurrentlyPlaying: Bool
@@ -17,12 +18,33 @@ struct QueueItemRow: View {
     var onReorder: (() -> Void)? = nil
     let onTap: () -> Void
 
+    private var isPlaybackActive: Bool {
+        appEnvironment?.playerService.state.playbackState == .playing
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             Button(action: onTap) {
                 HStack(spacing: 10) {
                     DeArrowVideoThumbnail(video: video, cornerRadius: 6)
                         .frame(width: 64, height: 36)
+                        .overlay {
+                            if isCurrentlyPlaying {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(.black.opacity(0.45))
+                                    .overlay {
+                                        Image(systemName: "waveform")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.white)
+                                            .symbolEffect(
+                                                .variableColor.iterative,
+                                                options: .repeating,
+                                                isActive: isPlaybackActive && !reduceMotion
+                                            )
+                                    }
+                                    .allowsHitTesting(false)
+                            }
+                        }
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -37,18 +59,11 @@ struct QueueItemRow: View {
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if isCurrentlyPlaying {
-                        Image(systemName: "waveform")
-                            .font(.subheadline)
-                            .foregroundStyle(.red)
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
-                            .accessibilityLabel(String(localized: "queue.section.nowPlaying"))
-                    }
                 }
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
             }
+            .accessibilityValue(isCurrentlyPlaying ? String(localized: "queue.section.nowPlaying") : "")
 
             if let onReorder {
                 Button(action: onReorder) {
