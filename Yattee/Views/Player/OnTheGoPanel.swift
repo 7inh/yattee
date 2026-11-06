@@ -78,40 +78,127 @@ struct OnTheGoPanel: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Share extra height across all four gaps. Short screens
-                    // and large text can scroll without shrinking the controls.
-                    Spacer(minLength: Layout.smallSpacing)
-                    artwork
-                        .padding(.top, 8)
-                        .padding(.bottom, 16)
-                    videoInfo
-                    Spacer(minLength: Layout.smallSpacing)
-                    seekControls
-                        .id(state.currentVideo?.id)
-                    Spacer(minLength: Layout.smallSpacing)
-                    transportControls
-                    Spacer(minLength: Layout.smallSpacing)
-                    accessoryBar
-                    if case .failed(let error) = state.playbackState {
-                        Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
-                        Button("Retry") { Task { await playerService.replayCurrentVideo() } }
-                    }
-                    if let segment = state.currentSegment {
-                        SponsorBlockOverlay(segment: segment) {
-                            await playerService.seek(to: segment.endTime)
-                        } onDismiss: {
-                            state.currentSegment = nil
-                        }
+                    playerContent
+                        .frame(minHeight: geometry.size.height, alignment: .top)
+
+                    if !state.queue.isEmpty {
+                        inlineQueue
+                            .frame(maxWidth: 560)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Layout.mediumSpacing)
+                            .padding(.bottom, Layout.mediumSpacing)
                     }
                 }
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, Layout.mediumSpacing)
-                .padding(.vertical, Layout.smallSpacing)
-                .frame(minHeight: geometry.size.height, alignment: .top)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private var playerContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Share extra height across all four gaps. Short screens
+            // and large text can scroll without shrinking the controls.
+            Spacer(minLength: Layout.smallSpacing)
+            artwork
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+            videoInfo
+            Spacer(minLength: Layout.smallSpacing)
+            seekControls
+                .id(state.currentVideo?.id)
+            Spacer(minLength: Layout.smallSpacing)
+            transportControls
+            Spacer(minLength: Layout.smallSpacing)
+            accessoryBar
+            if case .failed(let error) = state.playbackState {
+                Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
+                Button("Retry") { Task { await playerService.replayCurrentVideo() } }
+            }
+            if let segment = state.currentSegment {
+                SponsorBlockOverlay(segment: segment) {
+                    await playerService.seek(to: segment.endTime)
+                } onDismiss: {
+                    state.currentSegment = nil
+                }
+            }
+        }
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Layout.mediumSpacing)
+        .padding(.vertical, Layout.smallSpacing)
+    }
+
+    // MARK: - Inline Queue
+
+    private var queueTitle: String {
+        guard let queueManager = appEnvironment?.queueManager,
+              case .playlist = queueManager.currentQueueSource,
+              let title = queueManager.currentQueueSourceLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else {
+            return String(localized: "queue.section.upNext")
+        }
+        return title
+    }
+
+    private var inlineQueue: some View {
+        VStack(alignment: .leading, spacing: Layout.mediumSpacing) {
+            Capsule()
+                .fill(.tertiary)
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.top, Layout.smallSpacing)
+                .accessibilityHidden(true)
+
+            HStack(spacing: Layout.smallSpacing) {
+                Text(queueTitle)
+                    .font(.title2.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+
+                Button {
+                    presentAppSheet(.queue())
+                } label: {
+                    Image(systemName: "text.badge.plus")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "controls.button.queue"))
+            }
+
+            LazyVStack(spacing: 4) {
+                if let currentVideo = state.currentVideo {
+                    QueueItemRow(
+                        video: currentVideo,
+                        isCurrentlyPlaying: true,
+                        onReorder: { presentAppSheet(.queue(reordering: true)) },
+                        onTap: {
+                            if !isTransportDisabled, state.playbackState != .playing {
+                                playerService.togglePlayPause()
+                            }
+                        }
+                    )
+                }
+
+                ForEach(state.queue) { item in
+                    QueueItemRow(
+                        video: item.video,
+                        isCurrentlyPlaying: false,
+                        onRemove: {
+                            withAnimation {
+                                appEnvironment?.queueManager.removeFromQueue(id: item.id)
+                            }
+                        },
+                        onReorder: { presentAppSheet(.queue(reordering: true)) },
+                        onTap: {
+                            guard let index = state.queue.firstIndex(where: { $0.id == item.id }) else { return }
+                            QueuePlaybackActions.playVideo(at: index, appEnvironment: appEnvironment)
+                        }
+                    )
+                }
+            }
         }
     }
 

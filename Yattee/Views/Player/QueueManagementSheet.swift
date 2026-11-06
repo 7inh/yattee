@@ -12,6 +12,9 @@ struct QueueManagementSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appEnvironment) private var appEnvironment
 
+    var initiallyReordering = false
+    @State private var editMode: EditMode = .inactive
+
     /// Optional dismiss callback used when the view is presented inline (e.g. as
     /// the tvOS half-screen panel) rather than via a sheet/fullScreenCover. When
     /// nil, falls back to `@Environment(\.dismiss)`.
@@ -55,6 +58,16 @@ struct QueueManagementSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     closeButton
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    EditButton()
+                        .disabled(queue.isEmpty)
+                }
+            }
+        }
+        .environment(\.editMode, $editMode)
+        .onAppear {
+            if initiallyReordering {
+                editMode = .active
             }
         }
         .presentationDragIndicator(.visible)

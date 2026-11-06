@@ -16,8 +16,8 @@ import SwiftUI
 
 /// Sheets presented through `.appSheetHost()`.
 enum AppSheet: Identifiable {
-    /// Queue of the current player. `halfHeight` opens at the medium detent.
-    case queue(halfHeight: Bool = false)
+    /// Queue of the current player. `reordering` opens with drag handles visible.
+    case queue(halfHeight: Bool = false, reordering: Bool = false)
     /// Add a video to a playlist. `halfHeight` opens at the medium detent.
     case addToPlaylist(Video, halfHeight: Bool = false)
     /// Play now / queue choices for a tapped video while something is playing.
@@ -162,8 +162,8 @@ private struct AppSheetHost: ViewModifier {
     private func sheetContent(for sheet: AppSheet) -> some View {
         Group {
             switch sheet {
-            case .queue(let halfHeight):
-                QueueManagementSheet()
+            case .queue(let halfHeight, let reordering):
+                QueueManagementSheet(initiallyReordering: reordering)
                     .halfHeightDetents(halfHeight)
             case .addToPlaylist(let video, let halfHeight):
                 PlaylistSelectorSheet(video: video)

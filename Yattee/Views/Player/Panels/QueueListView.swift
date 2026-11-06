@@ -159,14 +159,15 @@ struct QueueListView: View {
                     Section {
                         ForEach(Array(history.enumerated()), id: \.element.id) { index, historyItem in
                             QueueItemRow(
-                                queuedVideo: historyItem,
+                                video: historyItem.video,
                                 isCurrentlyPlaying: false,
-                                onRemove: { },
                                 onTap: {
                                     QueuePlaybackActions.playFromHistory(at: index, appEnvironment: appEnvironment)
                                     onPlay?()
                                 }
                             )
+                            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                            .listRowSeparator(.hidden)
                         }
                     } header: {
                         sectionHeader("queue.section.previously", count: history.count)
@@ -176,18 +177,13 @@ struct QueueListView: View {
                 // Now Playing section - show the currently playing video from playerState
                 if showNowPlaying, let currentVideo = playerState?.currentVideo {
                     Section {
-                        // Create a temporary QueuedVideo for display
-                        let nowPlayingItem = QueuedVideo(
-                            video: currentVideo,
-                            stream: playerState?.currentStream,
-                            queueSource: nil
-                        )
                         QueueItemRow(
-                            queuedVideo: nowPlayingItem,
+                            video: currentVideo,
                             isCurrentlyPlaying: true,
-                            onRemove: { },
                             onTap: { }
                         )
+                        .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                        .listRowSeparator(.hidden)
                     } header: {
                         sectionHeader("queue.section.nowPlaying")
                     }
@@ -199,7 +195,7 @@ struct QueueListView: View {
                     Section {
                         ForEach(Array(queue.enumerated()), id: \.element.id) { index, queuedVideo in
                             QueueItemRow(
-                                queuedVideo: queuedVideo,
+                                video: queuedVideo.video,
                                 isCurrentlyPlaying: false,
                                 onRemove: {
                                     withAnimation {
@@ -211,6 +207,8 @@ struct QueueListView: View {
                                     onPlay?()
                                 }
                             )
+                            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                            .listRowSeparator(.hidden)
                         }
                         .onMove { source, destination in
                             guard let fromIndex = source.first else { return }
