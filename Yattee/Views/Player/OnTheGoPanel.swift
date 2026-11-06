@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Nuke
 import NukeUI
 
 private let nowPlayingAccent = Color.red
@@ -16,6 +17,8 @@ struct OnTheGoPanel: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let playerService: PlayerService
     let onClose: () -> Void
@@ -34,7 +37,7 @@ struct OnTheGoPanel: View {
     @State private var hasScrolledPastTransport = false
     @State private var showingLyrics = false
     @State private var lyrics = LyricsViewModel()
-    @State private var playerControlsHeight: CGFloat = 250
+    @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
 
     private enum ScrollCoordinateSpace: Hashable, Sendable {
         case player
@@ -56,7 +59,7 @@ struct OnTheGoPanel: View {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
     private var isStickyPlayerVisible: Bool {
-        hasScrolledPastTransport && state.currentVideo != nil
+        !showingLyrics && hasScrolledPastTransport && state.currentVideo != nil
     }
     private var sleepTimer: SleepTimer { .shared }
     private var isAutoPlayNextEnabled: Bool {
@@ -84,9 +87,11 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
-            .background(Color(.systemBackground).ignoresSafeArea())
+            .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(.primary)
             .tint(nowPlayingAccent)
+            .environment(\.colorScheme, showingLyrics ? .dark : colorScheme)
+            .preferredColorScheme(showingLyrics ? .dark : nil)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
@@ -119,6 +124,7 @@ struct OnTheGoPanel: View {
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
                 showingLyrics = false
+                lyricsArtworkColor = .fallback
             }
             .task(id: state.currentVideo?.id) {
                 let video = state.currentVideo
@@ -132,10 +138,33 @@ struct OnTheGoPanel: View {
     }
 
     private var panelContent: some View {
+        ZStack {
+            if showingLyrics {
+                lyricsPanelContent
+                    .transition(.opacity)
+            } else {
+                standardPanelContent
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.3), value: showingLyrics)
+    }
+
+    private var panelBackground: some View {
+        ZStack {
+            Color(.systemBackground)
+            lyricsArtworkColor.color
+                .opacity(showingLyrics ? 1 : 0)
+        }
+        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: showingLyrics)
+        .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: lyricsArtworkColor)
+    }
+
+    private var standardPanelContent: some View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    playerContent(availableHeight: max(0, geometry.size.height - Layout.headerHeight))
+                    playerContent
                         .frame(minHeight: max(0, geometry.size.height - Layout.headerHeight), alignment: .center)
 
                     if !state.queue.isEmpty {
@@ -158,24 +187,13 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private func playerContent(availableHeight: CGFloat) -> some View {
+    private var playerContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Center the artwork and controls as one group, with fixed gaps
             // that leave room for full-width artwork on smaller phones.
-            Group {
-                if showingLyrics && hasLyrics {
-                    LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
-                        .frame(height: max(220, availableHeight - playerControlsHeight - Layout.mediumSpacing * 3))
-                        .transition(.opacity)
-                } else {
-                    artwork
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: showingLyrics)
-            .padding(.bottom, Layout.mediumSpacing)
+            artwork
+                .padding(.bottom, Layout.mediumSpacing)
             playerControls
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { playerControlsHeight = $0 }
         }
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
@@ -195,17 +213,81 @@ struct OnTheGoPanel: View {
                     // The viewport includes the reserved header above its visible content.
                     geometry.frame(in: .named(ScrollCoordinateSpace.player)).maxY <= Layout.headerHeight
                 } action: { hasScrolledPastTransport = $0 }
-            if case .failed(let error) = state.playbackState {
-                Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
-                Button("Retry") { Task { await playerService.replayCurrentVideo() } }
+            playbackNotices
+        }
+    }
+
+    @ViewBuilder
+    private var playbackNotices: some View {
+        if case .failed(let error) = state.playbackState {
+            Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
+            Button("Retry") { Task { await playerService.replayCurrentVideo() } }
+        }
+        if let segment = state.currentSegment {
+            SponsorBlockOverlay(segment: segment) {
+                await playerService.seek(to: segment.endTime)
+            } onDismiss: {
+                state.currentSegment = nil
             }
-            if let segment = state.currentSegment {
-                SponsorBlockOverlay(segment: segment) {
-                    await playerService.seek(to: segment.endTime)
-                } onDismiss: {
-                    state.currentSegment = nil
+        }
+    }
+
+    // MARK: - Full-Screen Lyrics
+
+    private var lyricsPanelContent: some View {
+        VStack(spacing: 0) {
+            playerHeader
+
+            VStack(spacing: 0) {
+                lyricsHeader
+                    .padding(.bottom, Layout.mediumSpacing)
+
+                Rectangle()
+                    .fill(.white.opacity(0.15))
+                    .frame(height: 0.5)
+                    .accessibilityHidden(true)
+
+                LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
+                    .frame(maxHeight: .infinity)
+                    .layoutPriority(1)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    seekControls
+                    transportControls
+                        .padding(.top, Layout.mediumSpacing)
+                    playbackNotices
                 }
+                .padding(.bottom, Layout.mediumSpacing)
             }
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Layout.horizontalPadding)
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var lyricsHeader: some View {
+        HStack(spacing: 12) {
+            artworkImage(placeholderSize: 18)
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(videoTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(state.currentVideo?.author.name ?? "")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+
+            LyricsTrackPicker(model: lyrics)
+                .frame(maxWidth: 140, alignment: .trailing)
         }
     }
 
@@ -540,18 +622,33 @@ struct OnTheGoPanel: View {
         Rectangle().fill(.quaternary)
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                FallbackLazyImage(urls: artworkURLs) { imageState in
-                    if let image = imageState.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Rectangle().fill(.quaternary)
-                            .overlay { Image(systemName: "music.note").font(.system(size: 64)).foregroundStyle(.secondary) }
-                    }
-                }
+                artworkImage(placeholderSize: 64)
             }
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxWidth: .infinity)
             .accessibilityHidden(true)
+    }
+
+    private func artworkImage(placeholderSize: CGFloat) -> some View {
+        let videoID = state.currentVideo?.id.videoID
+        return FallbackLazyImage(urls: artworkURLs) { imageState in
+            Group {
+                if let image = imageState.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Rectangle().fill(.quaternary)
+                        .overlay { Image(systemName: "music.note").font(.system(size: placeholderSize)).foregroundStyle(.secondary) }
+                }
+            }
+            .task(id: imageState.imageContainer?.image) {
+                guard let videoID, let container = imageState.imageContainer,
+                      !container.isPreview, let image = container.image.cgImage else { return }
+                let color = await LyricsArtworkColorCache.shared.color(for: videoID, image: image)
+                guard !Task.isCancelled, state.currentVideo?.id.videoID == videoID else { return }
+                lyricsArtworkColor = color
+            }
+        }
+        .id(videoID)
     }
 
     private func detailsSheet(onClose: @escaping () -> Void) -> some View {
@@ -870,7 +967,7 @@ struct OnTheGoPanel: View {
                 Capsule()
                     .fill(.primary)
                     .frame(width: 2, height: 30)
-                    .background(Capsule().fill(Color(.systemBackground)).frame(width: 5).offset(x: 2))
+                    .background(Capsule().fill(showingLyrics ? lyricsArtworkColor.color : Color(.systemBackground)).frame(width: 5).offset(x: 2))
                     .rotationEffect(.degrees(-45))
             }
             .frame(width: 56, height: 44, alignment: .center)

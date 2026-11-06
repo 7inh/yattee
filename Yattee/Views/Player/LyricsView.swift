@@ -23,28 +23,29 @@ struct LyricsView: View {
     @State private var isManuallyScrolling = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            Group {
-                if model.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityLabel("Loading lyrics")
-                } else if model.lines.isEmpty {
-                    VStack(spacing: 12) {
-                        Text("No lyrics available")
-                            .foregroundStyle(.secondary)
-                        if model.errorMessage != nil {
-                            Button("Retry") {
-                                Task { await model.loadLyrics() }
-                            }
-                            .accessibilityHint(model.errorMessage ?? "")
-                        }
-                    }
+        Group {
+            if model.isLoading {
+                ProgressView()
+                    .tint(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    syncedLines
+                    .accessibilityLabel("Loading lyrics")
+            } else if model.lines.isEmpty {
+                VStack(spacing: 12) {
+                    Text("No lyrics available")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.7))
+                    if model.errorMessage != nil {
+                        Button("Retry") {
+                            Task { await model.loadLyrics() }
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                        .accessibilityHint(model.errorMessage ?? "")
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                syncedLines
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,42 +55,6 @@ struct LyricsView: View {
             resumeFollowingAt = .now
             isManuallyScrolling = false
             await model.loadLyrics()
-        }
-    }
-
-    // MARK: - Track Selection
-
-    private var header: some View {
-        HStack {
-            Text("Lyrics")
-                .font(.subheadline.weight(.semibold))
-            Spacer()
-            Menu {
-                ForEach(model.tracks) { track in
-                    Button {
-                        model.selectedTrack = track
-                    } label: {
-                        if track == model.selectedTrack {
-                            Label(track.label, systemImage: "checkmark")
-                        } else {
-                            Text(track.label)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(model.selectedTrack?.label ?? "Captions")
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Caption track")
-            .accessibilityValue(model.selectedTrack?.label ?? "")
         }
     }
 
@@ -110,7 +75,7 @@ struct LyricsView: View {
                                 Text(line.text)
                                     .font(.system(size: 26, weight: .bold))
                                     .multilineTextAlignment(.leading)
-                                    .foregroundStyle(.primary.opacity(index == currentIndex ? 1 : 0.35))
+                                    .foregroundStyle(.white.opacity(index == currentIndex ? 1 : 0.35))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .contentShape(Rectangle())
                             }
@@ -127,6 +92,9 @@ struct LyricsView: View {
                     .padding(.bottom, geometry.size.height * 2 / 3)
                 }
                 .scrollIndicators(.hidden)
+                .onChange(of: geometry.size) { _, _ in
+                    lastScrolledIndex = nil
+                }
                 .onScrollPhaseChange { _, phase in
                     if phase == .tracking || phase == .interacting || phase == .decelerating {
                         isManuallyScrolling = true
@@ -175,5 +143,42 @@ struct LyricsView: View {
         withAnimation(.easeInOut(duration: reduceMotion ? 0 : 0.4)) {
             proxy.scrollTo(target, anchor: UnitPoint(x: 0.5, y: 1.0 / 3))
         }
+    }
+}
+
+// MARK: - Track Selection
+
+@MainActor
+struct LyricsTrackPicker: View {
+    @Bindable var model: LyricsViewModel
+
+    var body: some View {
+        Menu {
+            ForEach(model.tracks) { track in
+                Button {
+                    model.selectedTrack = track
+                } label: {
+                    if track == model.selectedTrack {
+                        Label(track.label, systemImage: "checkmark")
+                    } else {
+                        Text(track.label)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(model.selectedTrack?.displayName ?? String(localized: "Captions"))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel("Caption track")
+        .accessibilityValue(model.selectedTrack?.label ?? "")
     }
 }
