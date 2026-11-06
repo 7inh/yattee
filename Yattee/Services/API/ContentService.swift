@@ -164,8 +164,8 @@ actor ContentService: ContentServiceProtocol {
         try await api(for: instance).playlist(id: id, instance: instance)
     }
 
-    func comments(videoID: String, instance: Instance, continuation: String? = nil) async throws -> CommentsPage {
-        try await api(for: instance).comments(videoID: videoID, instance: instance, continuation: continuation)
+    func comments(videoID: String, instance: Instance, continuation: String? = nil, sort: CommentSort = .top) async throws -> CommentsPage {
+        try await api(for: instance).comments(videoID: videoID, instance: instance, continuation: continuation, sort: sort)
     }
 
     func captions(videoID: String, instance: Instance) async throws -> [Caption] {

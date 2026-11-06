@@ -23,6 +23,8 @@ struct OnTheGoPanel: View {
     @State private var pendingSeekTime: TimeInterval?
     @State private var transportFeedbackTrigger = false
     @State private var showingDetails = false
+    @State private var showingComments = false
+    @State private var showingCommentDetails = false
 
     private enum Layout {
         static let smallSpacing: CGFloat = 8
@@ -66,7 +68,18 @@ struct OnTheGoPanel: View {
                 isHapticFeedbackEnabled
             }
             .sheet(isPresented: $showingDetails) {
-                detailsSheet
+                detailsSheet { showingDetails = false }
+            }
+            .sheet(isPresented: $showingComments) {
+                if let video = state.currentVideo {
+                    CommentsView(video: video) {
+                        showingCommentDetails = true
+                    }
+                    .id(video.id)
+                    .sheet(isPresented: $showingCommentDetails) {
+                        detailsSheet { showingCommentDetails = false }
+                    }
+                }
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
@@ -233,14 +246,14 @@ struct OnTheGoPanel: View {
         .accessibilityHidden(true)
     }
 
-    private var detailsSheet: some View {
+    private func detailsSheet(onClose: @escaping () -> Void) -> some View {
         NavigationStack {
             ScrollView {
                 if let video = state.currentVideo {
                     VStack(alignment: .leading, spacing: 20) {
                         Text(video.title).font(.title2.bold())
                         Button(video.author.name) {
-                            showingDetails = false
+                            onClose()
                             appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
                         }
                         Text(DescriptionText.attributed(video.description ?? "", linkColor: .red))
@@ -252,7 +265,7 @@ struct OnTheGoPanel: View {
             }
             .navigationTitle("Details")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { sheetCloseToolbarItem { showingDetails = false } }
+            .toolbar { sheetCloseToolbarItem(action: onClose) }
         }
     }
 
@@ -490,6 +503,15 @@ struct OnTheGoPanel: View {
 
             sleepTimerMenu
                 .frame(maxWidth: .infinity)
+
+            Button {
+                showingComments = true
+            } label: {
+                accessoryLabel("text.bubble", caption: String(localized: "videoInfo.section.comments"))
+            }
+            .frame(maxWidth: .infinity)
+            .disabled(state.currentVideo?.supportsComments != true)
+            .accessibilityLabel(String(localized: "videoInfo.section.comments"))
 
             Button {
                 appEnvironment?.settingsManager.queueAutoPlayNext.toggle()

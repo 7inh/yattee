@@ -24,6 +24,9 @@ struct Comment: Identifiable, Codable, Hashable, Sendable {
     /// Human-readable published date.
     let publishedText: String?
 
+    /// Whether the API marks this comment as edited. Optional for older cached comments.
+    let isEdited: Bool?
+
     /// Like count if available.
     let likeCount: Int?
 
@@ -50,6 +53,7 @@ struct Comment: Identifiable, Codable, Hashable, Sendable {
         content: String,
         publishedAt: Date? = nil,
         publishedText: String? = nil,
+        isEdited: Bool? = nil,
         likeCount: Int? = nil,
         isPinned: Bool = false,
         isCreatorComment: Bool = false,
@@ -62,6 +66,7 @@ struct Comment: Identifiable, Codable, Hashable, Sendable {
         self.content = content
         self.publishedAt = publishedAt
         self.publishedText = publishedText
+        self.isEdited = isEdited
         self.likeCount = likeCount
         self.isPinned = isPinned
         self.isCreatorComment = isCreatorComment
@@ -79,10 +84,23 @@ struct Comment: Identifiable, Codable, Hashable, Sendable {
     var formattedPublishedDate: String? {
         if let publishedAt {
             let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .full
+            formatter.unitsStyle = .abbreviated
             return formatter.localizedString(for: publishedAt, relativeTo: Date())
         }
         return publishedText
+    }
+}
+
+/// Sort order accepted by Invidious's comments endpoint.
+enum CommentSort: String, Codable, Hashable, Sendable, CaseIterable {
+    case top
+    case newest = "new"
+
+    var title: String {
+        switch self {
+        case .top: String(localized: "Top")
+        case .newest: String(localized: "Newest")
+        }
     }
 }
 

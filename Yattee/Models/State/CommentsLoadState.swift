@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum CommentsLoadState: Equatable {
+enum CommentsLoadState: Equatable, Sendable {
     case idle
     case loading
     case loaded

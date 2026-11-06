@@ -2,12 +2,14 @@
 //  CommentView.swift
 //  Yattee
 //
-//  View displaying a single comment.
+//  Read-only comment row with expandable text and inline continuation replies.
 //
 
+import Foundation
 import SwiftUI
 import NukeUI
 
+@MainActor
 struct CommentView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
@@ -16,253 +18,251 @@ struct CommentView: View {
     let source: ContentSource?
     let isReply: Bool
     let showAvatar: Bool
+    let instance: Instance?
 
+    @State private var isContentExpanded = false
+    @State private var fullTextHeight: CGFloat = 0
+    @State private var collapsedTextHeight: CGFloat = 0
     @State private var replies: [Comment] = []
     @State private var isLoadingReplies = false
     @State private var showReplies = false
+    @State private var hasLoadedReplies = false
     @State private var repliesContinuation: String?
+    @State private var replyError: String?
+    @State private var replyInstance: Instance?
+    @State private var loadedReplyTokens: Set<String> = []
 
-    private var contentService: ContentService? { appEnvironment?.contentService }
-    private var instancesManager: InstancesManager? { appEnvironment?.instancesManager }
-    private var navigationCoordinator: NavigationCoordinator? { appEnvironment?.navigationCoordinator }
     private var accentColor: Color { appEnvironment?.settingsManager.resolvedAccentColor ?? .accentColor }
+    private var resolvedInstance: Instance? {
+        instance ?? source.flatMap { appEnvironment?.instancesManager.instance(for: $0) }
+    }
+    private var canLoadReplies: Bool {
+        videoID != nil && comment.repliesContinuation?.isEmpty == false
+    }
 
-    init(comment: Comment, videoID: String? = nil, source: ContentSource? = nil, isReply: Bool = false, showAvatar: Bool = true) {
+    init(comment: Comment, videoID: String? = nil, source: ContentSource? = nil, isReply: Bool = false, showAvatar: Bool = true, instance: Instance? = nil) {
         self.comment = comment
         self.videoID = videoID
         self.source = source
         self.isReply = isReply
         self.showAvatar = showAvatar
+        self.instance = instance
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                // Author avatar
                 if showAvatar {
                     authorAvatar
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    // Author name and badges
+                VStack(alignment: .leading, spacing: 6) {
                     authorInfo
-
-                    // Comment content — render with clickable URLs and timestamps
-                    Text(DescriptionText.attributed(comment.content, linkColor: accentColor))
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                        .handleTimestampLinks(using: appEnvironment?.playerService)
-
-                    // Metadata row
+                    commentContent
                     metadataRow
+                        .padding(.top, 6)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, 8)
 
-            // Replies section (only for top-level comments)
-            if !isReply && comment.replyCount > 0 {
+            if showReplies {
                 repliesSection
+                    .padding(.leading, showAvatar ? 48 : 16)
             }
         }
+        .padding(.vertical, 8)
     }
 
-    @ViewBuilder
+    // MARK: - Author
+
     private var authorAvatar: some View {
-        Button {
-            navigateToChannel()
-        } label: {
-            authorAvatarImage
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var authorAvatarImage: some View {
         LazyImage(url: comment.author.thumbnailURL) { state in
             if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                image.resizable().aspectRatio(contentMode: .fill)
             } else {
                 Circle()
                     .fill(.quaternary)
                     .overlay {
-                        Text(String(comment.author.name.prefix(1)))
-                            .font(.caption)
-                            .fontWeight(.medium)
+                        Text(String(comment.author.name.drop(while: { $0 == "@" || $0.isWhitespace }).prefix(1)).uppercased())
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: isReply ? 28 : 36, height: isReply ? 28 : 36)
         .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 
-    @ViewBuilder
-    private var authorInfo: some View {
-        HStack(spacing: 4) {
-            Text(comment.author.name)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(comment.isCreatorComment ? accentColor : .primary)
+    private var authorMetadata: String {
+        let name = comment.author.name
+        var text = name.hasPrefix("@") ? name : "@\(name)"
+        if let published = comment.formattedPublishedDate {
+            text += " • \(published)"
+        }
+        if comment.isEdited == true && !text.localizedCaseInsensitiveContains("(edited)") {
+            text += " \(String(localized: "(edited)"))"
+        }
+        return text
+    }
 
+    private var authorInfo: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(verbatim: authorMetadata)
             if comment.isCreatorComment {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.caption2)
-                    .foregroundStyle(accentColor)
+                    .accessibilityLabel("Creator")
             }
-
             if comment.isPinned {
                 Image(systemName: "pin.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Pinned comment")
             }
         }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
-    private func navigateToChannel() {
-        guard let source, !comment.author.id.isEmpty else { return }
-        // Set collapsing first so mini player shows video immediately
-        navigationCoordinator?.isPlayerCollapsing = true
-        navigationCoordinator?.isPlayerExpanded = false
-        navigationCoordinator?.navigate(to: .channel(comment.author.id, source))
+    // MARK: - Content and Counts
+
+    private var commentText: Text {
+        Text(DescriptionText.attributed(comment.content, linkColor: accentColor))
     }
 
-    @ViewBuilder
+    private var commentContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            commentText
+                .lineLimit(isContentExpanded ? nil : 4)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .handleTimestampLinks(using: appEnvironment?.playerService)
+                .background {
+                    commentText
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullTextHeight = $0 }
+                }
+                .background {
+                    commentText
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedTextHeight = $0 }
+                }
+
+            if fullTextHeight > collapsedTextHeight + 1 && collapsedTextHeight > 0 {
+                Button {
+                    isContentExpanded.toggle()
+                } label: {
+                    Text(isContentExpanded ? "Show less" : "Read more")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(isReply ? .subheadline : .body)
+    }
+
     private var metadataRow: some View {
-        HStack(spacing: 12) {
-            // Published time
-            if let publishedText = comment.formattedPublishedDate {
-                Text(publishedText)
-                    .font(.caption)
+        HStack(spacing: 16) {
+            if let likeCount = comment.likeCount {
+                Label(CountFormatter.compact(max(0, likeCount)), systemImage: "hand.thumbsup")
                     .foregroundStyle(.secondary)
             }
-
-            // Like count
-            if let likeCount = comment.formattedLikeCount {
-                HStack(spacing: 2) {
-                    Image(systemName: "hand.thumbsup")
-                        .font(.caption2)
-                    Text(likeCount)
-                        .font(.caption)
-                }
-                .foregroundStyle(.secondary)
-            }
-
-            // Creator heart
             if comment.hasCreatorHeart {
                 Image(systemName: "heart.fill")
-                    .font(.caption2)
                     .foregroundStyle(.red)
+                    .accessibilityLabel("Hearted by creator")
+            }
+            if !isReply && comment.replyCount > 0 {
+                if canLoadReplies {
+                    Button {
+                        showReplies.toggle()
+                        if showReplies && !hasLoadedReplies {
+                            Task { await loadReplies() }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(replyCountText)
+                            Image(systemName: showReplies ? "chevron.up" : "chevron.down")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(accentColor)
+                    .accessibilityValue(showReplies ? "Expanded" : "Collapsed")
+                } else {
+                    Text(replyCountText).foregroundStyle(.secondary)
+                }
             }
         }
+        .font(.caption)
     }
 
-    // MARK: - Replies Section
-
-    /// Leading inset that lines the replies toggle up with the comment text:
-    /// the avatar column (avatar width + spacing) when avatars show, else
-    /// nothing.
-    private var contentIndent: CGFloat {
-        showAvatar ? 44 : 0
+    private var replyCountText: String {
+        comment.replyCount == 1 ? String(localized: "1 reply") : String(localized: "\(comment.replyCount) replies")
     }
 
-    /// Leading inset for the nested replies. Without avatars a smaller
-    /// inset still marks the hierarchy.
-    private var repliesIndent: CGFloat {
-        showAvatar ? 44 : 16
-    }
+    // MARK: - Replies
 
-    @ViewBuilder
     private var repliesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Toggle replies button
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if showReplies {
-                        showReplies = false
-                    } else {
-                        showReplies = true
-                        if replies.isEmpty {
-                            Task { await loadReplies() }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .rotationEffect(.degrees(showReplies ? -180 : 0))
-                    Text(String(localized: "comments.showReplies \(comment.replyCount)"))
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(accentColor)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(replies) { reply in
+                CommentView(comment: reply, source: source, isReply: true, showAvatar: showAvatar, instance: replyInstance)
             }
-            .buttonStyle(.plain)
-            .padding(.leading, contentIndent)
-            .padding(.bottom, 8)
-
-            // Replies list
-            if showReplies {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(replies) { reply in
-                        CommentView(comment: reply, source: source, isReply: true, showAvatar: showAvatar)
-                            .padding(.leading, repliesIndent)
-
-                        if reply.id != replies.last?.id {
-                            Divider()
-                                .padding(.leading, repliesIndent)
-                        }
-                    }
-
-                    // Load more replies
-                    if isLoadingReplies {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .padding(.vertical, 8)
-                            Spacer()
-                        }
-                        .padding(.leading, repliesIndent)
-                    } else if repliesContinuation != nil {
-                        Button {
-                            Task { await loadReplies() }
-                        } label: {
-                            Text(String(localized: "comments.loadMoreReplies"))
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(accentColor)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.leading, repliesIndent)
-                        .padding(.vertical, 8)
-                    }
+            if isLoadingReplies {
+                ProgressView().padding(.vertical, 8)
+            } else if let replyError {
+                Text(replyError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(String(localized: "common.retry")) {
+                    Task { await loadReplies() }
                 }
+                .buttonStyle(.plain)
+            } else if repliesContinuation != nil {
+                Button(String(localized: "comments.loadMoreReplies")) {
+                    Task { await loadReplies() }
+                }
+                .buttonStyle(.plain)
+            } else if hasLoadedReplies && replies.isEmpty {
+                Text("No replies available")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private func loadReplies() async {
-        guard let videoID, let contentService, let instancesManager else { return }
-        guard let instance = instancesManager.enabledInstances.first(where: \.isYouTubeInstance) else { return }
-
-        // Use the comment's replies continuation, or the stored one for subsequent pages
-        let continuation = replies.isEmpty ? comment.repliesContinuation : repliesContinuation
-        guard let continuation else { return }
-
+        guard !isLoadingReplies else { return }
+        let continuation = hasLoadedReplies ? repliesContinuation : comment.repliesContinuation
+        guard let videoID, let continuation, !continuation.isEmpty else { return }
+        guard let service = appEnvironment?.contentService,
+              let instance = replyInstance ?? resolvedInstance else {
+            replyError = APIError.noInstance.localizedDescription
+            return
+        }
+        replyInstance = instance
         isLoadingReplies = true
+        replyError = nil
+        defer { isLoadingReplies = false }
 
         do {
-            let page = try await contentService.comments(videoID: videoID, instance: instance, continuation: continuation)
-            replies.append(contentsOf: page.comments)
-            repliesContinuation = page.continuation
+            let page = try await service.comments(videoID: videoID, instance: instance, continuation: continuation)
+            guard !Task.isCancelled else { return }
+            var ids = Set(replies.map(\.id))
+            replies.append(contentsOf: page.comments.filter { ids.insert($0.id).inserted })
+            hasLoadedReplies = true
+            loadedReplyTokens.insert(continuation)
+            repliesContinuation = page.continuation.flatMap {
+                $0.isEmpty || loadedReplyTokens.contains($0) ? nil : $0
+            }
         } catch {
-            // Silently fail for replies
+            guard !Task.isCancelled else { return }
+            replyError = error.localizedDescription
+            LoggingService.shared.warning("Failed to load comment replies", category: .api, details: error.localizedDescription)
         }
-
-        isLoadingReplies = false
     }
 }

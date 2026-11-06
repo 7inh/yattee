@@ -1673,43 +1673,8 @@ struct VideoInfoView: View {
     @ViewBuilder
     private var commentsSheetContent: some View {
         if let video = displayedVideo {
-            NavigationStack {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(comments) { comment in
-                            CommentView(
-                                comment: comment,
-                                videoID: video.id.videoID,
-                                source: video.id.source,
-                                isReply: false
-                            )
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .onAppear {
-                                // Infinite scroll: load more when last comment appears
-                                if comment.id == comments.last?.id {
-                                    loadMoreComments()
-                                }
-                            }
-                        }
-
-                        // Loading indicator at the bottom
-                        if commentsState == .loadingMore {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
-                            }
-                            .padding()
-                        }
-                    }
-                }
-                .navigationTitle(String(localized: "videoInfo.section.comments"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    sheetCloseToolbarItem { showingCommentsSheet = false }
-                }
-            }
+            CommentsView(video: video)
+                .id(video.id)
         }
     }
 
@@ -1823,35 +1788,6 @@ struct VideoInfoView: View {
             } catch {
                 await MainActor.run {
                     commentsState = .error
-                }
-            }
-        }
-    }
-
-    private func loadMoreComments() {
-        guard commentsState != .loadingMore else { return }
-        guard let continuation = commentsContinuation else { return }
-        guard let video = displayedVideo,
-              let contentService, let instancesManager,
-              let instance = instancesManager.instance(for: video) else { return }
-
-        commentsState = .loadingMore
-
-        Task {
-            do {
-                let page = try await contentService.comments(
-                    videoID: video.id.videoID,
-                    instance: instance,
-                    continuation: continuation
-                )
-                await MainActor.run {
-                    comments.append(contentsOf: page.comments)
-                    commentsContinuation = page.continuation
-                    commentsState = .loaded
-                }
-            } catch {
-                await MainActor.run {
-                    commentsState = .loaded // Don't show error on load more failure
                 }
             }
         }

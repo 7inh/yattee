@@ -20,7 +20,7 @@ protocol InstanceAPI: Sendable {
     func channelShorts(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage
     func channelStreams(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage
     func playlist(id: String, instance: Instance) async throws -> Playlist
-    func comments(videoID: String, instance: Instance, continuation: String?) async throws -> CommentsPage
+    func comments(videoID: String, instance: Instance, continuation: String?, sort: CommentSort) async throws -> CommentsPage
     func captions(videoID: String, instance: Instance) async throws -> [Caption]
     func channelSearch(id: String, query: String, instance: Instance, page: Int) async throws -> ChannelSearchPage
 }

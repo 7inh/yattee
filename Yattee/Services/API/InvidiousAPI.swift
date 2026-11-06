@@ -389,8 +389,8 @@ actor InvidiousAPI: InstanceAPI {
         )
     }
 
-    func comments(videoID: String, instance: Instance, continuation: String?) async throws -> CommentsPage {
-        var query: [String: String] = [:]
+    func comments(videoID: String, instance: Instance, continuation: String?, sort: CommentSort = .top) async throws -> CommentsPage {
+        var query: [String: String] = ["sort_by": sort.rawValue]
         if let continuation {
             query["continuation"] = continuation
         }
@@ -2018,6 +2018,7 @@ private struct InvidiousComment: Decodable, Sendable {
             content: content,
             publishedAt: published.map { Date(timeIntervalSince1970: TimeInterval($0)) },
             publishedText: publishedText,
+            isEdited: isEdited,
             likeCount: likeCount,
             isPinned: isPinned ?? false,
             isCreatorComment: authorIsChannelOwner ?? false,
