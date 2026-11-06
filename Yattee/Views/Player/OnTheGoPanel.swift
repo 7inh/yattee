@@ -23,6 +23,8 @@ struct OnTheGoPanel: View {
     @GestureState private var scrubTime: TimeInterval? = nil
     @State private var pendingSeekTime: TimeInterval?
     @State private var transportFeedbackTrigger = false
+    @State private var showingPlayerMenu = false
+    @State private var shareRequest = 0
     @State private var showingDetails = false
     @State private var showingComments = false
     @State private var showingCommentDetails = false
@@ -216,19 +218,30 @@ struct OnTheGoPanel: View {
 
             Spacer()
 
-            Menu {
-                if let video = state.currentVideo {
-                    playerMenuItems(for: video)
-                }
+            Button {
+                showingPlayerMenu = true
             } label: {
                 topBarSymbol("ellipsis")
             }
-            // Let the shared label define the glass instead of the menu style.
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .menuOrder(.fixed)
             .topBarCircle()
+            .background {
+                if let video = state.currentVideo {
+                    // Keep the share presenter attached after the popover disappears.
+                    ShareLink(item: appEnvironment?.shareURL(for: video) ?? video.shareURL) {
+                        Color.clear
+                    }
+                    .buttonStyle(OnTheGoShareLinkStyle(request: shareRequest))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
+            .popover(isPresented: $showingPlayerMenu, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                if let video = state.currentVideo {
+                    playerMenuItems(for: video)
+                        .presentationCompactAdaptation(.popover)
+                }
+            }
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
@@ -250,70 +263,129 @@ struct OnTheGoPanel: View {
     private func playerMenuItems(for video: Video) -> some View {
         let shareURL = appEnvironment?.shareURL(for: video) ?? video.shareURL
 
-        Section {
-            Toggle(isOn: Binding(
-                get: { isAutoPlayNextEnabled },
-                set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
-            )) {
-                Label(String(localized: "player.nowPlaying.autoplay"), systemImage: "infinity")
-            }
-            .disabled(state.isControlsLocked || appEnvironment == nil)
+        VStack(spacing: 0) {
+            autoplayMenuRow
+
+            playerMenuSeparator
 
             Button {
-                presentAppSheet(.queue())
+                dismissPlayerMenu { presentAppSheet(.queue()) }
             } label: {
-                Label(String(localized: "controls.button.queue"), systemImage: "list.bullet")
+                playerMenuRow(String(localized: "controls.button.queue"), systemImage: "list.bullet")
             }
 
             Button {
-                showingComments = true
+                dismissPlayerMenu { showingComments = true }
             } label: {
-                Label(String(localized: "videoInfo.section.comments"), systemImage: "text.bubble")
+                playerMenuRow(String(localized: "videoInfo.section.comments"), systemImage: "text.bubble")
             }
             .disabled(!video.supportsComments)
 
             Button {
-                showingDetails = true
+                dismissPlayerMenu { showingDetails = true }
             } label: {
-                Label("Details", systemImage: "info.circle")
+                playerMenuRow(String(localized: "Details"), systemImage: "info.circle")
             }
-        }
 
-        Section {
+            playerMenuSeparator
+
             downloadMenuItem(for: video)
 
             Button {
-                presentAppSheet(.addToPlaylist(video))
+                dismissPlayerMenu { presentAppSheet(.addToPlaylist(video)) }
             } label: {
-                Label(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
-            }
-
-            ShareLink(item: shareURL) {
-                Label(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+                playerMenuRow(String(localized: "video.context.addToPlaylist"), systemImage: "text.badge.plus")
             }
 
             Button {
-                UIPasteboard.general.string = shareURL.absoluteString
+                dismissPlayerMenu { shareRequest += 1 }
             } label: {
-                Label(String(localized: "video.context.copyLink"), systemImage: "doc.on.doc")
+                playerMenuRow(String(localized: "video.context.share"), systemImage: "square.and.arrow.up")
+            }
+
+            Button {
+                dismissPlayerMenu { UIPasteboard.general.string = shareURL.absoluteString }
+            } label: {
+                playerMenuRow(String(localized: "video.context.copyLink"), systemImage: "doc.on.doc")
             }
 
             if video.id.youtubeURL() != nil {
                 Button {
-                    if let url = video.id.youtubeURL(startTime: state.currentTime) {
-                        openURL(url)
+                    dismissPlayerMenu {
+                        if let url = video.id.youtubeURL(startTime: state.currentTime) {
+                            openURL(url)
+                        }
                     }
                 } label: {
-                    Label(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
+                    playerMenuRow(String(localized: "video.context.openInYouTube"), systemImage: "play.rectangle")
                 }
             }
 
             Button {
-                appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+                dismissPlayerMenu {
+                    appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+                }
             } label: {
-                Label(String(localized: "video.context.goToChannel"), systemImage: "person.circle")
+                playerMenuRow(String(localized: "video.context.goToChannel"), systemImage: "person.circle")
             }
             .disabled(!video.author.hasRealChannelInfo)
+        }
+        .font(.body)
+        .buttonStyle(OnTheGoMenuButtonStyle())
+        .tint(nowPlayingAccent)
+        .padding(.vertical, 8)
+        .frame(width: 250)
+    }
+
+    private var autoplayMenuRow: some View {
+        let title = String(localized: "player.nowPlaying.autoplay")
+
+        return Button {
+            appEnvironment?.settingsManager.queueAutoPlayNext.toggle()
+        } label: {
+            playerMenuRow(title, systemImage: "infinity")
+                .padding(.trailing, 60)
+                .contentShape(Rectangle())
+        }
+        .accessibilityHidden(true)
+        .overlay(alignment: .trailing) {
+            Toggle(title, isOn: Binding(
+                get: { isAutoPlayNextEnabled },
+                set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .padding(.trailing, 16)
+        }
+        .disabled(state.isControlsLocked || appEnvironment == nil)
+    }
+
+    private func playerMenuRow(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            Text(title)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+    }
+
+    private var playerMenuSeparator: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(height: 8)
+            .accessibilityHidden(true)
+    }
+
+    private func dismissPlayerMenu(perform action: @escaping @MainActor () -> Void) {
+        showingPlayerMenu = false
+        Task { @MainActor in
+            // Let the popover finish dismissing before presenting sheets or sharing.
+            try? await Task.sleep(for: .milliseconds(350))
+            action()
         }
     }
 
@@ -322,23 +394,29 @@ struct OnTheGoPanel: View {
         if let manager = appEnvironment?.downloadManager,
            manager.isDownloading(video.id), let download = manager.download(for: video.id) {
             Button(role: .destructive) {
-                Task { await manager.cancel(download) }
+                dismissPlayerMenu {
+                    Task { await manager.cancel(download) }
+                }
             } label: {
-                Label(String(localized: "video.context.cancelDownload"), systemImage: "xmark.circle")
+                playerMenuRow(String(localized: "video.context.cancelDownload"), systemImage: "xmark.circle")
             }
         } else if let manager = appEnvironment?.downloadManager,
                   manager.isDownloaded(video.id), let download = manager.download(for: video.id) {
             Button {
-                downloadToDelete = download
-                showingDeleteDownloadConfirmation = true
+                dismissPlayerMenu {
+                    downloadToDelete = download
+                    showingDeleteDownloadConfirmation = true
+                }
             } label: {
-                Label(String(localized: "video.context.downloaded"), systemImage: "checkmark.circle.fill")
+                playerMenuRow(String(localized: "video.context.downloaded"), systemImage: "checkmark.circle.fill")
             }
         } else {
             Button {
-                presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, dislikeCount: state.dislikeCount))
+                dismissPlayerMenu {
+                    presentAppSheet(.downloadOptions(video, streams: playerService.availableStreams, dislikeCount: state.dislikeCount))
+                }
             } label: {
-                Label(String(localized: "video.context.download"), systemImage: "arrow.down.circle")
+                playerMenuRow(String(localized: "video.context.download"), systemImage: "arrow.down.circle")
             }
         }
     }
@@ -751,6 +829,30 @@ struct OnTheGoPanel: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Menu Styling
+
+private struct OnTheGoMenuButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(configuration.role == .destructive ? nowPlayingAccent : .primary)
+            .opacity(isEnabled ? 1 : 0.4)
+            .background(configuration.isPressed && isEnabled ? Color.gray.opacity(0.15) : .clear)
+    }
+}
+
+private struct OnTheGoShareLinkStyle: PrimitiveButtonStyle {
+    let request: Int
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: request) { _, _ in
+                configuration.trigger()
+            }
     }
 }
 
