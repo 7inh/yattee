@@ -99,7 +99,8 @@ struct VideoInfoView: View {
     @State private var isEnqueuingDownload = false
     @State private var showingRemoveDownloadConfirmation = false
 
-    // Resume action sheet state
+    // Resume confirmation state
+    @State private var resumeTime: TimeInterval?
 
     // Video details cache - stores full video details loaded from API
     @State private var loadedVideoDetails: [String: Video] = [:]
@@ -360,6 +361,12 @@ struct VideoInfoView: View {
         .sheet(isPresented: $showingCommentsSheet) {
             commentsSheetContent
         }
+        .resumeConfirmationDialog(
+            videoTitle: displayedVideo?.title ?? "",
+            resumeTime: $resumeTime,
+            onContinue: { playVideoWithStartTime($0) },
+            onStartOver: { playVideoWithStartTime(0) }
+        )
         .onChange(of: downloadManager?.completedDownloads) { _, newValue in
             // Update download state when completedDownloads changes
             if let video = displayedVideo {
@@ -1993,13 +2000,7 @@ struct VideoInfoView: View {
                 // Always start from beginning
                 playVideoWithStartTime(0)
             case .ask:
-                // Show the resume action sheet
-                presentAppSheet(.resumeAction(
-                    video,
-                    resumeTime: savedProgress,
-                    onContinue: { playVideoWithStartTime(savedProgress) },
-                    onStartOver: { playVideoWithStartTime(0) }
-                ))
+                resumeTime = savedProgress
             }
         } else {
             // No saved progress or video was completed - play from beginning

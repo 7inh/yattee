@@ -12,7 +12,7 @@ import SwiftUI
 /// When nothing is playing or queue is disabled, plays the video directly and queues subsequent videos.
 struct TappableVideoModifier: ViewModifier {
     @Environment(\.appEnvironment) private var appEnvironment
-    @Environment(\.presentAppSheet) private var presentAppSheet
+    @State private var resumeTime: TimeInterval?
 
     let video: Video
     var startTime: Double? = nil
@@ -43,6 +43,12 @@ struct TappableVideoModifier: ViewModifier {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .resumeConfirmationDialog(
+            videoTitle: video.title,
+            resumeTime: $resumeTime,
+            onContinue: { playVideoWithStartTime($0) },
+            onStartOver: { playVideoWithStartTime(0) }
+        )
         .if(includeContextMenu) { view in
             view.videoContextMenu(
                 video: video,
@@ -122,13 +128,7 @@ struct TappableVideoModifier: ViewModifier {
                 // Always start from beginning
                 playVideoWithStartTime(0)
             case .ask:
-                // Show the resume action sheet with data bundled together
-                presentAppSheet(.resumeAction(
-                    video,
-                    resumeTime: savedProgress,
-                    onContinue: { playVideoWithStartTime(savedProgress) },
-                    onStartOver: { playVideoWithStartTime(0) }
-                ))
+                resumeTime = savedProgress
             }
         } else {
             // No saved progress or video was completed - play from beginning
