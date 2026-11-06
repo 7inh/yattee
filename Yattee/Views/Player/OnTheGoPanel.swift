@@ -160,9 +160,10 @@ struct OnTheGoPanel: View {
     private var topBar: some View {
         HStack {
             Button(action: onClose) {
-                topBarSymbol("chevron.down", alignment: .leading)
+                topBarSymbol("chevron.down")
             }
             .buttonStyle(.plain)
+            .fixedSize()
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -172,12 +173,13 @@ struct OnTheGoPanel: View {
                     playerMenuItems(for: video)
                 }
             } label: {
-                topBarSymbol("ellipsis", alignment: .trailing)
+                topBarSymbol("ellipsis")
             }
             // Let the shared label define the glass instead of the menu style.
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
+            .fixedSize()
             .menuOrder(.fixed)
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
@@ -189,13 +191,13 @@ struct OnTheGoPanel: View {
         .padding(.vertical, Layout.smallSpacing)
     }
 
-    private func topBarSymbol(_ name: String, alignment: Alignment) -> some View {
+    private func topBarSymbol(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 14, weight: .semibold))
-            .frame(width: 34, height: 34)
+            .frame(width: 34, height: 34, alignment: .center)
             .modifier(OnTheGoTopBarStyleModifier())
-            // Extend the hit area inward so the circles align with the artwork.
-            .frame(width: 44, height: 44, alignment: alignment)
+            .fixedSize()
+            .frame(width: 44, height: 44, alignment: .center)
             .contentShape(Rectangle())
     }
 
