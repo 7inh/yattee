@@ -361,8 +361,8 @@ struct VideoInfoView: View {
         .sheet(isPresented: $showingCommentsSheet) {
             commentsSheetContent
         }
-        .resumeConfirmationDialog(
-            videoTitle: displayedVideo?.title ?? "",
+        .resumeConfirmationSheet(
+            video: displayedVideo,
             resumeTime: $resumeTime,
             onContinue: { playVideoWithStartTime($0) },
             onStartOver: { playVideoWithStartTime(0) }

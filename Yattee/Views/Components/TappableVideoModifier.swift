@@ -43,8 +43,8 @@ struct TappableVideoModifier: ViewModifier {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .resumeConfirmationDialog(
-            videoTitle: video.title,
+        .resumeConfirmationSheet(
+            video: video,
             resumeTime: $resumeTime,
             onContinue: { playVideoWithStartTime($0) },
             onStartOver: { playVideoWithStartTime(0) }
