@@ -22,6 +22,7 @@ struct PlayerPanelCoverGeometryTests {
         #expect(layout.playerOriginY == 80)
         #expect(layout.playerHeight == 648)
         #expect(layout.queueTop == 744)
+        #expect(layout.queueRowsTop == 773)
         #expect(layout.morphProgress == 0)
         #expect(layout.queueProgress == 0)
         #expect(layout.coverHeaderProgress == 0)
@@ -35,7 +36,8 @@ struct PlayerPanelCoverGeometryTests {
         #expect(abs(geometry.transportTop - 397.76) < 0.001)
         #expect(PlayerPanelCoverGeometry.transportHeight == 80)
         #expect(abs(layout.playerHeight - 477.76) < 0.001)
-        #expect(abs(layout.queueTop + 8 + 50 - 493.76) < 0.001)
+        #expect(abs(layout.queueHandleTop + 50 - 493.76) < 0.001)
+        #expect(abs(layout.queueRowsTop + 50 - 514.76) < 0.001)
         #expect(layout.morphProgress == 1)
         #expect(layout.coverHeaderProgress == 1)
     }
@@ -58,8 +60,9 @@ struct PlayerPanelCoverGeometryTests {
         for normalHeight: CGFloat in [400, 648, 900] {
             let layout = geometry.layout(progress: 2, normalPlayerHeight: normalHeight)
             #expect(abs(layout.playerOriginY + layout.playerHeight - 80) < 0.001)
-            #expect(abs(layout.queueTop - 112) < 0.001)
-            #expect(abs(layout.queueTop + 8 + 50 - 170) < 0.001)
+            #expect(abs(layout.queueTop - 72) < 0.001)
+            #expect(abs(layout.queueHandleTop - 80) < 0.001)
+            #expect(abs(layout.queueRowsTop - 93) < 0.001)
             #expect(layout.queueProgress == 1)
             #expect(layout.coverHeaderProgress == 0)
         }
@@ -86,7 +89,9 @@ struct PlayerPanelCoverGeometryTests {
         #expect(geometry.coverHeight == 180)
         #expect(halfOpen.playerOriginY == 0)
         #expect(halfOpen.playerHeight == 268)
-        #expect(halfOpen.queueTop + 8 + 5 + 16 < 375)
-        #expect(fullQueue.queueTop == 112)
+        #expect(halfOpen.queueRowsTop < 375)
+        #expect(fullQueue.queueTop == 72)
+        #expect(fullQueue.queueHandleTop == 80)
+        #expect(fullQueue.queueRowsTop == 93)
     }
 }

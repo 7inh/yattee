@@ -10,6 +10,8 @@ import Foundation
 struct PlayerPanelCoverGeometry: Equatable, Sendable {
     static let transportSpacing: CGFloat = 8
     static let transportHeight: CGFloat = 80
+    static let queueHandleHeight: CGFloat = 5
+    static let queueHandleTopSpacing: CGFloat = 8
 
     let screenHeight: CGFloat
     let topSafeArea: CGFloat
@@ -33,6 +35,12 @@ struct PlayerPanelCoverGeometry: Equatable, Sendable {
         let playerHeight: CGFloat
         let queueTop: CGFloat
         let coverHeaderProgress: CGFloat
+
+        var queueHandleTop: CGFloat { queueTop + PlayerPanelCoverGeometry.queueHandleTopSpacing }
+        var queueHandleBottomSpacing: CGFloat { 16 - 8 * queueProgress }
+        var queueRowsTop: CGFloat {
+            queueHandleTop + PlayerPanelCoverGeometry.queueHandleHeight + queueHandleBottomSpacing
+        }
     }
 
     /// Coordinates are relative to the top safe area. The queue's measured
@@ -45,8 +53,9 @@ struct PlayerPanelCoverGeometry: Equatable, Sendable {
             : -max(0, progress - 2) * detents.halfOpenToFullQueueDistance
         let origin = headerHeight - morph * (headerHeight + topSafeArea)
             - queue * detents.halfOpenToFullQueueDistance + overshoot
-        // Preserve A's 16pt gap, B's 8pt gap and C's 32pt gap before the grabber.
-        let queuePadding = 16 - 8 * morph + 24 * queue
+        // Preserve A/B. In C the card ends 8pt before the header's bottom;
+        // start the queue there so its top padding leaves an 8pt grabber gap.
+        let queuePadding = 16 - 8 * morph - 16 * queue
         let coverHeaderProgress = morph * min(1, max(0, (origin + coverHeight) / max(1, headerHeight)))
         return PanelLayout(
             morphProgress: morph, queueProgress: queue,

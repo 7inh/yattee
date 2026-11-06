@@ -421,6 +421,15 @@ struct OnTheGoPanel: View {
     }
 
     private func settlePanel(at target: PanelDetent) {
+        #if DEBUG
+        if target == .fullQueue {
+            let layout = panelCoverGeometry.layout(progress: 2, normalPlayerHeight: 0)
+            LoggingService.shared.debug(
+                "Player full queue layout: cardBottom=\(Layout.headerHeight - Layout.smallSpacing), handleTop=\(layout.queueHandleTop), rowsTop=\(layout.queueRowsTop)",
+                category: .player
+            )
+        }
+        #endif
         withAnimation(panelSnapAnimation) {
             detent = target
             dragOffset = 0
@@ -450,7 +459,7 @@ struct OnTheGoPanel: View {
             // Keep paging/scrubbing simultaneous. Native dismissal stays enabled
             // in A, with a release fallback if our direction-locked pan wins.
             .simultaneousGesture(panelDragGesture(
-                queueRowsTop: layout.queueTop + Layout.smallSpacing + 5 + Layout.mediumSpacing
+                queueRowsTop: layout.queueRowsTop
             ))
             .onChange(of: coverGeometry, initial: true) { _, value in
                 panelCoverGeometry = value
@@ -461,7 +470,8 @@ struct OnTheGoPanel: View {
     private func playerContent(
         panelHeight: CGFloat, progress: CGFloat, coverGeometry: PlayerPanelCoverGeometry
     ) -> some View {
-        PlayerContentLayout(
+        let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: 0)
+        return PlayerContentLayout(
             progress: progress,
             panelHeight: panelHeight,
             coverGeometry: coverGeometry
@@ -496,7 +506,7 @@ struct OnTheGoPanel: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                 playbackNoticesHeight = $0
             }
-            inlineQueue
+            inlineQueue(handleBottomSpacing: layout.queueHandleBottomSpacing)
                 .opacity(state.currentVideo != nil || !state.queue.isEmpty ? 1 : 0)
                 .padding(.horizontal, Layout.horizontalPadding)
         }
@@ -963,16 +973,16 @@ struct OnTheGoPanel: View {
 
     // MARK: - Inline Queue
 
-    private var inlineQueue: some View {
+    private func inlineQueue(handleBottomSpacing: CGFloat) -> some View {
         VStack(spacing: 0) {
             // The grabber is outside the rows' ScrollView so it can always
             // collapse C, including while the rows are scrolled down.
             Capsule()
                 .fill(.tertiary)
-                .frame(width: 36, height: 5)
+                .frame(width: 36, height: PlayerPanelCoverGeometry.queueHandleHeight)
                 .frame(maxWidth: .infinity)
-                .padding(.top, Layout.smallSpacing)
-                .padding(.bottom, Layout.mediumSpacing)
+                .padding(.top, PlayerPanelCoverGeometry.queueHandleTopSpacing)
+                .padding(.bottom, handleBottomSpacing)
                 .contentShape(Rectangle())
                 .accessibilityLabel("Player queue handle")
                 .accessibilityAdjustableAction { direction in
