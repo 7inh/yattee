@@ -68,7 +68,7 @@ struct PlayerPanelScrollDetentsTests {
     }
 
     @Test("Queues add only the bottom filler needed to reach C", arguments: [
-        (0, CGFloat(485)), (1, 429), (3, 317), (16, 0)
+        (0, CGFloat(487)), (1, 431), (3, 319), (16, 0)
     ])
     func queueBottomFiller(queueCount: Int, expectedFillerHeight: CGFloat) {
         let viewportHeight = PlayerPanelScrollDetents.viewportHeight(containerHeight: 728, topInset: 80, bottomInset: 34)
@@ -85,14 +85,14 @@ struct PlayerPanelScrollDetentsTests {
 
         #expect(viewportHeight == 614)
         #expect(abs(fillerHeight - expectedFillerHeight) < 0.001)
-        #expect(maximumOffset >= detents.fullQueueOffset)
+        #expect(maximumOffset >= detents.fullQueueOffset + PlayerPanelScrollDetents.fullQueueScrollMargin)
         #expect(PlayerPanelScrollDetents.clampedOffset(detents.fullQueueOffset, maximumOffset: maximumOffset) == detents.fullQueueOffset)
         #expect(detents.targetOffset(
             startOffset: detents.halfOpenOffset, releaseOffset: detents.halfOpenOffset + 20,
             velocity: 600, maximumOffset: maximumOffset
         ) == detents.fullQueueOffset)
         if queueCount < 16 {
-            #expect(abs(maximumOffset - detents.fullQueueOffset) < 0.001)
+            #expect(abs(maximumOffset - detents.fullQueueOffset - 2) < 0.001)
         } else {
             #expect(contentHeight == naturalContentHeight)
             #expect(maximumOffset + viewportHeight == naturalContentHeight)
@@ -146,17 +146,68 @@ struct PlayerPanelScrollDetentsTests {
         #expect(detents.targetOffset(startOffset: 800, releaseOffset: 1200, velocity: 600, maximumOffset: maximumOffset) == maximumOffset)
     }
 
-    @Test("Snaps and queue overscroll respect the maximum offset", arguments: [
+    @Test("Undersized scroll ranges fall back to real detents", arguments: [
         [CGFloat(500), 840, 600, 500, 500],
         [500, 840, 0, 500, 500],
         [500, 480, -600, 500, 140],
-        [140, 160, 600, 300, 300],
-        [0, 20, 2400, 100, 100]
+        [140, 840, 600, 502, 500],
+        [140, 160, 600, 300, 140],
+        [140, 340, 600, 340, 140],
+        [140, 420, 0, 340, 140],
+        [500, 340, 0, 340, 140],
+        [0, 20, 2400, 100, 0]
     ])
     func clampedTargets(sample: [CGFloat]) {
         #expect(detents.targetOffset(
             startOffset: sample[0], releaseOffset: sample[1], velocity: sample[2], maximumOffset: sample[3]
         ) == sample[4])
+    }
+
+    @Test("No release below C can snap to the middle of the morph")
+    func noIntermediateDetents() {
+        for maximumOffset: CGFloat in [0, 100, 140, 300, 499, 500, 502, 1200] {
+            for startOffset: CGFloat in [0, 140, 340, 500, 800] {
+                for releaseOffset: CGFloat in [20, 100, 140, 220, 340, 420, 499] {
+                    for velocity: CGFloat in [-2400, -600, 0, 600, 2400] {
+                        let target = detents.targetOffset(
+                            startOffset: startOffset, releaseOffset: releaseOffset,
+                            velocity: velocity, maximumOffset: maximumOffset
+                        )
+                        #expect(target == 0 || target == 140 || target == 500)
+                        #expect((target ?? .infinity) <= maximumOffset)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("A single current row reaches C with real viewport and bottom insets", arguments: [
+        [CGFloat(728), 80, 34], [728, 130, 34], [728, 80, 68], [375, 80, 21]
+    ])
+    func singleItemQueue(insets: [CGFloat]) {
+        let viewportHeight = PlayerPanelScrollDetents.viewportHeight(
+            containerHeight: insets[0], topInset: insets[1], bottomInset: insets[2]
+        )
+        let geometry = PlayerPanelCoverGeometry(screenHeight: 812, topSafeArea: 50, headerHeight: 80, noticesHeight: 0)
+        let detents = geometry.detents
+        let naturalContentHeight = geometry.contentHeight + geometry.queueTopPadding(at: detents.fullQueueOffset)
+            + 8 + 5 + 16 + 52 + 16
+        let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: naturalContentHeight + fillerHeight, viewportHeight: viewportHeight
+        )
+        let target = detents.targetOffset(
+            startOffset: detents.halfOpenOffset, releaseOffset: detents.halfOpenOffset + 340,
+            velocity: 0, maximumOffset: maximumOffset
+        )
+
+        #expect(abs(maximumOffset - detents.fullQueueOffset - 2) < 0.001)
+        #expect(target == detents.fullQueueOffset)
+        #expect((target ?? 0) >= detents.fullQueueOffset - 1) // The pinned card's threshold.
+        #expect(detents.targetOffset(
+            startOffset: detents.fullQueueOffset, releaseOffset: detents.fullQueueOffset - 200,
+            velocity: 0, maximumOffset: maximumOffset
+        ) == detents.halfOpenOffset)
     }
 
     @Test("Small content and excessive insets cannot produce negative scroll ranges")

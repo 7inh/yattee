@@ -8,12 +8,15 @@
 import Foundation
 
 struct PlayerPanelScrollDetents: Sendable {
+    // Leave C inside the scroll range despite pixel rounding at the bottom edge.
+    static let fullQueueScrollMargin: CGFloat = 2
+
     let halfOpenOffset: CGFloat
     let fullQueueOffset: CGFloat
 
     /// Keep C reachable even after the player has finished morphing.
     func minimumContentHeight(viewportHeight: CGFloat) -> CGFloat {
-        fullQueueOffset + max(0, viewportHeight)
+        fullQueueOffset + Self.fullQueueScrollMargin + max(0, viewportHeight)
     }
 
     /// Natural content includes the player, queue rows and normal bottom inset.
@@ -48,24 +51,25 @@ struct PlayerPanelScrollDetents: Sendable {
         let tolerance: CGFloat = 1
         let flickVelocity: CGFloat = 250
 
-        // Native queue momentum and programmatic snaps share the real content
-        // limit, including when a short queue needs padding just to reach C.
-        if releaseOffset > maximumOffset {
+        // Clamp free queue scrolling only beyond C. An undersized content range
+        // must never turn its bottom edge into a fourth panel detent.
+        if maximumOffset >= fullQueueOffset, startOffset >= fullQueueOffset - tolerance,
+           releaseOffset > fullQueueOffset, releaseOffset > maximumOffset {
             return Self.clampedOffset(releaseOffset, maximumOffset: maximumOffset)
         }
 
         // Only releases still inside the queue retain native scrolling. Once
         // the finger crosses C, the same gesture can collapse the panel.
-        if startOffset >= fullQueueOffset - tolerance, releaseOffset > fullQueueOffset {
+        if maximumOffset >= fullQueueOffset, startOffset >= fullQueueOffset - tolerance, releaseOffset > fullQueueOffset {
             return nil
         }
         if startOffset <= tolerance, releaseOffset <= 0 {
             return nil
         }
 
-        let offsets: [CGFloat] = [0, halfOpenOffset, fullQueueOffset].map {
-            Self.clampedOffset($0, maximumOffset: maximumOffset)
-        }
+        // Keep the real coordinates. During a geometry update, fall back to a
+        // reachable detent instead of resting in the B-to-C transition.
+        let offsets: [CGFloat] = [0, halfOpenOffset, fullQueueOffset].filter { $0 <= max(0, maximumOffset) }
         let nearestOffset = offsets.min { abs($0 - releaseOffset) < abs($1 - releaseOffset) }
         guard abs(velocity) >= flickVelocity else { return nearestOffset }
 

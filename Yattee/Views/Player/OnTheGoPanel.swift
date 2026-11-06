@@ -38,12 +38,13 @@ struct OnTheGoPanel: View {
     @State private var scrollPosition = ScrollPosition(y: 0)
     @State private var panelScrollOffset: CGFloat = 0
     @State private var scrollViewportHeight: CGFloat = 0
+    @State private var naturalScrollContentHeight: CGFloat = 0
+    @State private var proposedSnapTarget: CGFloat?
     @State private var panelCoverGeometry = PlayerPanelCoverGeometry(
         screenHeight: 0, topSafeArea: 0, headerHeight: Layout.headerHeight, noticesHeight: 0
     )
     @State private var playbackNoticesHeight: CGFloat = 0
     @State private var scrollGestureStartOffset: CGFloat?
-    @State private var isQueueDecelerating = false
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
@@ -353,13 +354,16 @@ struct OnTheGoPanel: View {
                 (coverGeometry.halfOpenOffset + coverGeometry.coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
             ))
             let detents = coverGeometry.detents
-            let visibleHeight = scrollViewportHeight > 0 ? scrollViewportHeight : viewportHeight
+            // Only scroll geometry determines the filler. The outer reader is
+            // still used to lay out A and the full-bleed cover.
+            let visibleHeight = scrollViewportHeight
+            let minimumContentHeight = state.currentVideo != nil
+                ? detents.minimumContentHeight(viewportHeight: visibleHeight) : 0
+            let fillerHeight = state.currentVideo != nil ? detents.bottomFillerHeight(
+                naturalContentHeight: naturalScrollContentHeight, viewportHeight: visibleHeight
+            ) : 0
             ScrollView {
-                PlayerScrollContentLayout(
-                    detents: detents,
-                    viewportHeight: visibleHeight,
-                    hasCurrentVideo: state.currentVideo != nil
-                ) {
+                VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 0) {
                         playerContent(viewportHeight: viewportHeight, coverGeometry: coverGeometry)
 
@@ -374,7 +378,21 @@ struct OnTheGoPanel: View {
                                 .padding(.bottom, Layout.mediumSpacing)
                         }
                     }
+                    // Measure the laid-out player and queue, excluding filler.
+                    // Adding filler therefore cannot feed back into this value.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        naturalScrollContentHeight = $0
+                    }
+
+                    Color.clear
+                        .frame(height: fillerHeight)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
+                // Natural-content measurement follows layout by one update.
+                // Keep C reachable even during that update as the player shrinks.
+                .frame(minHeight: minimumContentHeight, alignment: .top)
             }
             .scrollIndicators(.hidden)
             // The morphing cover can draw behind the reserved header and status bar.
@@ -386,43 +404,43 @@ struct OnTheGoPanel: View {
             .defaultScrollAnchor(.top, for: .sizeChanges)
             // Bound only the end. A floor at C would block downward drags from
             // queue rows continuing into B/A.
-            .scrollTargetBehavior(QueueEndScrollTargetBehavior(viewportHeight: visibleHeight))
+            .scrollTargetBehavior(QueueEndScrollTargetBehavior(detents: detents))
             .onScrollPhaseChange { oldPhase, newPhase, context in
                 let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
+                let measuredViewportHeight = PlayerPanelScrollDetents.viewportHeight(
+                    containerHeight: context.geometry.containerSize.height,
+                    topInset: context.geometry.contentInsets.top,
+                    bottomInset: context.geometry.contentInsets.bottom
+                )
                 let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
                     contentHeight: context.geometry.contentSize.height,
-                    viewportHeight: PlayerPanelScrollDetents.viewportHeight(
-                        containerHeight: context.geometry.containerSize.height,
-                        topInset: context.geometry.contentInsets.top,
-                        bottomInset: context.geometry.contentInsets.bottom
-                    )
+                    viewportHeight: measuredViewportHeight
                 )
                 defer {
                     if newPhase == .idle {
                         scrollGestureStartOffset = nil
-                        isQueueDecelerating = false
                     }
                 }
-                if newPhase == .animating { isQueueDecelerating = false }
                 if newPhase == .idle, state.currentVideo != nil {
+                    panelScrollOffset = max(0, offset)
                     LoggingService.shared.debug(
-                        "Player panel settled: offset=\(offset), maxOffset=\(maximumOffset), contentHeight=\(context.geometry.contentSize.height), requiredHeight=\(detents.minimumContentHeight(viewportHeight: visibleHeight)), queueCount=\(state.queue.count), viewport=\(visibleHeight), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
+                        "Player panel settled: contentHeight=\(context.geometry.contentSize.height), naturalContentHeight=\(naturalScrollContentHeight), viewportHeight=\(measuredViewportHeight), containerHeight=\(context.geometry.containerSize.height), topInset=\(context.geometry.contentInsets.top), bottomInset=\(context.geometry.contentInsets.bottom), filler=\(max(0, context.geometry.contentSize.height - naturalScrollContentHeight)), requestedFiller=\(fillerHeight), requiredHeight=\(detents.minimumContentHeight(viewportHeight: measuredViewportHeight)), offsetB=\(detents.halfOpenOffset), offsetC=\(detents.fullQueueOffset), maxOffset=\(maximumOffset), cHeadroom=\(maximumOffset - detents.fullQueueOffset), proposedTarget=\(proposedSnapTarget.map { String(describing: $0) } ?? "native"), settledTarget=\(offset), sticky=\(offset >= detents.fullQueueOffset - 1), queueCount=\(state.queue.count)",
                         category: .player
                     )
                 }
                 if newPhase == .tracking || (newPhase == .interacting && oldPhase != .tracking) {
                     scrollGestureStartOffset = max(0, offset)
-                    isQueueDecelerating = false
+                    proposedSnapTarget = nil
                     LoggingService.shared.debug(
                         "Player panel gesture began: offset=\(offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset), dismissalAllowed=\(isPanelDismissalAllowed)",
                         category: .player
                     )
                 }
                 let isRelease = oldPhase == .interacting && (newPhase == .decelerating || newPhase == .idle)
-                // Native queue momentum may cross C too. Snap its final
-                // position if it settles between panel detents.
-                let isQueueSettling = isQueueDecelerating && oldPhase == .decelerating && newPhase == .idle
-                guard isRelease || isQueueSettling,
+                // Repair native momentum and programmatic snaps alike if they
+                // stop between detents. Never leave the morph at rest.
+                let isSettling = newPhase == .idle
+                guard isRelease || isSettling,
                       state.currentVideo != nil else { return }
                 let startOffset = scrollGestureStartOffset ?? max(0, offset)
                 let velocity = isRelease ? context.velocity?.dy ?? 0 : 0
@@ -432,12 +450,8 @@ struct OnTheGoPanel: View {
                     velocity: velocity,
                     maximumOffset: maximumOffset
                 )
-                if isRelease {
-                    isQueueDecelerating = target == nil && offset > detents.fullQueueOffset && newPhase == .decelerating
-                }
-
                 LoggingService.shared.debug(
-                    "Player panel \(isRelease ? "release" : "queue settled"): start=\(startOffset), offset=\(offset), velocity=\(velocity), target=\(target.map { String(describing: $0) } ?? "native"), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
+                    "Player panel \(isRelease ? "release" : "settle check"): start=\(startOffset), offset=\(offset), velocity=\(velocity), target=\(target.map { String(describing: $0) } ?? "native"), maxOffset=\(maximumOffset), inset=\(context.geometry.contentInsets.top), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
                     category: .player
                 )
                 guard let target, isRelease || abs(target - offset) > 0.5 else { return }
@@ -476,7 +490,7 @@ struct OnTheGoPanel: View {
     }
 
     private func scrollPanel(to offset: CGFloat) {
-        isQueueDecelerating = false
+        proposedSnapTarget = offset
         withAnimation(pageSnapAnimation) {
             // A uses the same explicit coordinate as B/C. An edge request can
             // remain anchored while the morph changes the content's size.
@@ -509,31 +523,6 @@ struct OnTheGoPanel: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                 playbackNoticesHeight = $0
             }
-        }
-    }
-
-    /// Reserve only the missing scroll range below the natural content. Always
-    /// propose an unbounded height to the player/queue so the filler cannot
-    /// compress their layout or change B when the queue length changes.
-    private struct PlayerScrollContentLayout: SwiftUI.Layout, Sendable {
-        let detents: PlayerPanelScrollDetents
-        let viewportHeight: CGFloat
-        let hasCurrentVideo: Bool
-
-        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-            let naturalSize = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-            let fillerHeight = hasCurrentVideo ? detents.bottomFillerHeight(
-                naturalContentHeight: naturalSize.height, viewportHeight: viewportHeight
-            ) : 0
-            return CGSize(width: naturalSize.width, height: naturalSize.height + fillerHeight)
-        }
-
-        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-            subviews[0].place(
-                at: bounds.origin,
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: bounds.width, height: nil)
-            )
         }
     }
 
@@ -1449,19 +1438,24 @@ struct OnTheGoPanel: View {
 // MARK: - Queue Scroll Boundary
 
 private struct QueueEndScrollTargetBehavior: ScrollTargetBehavior, Sendable {
-    let viewportHeight: CGFloat
+    let detents: PlayerPanelScrollDetents
 
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
             contentHeight: context.contentSize.height,
-            viewportHeight: viewportHeight
+            // TargetContext already subtracts the scroll view's insets. Use
+            // its current measurement rather than a previous geometry update.
+            viewportHeight: context.containerSize.height
         )
         // Preserve native scrolling and dismissal below the upper limit. In
         // particular, never add a lower bound at the full-queue detent.
         guard target.rect.minY > maximumOffset else { return }
-        target.rect.origin.y = PlayerPanelScrollDetents.clampedOffset(
-            target.rect.minY, maximumOffset: maximumOffset
-        )
+        target.rect.origin.y = detents.targetOffset(
+            startOffset: context.originalTarget.rect.minY,
+            releaseOffset: target.rect.minY,
+            velocity: 0,
+            maximumOffset: maximumOffset
+        ) ?? maximumOffset
         target.anchor = .top
     }
 }
