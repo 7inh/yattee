@@ -63,6 +63,14 @@ struct OnTheGoPanel: View {
         static let transportHeight: CGFloat = 104
     }
 
+    private enum MenuLayout {
+        static let width: CGFloat = 270
+        static let rowHeight: CGFloat = 44
+        static let horizontalPadding: CGFloat = 16
+        static let iconWidth: CGFloat = 24
+        static let iconSpacing: CGFloat = 12
+    }
+
     private var state: PlayerState { playerService.state }
     private var showingLyrics: Bool { selectedPage == .lyrics }
     private var hasLyrics: Bool {
@@ -444,8 +452,7 @@ struct OnTheGoPanel: View {
             }
             .popover(isPresented: $showingPlayerMenu, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
                 if let video = state.currentVideo {
-                    playerMenuItems(for: video)
-                        .presentationCompactAdaptation(.popover)
+                    playerMenu(for: video)
                 }
             }
             .disabled(state.currentVideo == nil)
@@ -464,6 +471,23 @@ struct OnTheGoPanel: View {
             .foregroundStyle(controlPrimaryColor)
             .frame(width: 34, height: 34, alignment: .center)
             .contentShape(Circle())
+    }
+
+    private func playerMenu(for video: Video) -> some View {
+        ViewThatFits(in: .vertical) {
+            playerMenuItems(for: video)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Preserve access to every action in landscape or with larger text.
+            ScrollView {
+                playerMenuItems(for: video)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .frame(width: MenuLayout.width)
+        .presentationCompactAdaptation(.popover)
+        // Give the entire popover, including its arrow, one consistent surface.
+        .presentationBackground(.thickMaterial)
     }
 
     @ViewBuilder
@@ -494,7 +518,10 @@ struct OnTheGoPanel: View {
                 Menu {
                     LyricsTrackOptions(model: lyrics)
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MenuLayout.iconSpacing) {
+                        Image(systemName: "character.bubble")
+                            .frame(width: MenuLayout.iconWidth)
+                            .accessibilityHidden(true)
                         Text("Lyrics language")
                         Spacer(minLength: 0)
                         Text(lyrics.selectedTrack?.label ?? "")
@@ -503,8 +530,8 @@ struct OnTheGoPanel: View {
                             .truncationMode(.tail)
                             .layoutPriority(-1)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: MenuLayout.rowHeight, alignment: .leading)
+                    .padding(.horizontal, MenuLayout.horizontalPadding)
                     .contentShape(Rectangle())
                 }
                 .menuIndicator(.hidden)
@@ -574,53 +601,57 @@ struct OnTheGoPanel: View {
             }
             .disabled(!video.author.hasRealChannelInfo)
         }
-        .font(.body)
+        .font(.body.weight(.regular))
+        .foregroundStyle(.primary)
         .buttonStyle(OnTheGoMenuButtonStyle())
         .tint(nowPlayingAccent)
-        .padding(.vertical, 8)
-        .frame(width: 250)
+        .padding(.vertical, 6)
     }
 
     private var autoplayMenuRow: some View {
         let title = String(localized: "player.nowPlaying.autoplay")
 
-        return Button {
-            appEnvironment?.settingsManager.queueAutoPlayNext.toggle()
-        } label: {
-            playerMenuRow(title, systemImage: "infinity")
-                .padding(.trailing, 60)
-                .contentShape(Rectangle())
-        }
-        .accessibilityHidden(true)
-        .overlay(alignment: .trailing) {
+        return HStack(spacing: 0) {
+            Button {
+                appEnvironment?.settingsManager.queueAutoPlayNext.toggle()
+            } label: {
+                playerMenuRow(title, systemImage: "infinity")
+            }
+            .accessibilityHidden(true)
+
             Toggle(title, isOn: Binding(
                 get: { isAutoPlayNextEnabled },
                 set: { appEnvironment?.settingsManager.queueAutoPlayNext = $0 }
             ))
             .toggleStyle(.switch)
+            .controlSize(.regular)
             .labelsHidden()
-            .padding(.trailing, 16)
+            .tint(nowPlayingAccent)
+            .fixedSize()
+            .padding(.trailing, MenuLayout.horizontalPadding)
         }
+        .frame(minHeight: MenuLayout.rowHeight)
         .disabled(state.isControlsLocked || appEnvironment == nil)
     }
 
     private func playerMenuRow(_ title: String, systemImage: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MenuLayout.iconSpacing) {
             Image(systemName: systemImage)
-                .frame(width: 20)
+                .frame(width: MenuLayout.iconWidth)
                 .accessibilityHidden(true)
             Text(title)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: MenuLayout.rowHeight, alignment: .leading)
+        .padding(.horizontal, MenuLayout.horizontalPadding)
         .contentShape(Rectangle())
     }
 
     private var playerMenuSeparator: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(height: 8)
+        Divider()
+            .padding(.leading, MenuLayout.horizontalPadding + MenuLayout.iconWidth + MenuLayout.iconSpacing)
+            .padding(.trailing, MenuLayout.horizontalPadding)
             .accessibilityHidden(true)
     }
 
@@ -1180,7 +1211,7 @@ private struct OnTheGoMenuButtonStyle: ButtonStyle {
         configuration.label
             .foregroundStyle(configuration.role == .destructive ? nowPlayingAccent : .primary)
             .opacity(isEnabled ? 1 : 0.4)
-            .background(configuration.isPressed && isEnabled ? Color.gray.opacity(0.15) : .clear)
+            .background(configuration.isPressed && isEnabled ? Color.primary.opacity(0.08) : .clear)
     }
 }
 
