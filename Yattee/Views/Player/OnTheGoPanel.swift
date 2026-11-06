@@ -30,6 +30,8 @@ struct OnTheGoPanel: View {
     @State private var downloadToDelete: Download?
 
     private enum Layout {
+        static let horizontalPadding: CGFloat = 16
+        static let compactSpacing: CGFloat = 4
         static let smallSpacing: CGFloat = 8
         static let mediumSpacing: CGFloat = 16
         // Keeps the enlarged thumb inside the seek control at both endpoints.
@@ -116,7 +118,7 @@ struct OnTheGoPanel: View {
                         inlineQueue
                             .frame(maxWidth: 560)
                             .frame(maxWidth: .infinity)
-                            .padding(.horizontal, Layout.mediumSpacing)
+                            .padding(.horizontal, Layout.horizontalPadding)
                             .padding(.bottom, Layout.mediumSpacing)
                     }
                 }
@@ -128,18 +130,18 @@ struct OnTheGoPanel: View {
 
     private var playerContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Share extra height across all four gaps. Short screens
-            // and large text can scroll without shrinking the controls.
-            Spacer(minLength: Layout.smallSpacing)
+            // Compact gaps leave room for full-width square artwork and
+            // the action row on smaller phones without shrinking controls.
+            Spacer(minLength: Layout.compactSpacing)
             artwork
                 .padding(.bottom, Layout.smallSpacing)
             videoInfo
-            Spacer(minLength: Layout.smallSpacing)
+            Spacer(minLength: Layout.compactSpacing)
             seekControls
                 .id(state.currentVideo?.id)
-            Spacer(minLength: Layout.smallSpacing)
+            Spacer(minLength: Layout.compactSpacing)
             transportControls
-            Spacer(minLength: Layout.smallSpacing)
+            Spacer(minLength: Layout.compactSpacing)
             accessoryBar
             if case .failed(let error) = state.playbackState {
                 Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
@@ -155,8 +157,8 @@ struct OnTheGoPanel: View {
         }
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, Layout.mediumSpacing)
-        .padding(.vertical, Layout.smallSpacing)
+        .padding(.horizontal, Layout.horizontalPadding)
+        .padding(.vertical, Layout.compactSpacing)
     }
 
     // MARK: - Top Bar
@@ -164,9 +166,8 @@ struct OnTheGoPanel: View {
     private var topBar: some View {
         HStack {
             Button(action: onClose) {
-                topBarSymbol("chevron.down")
+                topBarSymbol("chevron.down", alignment: .leading)
             }
-            .modifier(OnTheGoTopBarStyleModifier())
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -176,26 +177,29 @@ struct OnTheGoPanel: View {
                     playerMenuItems(for: video)
                 }
             } label: {
-                topBarSymbol("ellipsis")
+                topBarSymbol("ellipsis", alignment: .trailing)
             }
-            .modifier(OnTheGoTopBarStyleModifier())
             .menuIndicator(.hidden)
             .menuOrder(.fixed)
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
+        .buttonStyle(.plain)
         .tint(.primary)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, Layout.mediumSpacing)
+        .padding(.horizontal, Layout.horizontalPadding)
         .padding(.vertical, Layout.smallSpacing)
     }
 
-    private func topBarSymbol(_ name: String) -> some View {
+    private func topBarSymbol(_ name: String, alignment: Alignment) -> some View {
         Image(systemName: name)
-            .font(.system(size: 18, weight: .semibold))
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
+            .font(.system(size: 14, weight: .semibold))
+            .frame(width: 34, height: 34)
+            .modifier(OnTheGoTopBarStyleModifier())
+            // Extend the hit area inward so the circles align with the artwork.
+            .frame(width: 44, height: 44, alignment: alignment)
+            .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -366,19 +370,18 @@ struct OnTheGoPanel: View {
         Rectangle().fill(.quaternary)
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-        FallbackLazyImage(urls: artworkURLs) { imageState in
-            if let image = imageState.image {
-                image.resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle().fill(.quaternary)
-                    .overlay { Image(systemName: "music.note").font(.system(size: 64)).foregroundStyle(.secondary) }
+                FallbackLazyImage(urls: artworkURLs) { imageState in
+                    if let image = imageState.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle().fill(.quaternary)
+                            .overlay { Image(systemName: "music.note").font(.system(size: 64)).foregroundStyle(.secondary) }
+                    }
+                }
             }
-        }
-        }
-        .frame(maxWidth: 300)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .frame(maxWidth: .infinity)
-        .accessibilityHidden(true)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .frame(maxWidth: .infinity)
+            .accessibilityHidden(true)
     }
 
     private func detailsSheet(onClose: @escaping () -> Void) -> some View {
@@ -615,11 +618,6 @@ struct OnTheGoPanel: View {
     // MARK: - Accessories
 
     private var accessoryBar: some View {
-        accessoryControls
-            .padding(.horizontal, Layout.smallSpacing)
-    }
-
-    private var accessoryControls: some View {
         HStack(spacing: 0) {
             Menu {
                 PlaybackSpeedMenuContent(currentRate: state.rate) { rate in
@@ -763,12 +761,9 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
             content
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .buttonSizing(.flexible)
-                .frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
         } else {
-            content.buttonStyle(.plain)
+            content.background(.quaternary, in: Circle())
         }
     }
 }
