@@ -39,6 +39,8 @@ struct OnTheGoPanel: View {
     @State private var panelScrollOffset: CGFloat = 0
     @State private var isPanelAtTop = true
     @State private var playerContentHeight: CGFloat = 0
+    @State private var playbackNoticesHeight: CGFloat = 0
+    @State private var scrollGestureStartOffset: CGFloat = 0
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
@@ -62,6 +64,11 @@ struct OnTheGoPanel: View {
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
         static let queueMorphDistance: CGFloat = 140
+
+        static func queueContentHeight(coverHeight: CGFloat, topSafeArea: CGFloat, noticesHeight: CGFloat) -> CGFloat {
+            queueMorphDistance - headerHeight - topSafeArea + coverHeight
+                + smallSpacing + transportHeight + noticesHeight + mediumSpacing
+        }
     }
 
     private enum MenuLayout {
@@ -82,7 +89,7 @@ struct OnTheGoPanel: View {
         // The layout's bottom padding follows transport/notices. Use content
         // coordinates from the ScrollView, rather than a transformed child's
         // frame inside the custom morph layout, to detect the full queue state.
-        return panelScrollOffset >= max(Layout.queueMorphDistance, playerContentHeight - Layout.mediumSpacing)
+        return panelScrollOffset >= max(Layout.queueMorphDistance, playerContentHeight - Layout.mediumSpacing) - 1
     }
     private var queueMorphProgress: CGFloat {
         guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
@@ -328,6 +335,16 @@ struct OnTheGoPanel: View {
             let coverHeaderProgress = queueMorphProgress * min(1, max(0,
                 (Layout.queueMorphDistance + coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
             ))
+            // Measure the final layout independently of the in-flight morph.
+            // Its current height shrinks while the cover morphs.
+            let detents = PlayerPanelScrollDetents(
+                halfOpenOffset: Layout.queueMorphDistance,
+                fullQueueOffset: max(Layout.queueMorphDistance, Layout.queueContentHeight(
+                    coverHeight: coverHeight,
+                    topSafeArea: geometry.safeAreaInsets.top,
+                    noticesHeight: playbackNoticesHeight
+                ) - Layout.mediumSpacing)
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent(viewportHeight: viewportHeight, coverHeight: coverHeight, topSafeArea: geometry.safeAreaInsets.top)
@@ -353,6 +370,37 @@ struct OnTheGoPanel: View {
             .scrollClipDisabled(!state.queue.isEmpty && state.currentVideo != nil)
             .scrollBounceBehavior(.basedOnSize)
             .scrollPosition($scrollPosition)
+            .scrollTargetBehavior(QueueTopScrollTargetBehavior(
+                isEnabled: !state.queue.isEmpty && state.currentVideo != nil,
+                detents: detents
+            ))
+            .onScrollPhaseChange { oldPhase, newPhase, context in
+                let offset = context.geometry.contentOffset.y + context.geometry.contentInsets.top
+                if newPhase == .tracking || (newPhase == .interacting && oldPhase != .tracking) {
+                    scrollGestureStartOffset = max(0, offset)
+                }
+                guard oldPhase == .interacting, newPhase == .decelerating || newPhase == .idle,
+                      !state.queue.isEmpty, state.currentVideo != nil,
+                      let target = detents.targetOffset(
+                          startOffset: scrollGestureStartOffset,
+                          releaseOffset: offset,
+                          velocity: context.velocity?.dy ?? 0
+                      ) else { return }
+
+                LoggingService.shared.debug(
+                    "Player panel snap: start=\(scrollGestureStartOffset), release=\(offset), velocity=\(context.velocity?.dy ?? 0), target=\(target)",
+                    category: .player
+                )
+                // Replace panel deceleration with a spring immediately on
+                // release. Queue-only gestures retain native scrolling.
+                withAnimation(pageSnapAnimation) {
+                    if target == 0 {
+                        scrollPosition.scrollTo(edge: .top)
+                    } else {
+                        scrollPosition.scrollTo(y: target - context.geometry.contentInsets.top)
+                    }
+                }
+            }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, geometry.contentOffset.y + geometry.contentInsets.top)
             } action: { _, offset in
@@ -395,6 +443,9 @@ struct OnTheGoPanel: View {
             transportControls
             VStack(alignment: .leading, spacing: 0) {
                 playbackNotices
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                playbackNoticesHeight = $0
             }
         }
     }
@@ -465,7 +516,11 @@ struct OnTheGoPanel: View {
             queue[Element.time.rawValue].origin.y = coverBottom
             queue[Element.transport.rawValue].origin.y = coverBottom + Layout.smallSpacing
             queue[Element.notices.rawValue].origin.y = queue[Element.transport.rawValue].maxY
-            let queueHeight = queue[Element.notices.rawValue].maxY + Layout.mediumSpacing
+            let queueHeight = Layout.queueContentHeight(
+                coverHeight: coverHeight,
+                topSafeArea: topSafeArea,
+                noticesHeight: normal[Element.notices.rawValue].height
+            )
 
             let frames = zip(normal, queue).map { start, end in
                 CGRect(
@@ -1282,6 +1337,26 @@ struct OnTheGoPanel: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Queue Scroll Boundary
+
+private struct QueueTopScrollTargetBehavior: ScrollTargetBehavior, Sendable {
+    let isEnabled: Bool
+    let detents: PlayerPanelScrollDetents
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        // Returning through a long queue must stop at its top first. A new
+        // downward gesture can then collapse the panel.
+        guard isEnabled else { return }
+        let offset = detents.queueTargetOffset(
+            startOffset: context.originalTarget.rect.minY,
+            proposedOffset: target.rect.minY
+        )
+        guard offset != target.rect.minY else { return }
+        target.rect.origin.y = offset
+        target.anchor = .top
     }
 }
 
