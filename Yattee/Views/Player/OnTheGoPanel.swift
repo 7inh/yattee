@@ -89,7 +89,7 @@ struct OnTheGoPanel: View {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
     private var isStickyPlayerVisible: Bool {
-        guard !state.queue.isEmpty, state.currentVideo != nil, panelCoverGeometry.screenHeight > 0 else { return false }
+        guard state.currentVideo != nil, panelCoverGeometry.screenHeight > 0 else { return false }
         return panelScrollOffset >= panelCoverGeometry.detents.fullQueueOffset - 1
     }
     private var isPanelDismissalAllowed: Bool {
@@ -99,7 +99,7 @@ struct OnTheGoPanel: View {
         )
     }
     private var queueMorphProgress: CGFloat {
-        guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
+        guard state.currentVideo != nil else { return 0 }
         return panelCoverGeometry.morphProgress(at: panelScrollOffset)
     }
     private var visibleLyricsProgress: CGFloat {
@@ -355,29 +355,30 @@ struct OnTheGoPanel: View {
             let detents = coverGeometry.detents
             let visibleHeight = scrollViewportHeight > 0 ? scrollViewportHeight : viewportHeight
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    playerContent(viewportHeight: viewportHeight, coverGeometry: coverGeometry)
+                PlayerScrollContentLayout(
+                    detents: detents,
+                    viewportHeight: visibleHeight,
+                    hasCurrentVideo: state.currentVideo != nil
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        playerContent(viewportHeight: viewportHeight, coverGeometry: coverGeometry)
 
-                    if !state.queue.isEmpty {
-                        inlineQueue
-                            .frame(maxWidth: 560)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, Layout.horizontalPadding)
-                            .padding(.top, coverGeometry.queueTopPadding(at: panelScrollOffset))
-                            .padding(.bottom, Layout.mediumSpacing)
+                        // Keep the current row and all detents when there are
+                        // no upcoming items, too.
+                        if state.currentVideo != nil || !state.queue.isEmpty {
+                            inlineQueue
+                                .frame(maxWidth: 560)
+                                .frame(maxWidth: .infinity)
+                                .padding(.horizontal, Layout.horizontalPadding)
+                                .padding(.top, coverGeometry.queueTopPadding(at: panelScrollOffset))
+                                .padding(.bottom, Layout.mediumSpacing)
+                        }
                     }
                 }
-                // Apply the minimum to the entire content, using the actual
-                // inset-adjusted viewport. A queue-sized spacer can otherwise
-                // leave empty scrollable space after the last row.
-                .frame(
-                    minHeight: state.queue.isEmpty ? 0 : detents.minimumContentHeight(viewportHeight: visibleHeight),
-                    alignment: .top
-                )
             }
             .scrollIndicators(.hidden)
             // The morphing cover can draw behind the reserved header and status bar.
-            .scrollClipDisabled(!state.queue.isEmpty && state.currentVideo != nil)
+            .scrollClipDisabled(state.currentVideo != nil)
             .scrollBounceBehavior(.basedOnSize)
             .scrollPosition($scrollPosition)
             // Reflow moves the queue up as the player morphs. Keep the scroll
@@ -403,9 +404,9 @@ struct OnTheGoPanel: View {
                     }
                 }
                 if newPhase == .animating { isQueueDecelerating = false }
-                if newPhase == .idle, !state.queue.isEmpty, state.currentVideo != nil {
+                if newPhase == .idle, state.currentVideo != nil {
                     LoggingService.shared.debug(
-                        "Player panel settled: offset=\(offset), maxOffset=\(maximumOffset), contentHeight=\(context.geometry.contentSize.height), viewport=\(visibleHeight), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
+                        "Player panel settled: offset=\(offset), maxOffset=\(maximumOffset), contentHeight=\(context.geometry.contentSize.height), requiredHeight=\(detents.minimumContentHeight(viewportHeight: visibleHeight)), queueCount=\(state.queue.count), viewport=\(visibleHeight), inset=\(context.geometry.contentInsets.top), morph=\(coverGeometry.morphProgress(at: offset)), coverBottom=\(coverGeometry.halfOpenOffset + coverGeometry.coverHeight - offset), halfOpen=\(detents.halfOpenOffset), fullQueue=\(detents.fullQueueOffset)",
                         category: .player
                     )
                 }
@@ -422,7 +423,7 @@ struct OnTheGoPanel: View {
                 // position if it settles between panel detents.
                 let isQueueSettling = isQueueDecelerating && oldPhase == .decelerating && newPhase == .idle
                 guard isRelease || isQueueSettling,
-                      !state.queue.isEmpty, state.currentVideo != nil else { return }
+                      state.currentVideo != nil else { return }
                 let startOffset = scrollGestureStartOffset ?? max(0, offset)
                 let velocity = isRelease ? context.velocity?.dy ?? 0 : 0
                 let target = detents.targetOffset(
@@ -508,6 +509,31 @@ struct OnTheGoPanel: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                 playbackNoticesHeight = $0
             }
+        }
+    }
+
+    /// Reserve only the missing scroll range below the natural content. Always
+    /// propose an unbounded height to the player/queue so the filler cannot
+    /// compress their layout or change B when the queue length changes.
+    private struct PlayerScrollContentLayout: SwiftUI.Layout, Sendable {
+        let detents: PlayerPanelScrollDetents
+        let viewportHeight: CGFloat
+        let hasCurrentVideo: Bool
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let naturalSize = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+            let fillerHeight = hasCurrentVideo ? detents.bottomFillerHeight(
+                naturalContentHeight: naturalSize.height, viewportHeight: viewportHeight
+            ) : 0
+            return CGSize(width: naturalSize.width, height: naturalSize.height + fillerHeight)
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            subviews[0].place(
+                at: bounds.origin,
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: nil)
+            )
         }
     }
 
@@ -639,7 +665,7 @@ struct OnTheGoPanel: View {
                                 isSeekDisabled: isSeekDisabled,
                                 isActive: progress > 0,
                                 isPaging: isPaging,
-                                allowsManualScrolling: state.queue.isEmpty,
+                                allowsManualScrolling: state.currentVideo == nil,
                                 onSeek: seek
                             )
                             .environment(\.colorScheme, .dark)

@@ -67,26 +67,77 @@ struct PlayerPanelScrollDetentsTests {
         ) == 0)
     }
 
-    @Test("Short queues add exactly enough content to reach C", arguments: [CGFloat(0), 130, 400])
-    func shortQueueScrollRange(queueHeight: CGFloat) {
+    @Test("Queues add only the bottom filler needed to reach C", arguments: [
+        (0, CGFloat(485)), (1, 429), (3, 317), (16, 0)
+    ])
+    func queueBottomFiller(queueCount: Int, expectedFillerHeight: CGFloat) {
         let viewportHeight = PlayerPanelScrollDetents.viewportHeight(containerHeight: 728, topInset: 80, bottomInset: 34)
-        let minimumHeight = detents.minimumContentHeight(viewportHeight: viewportHeight)
-        let contentHeight = max(minimumHeight, detents.fullQueueOffset + queueHeight)
+        let geometry = PlayerPanelCoverGeometry(screenHeight: 812, topSafeArea: 50, headerHeight: 80, noticesHeight: 0)
+        let detents = geometry.detents
+        // The current row remains visible with zero upcoming items. Include
+        // C's top padding, grabber, row spacing and normal 16pt bottom inset.
+        let rowsHeight = CGFloat(queueCount + 1) * 52 + CGFloat(queueCount) * 4
+        let naturalContentHeight = geometry.contentHeight + geometry.queueTopPadding(at: detents.fullQueueOffset)
+            + 8 + 5 + 16 + rowsHeight + 16
+        let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
+        let contentHeight = naturalContentHeight + fillerHeight
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
 
         #expect(viewportHeight == 614)
-        #expect(minimumHeight == 1114)
-        #expect(maximumOffset == detents.fullQueueOffset)
-        #expect(PlayerPanelScrollDetents.clampedOffset(500 + 340, maximumOffset: maximumOffset) == 500)
+        #expect(abs(fillerHeight - expectedFillerHeight) < 0.001)
+        #expect(maximumOffset >= detents.fullQueueOffset)
+        #expect(PlayerPanelScrollDetents.clampedOffset(detents.fullQueueOffset, maximumOffset: maximumOffset) == detents.fullQueueOffset)
+        #expect(detents.targetOffset(
+            startOffset: detents.halfOpenOffset, releaseOffset: detents.halfOpenOffset + 20,
+            velocity: 600, maximumOffset: maximumOffset
+        ) == detents.fullQueueOffset)
+        if queueCount < 16 {
+            #expect(abs(maximumOffset - detents.fullQueueOffset) < 0.001)
+        } else {
+            #expect(contentHeight == naturalContentHeight)
+            #expect(maximumOffset + viewportHeight == naturalContentHeight)
+        }
+    }
+
+    @Test("B keeps the same cover and scroll coordinate for every queue length", arguments: [0, 1, 3, 16])
+    func halfOpenLayoutWithQueue(queueCount: Int) {
+        let viewportHeight: CGFloat = 614
+        let geometry = PlayerPanelCoverGeometry(screenHeight: 812, topSafeArea: 50, headerHeight: 80, noticesHeight: 0)
+        let detents = geometry.detents
+        let rowsHeight = CGFloat(queueCount + 1) * 52 + CGFloat(queueCount) * 4
+        let naturalContentHeight = geometry.contentHeight + geometry.queueTopPadding(at: detents.halfOpenOffset)
+            + 8 + 5 + 16 + rowsHeight + 16
+        let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
+        let maximumOffset = PlayerPanelScrollDetents.maximumOffset(
+            contentHeight: naturalContentHeight + fillerHeight, viewportHeight: viewportHeight
+        )
+        let offset = PlayerPanelScrollDetents.clampedOffset(detents.halfOpenOffset, maximumOffset: maximumOffset)
+
+        #expect(offset == 130)
+        #expect(maximumOffset >= detents.fullQueueOffset)
+        #expect(geometry.morphProgress(at: offset) == 1)
+        #expect(geometry.topSafeArea + geometry.headerHeight - offset == 0)
+        #expect(abs(geometry.coverHeight - 389.76) < 0.001)
+        #expect(detents.targetOffset(
+            startOffset: 0, releaseOffset: 20, velocity: 600, maximumOffset: maximumOffset
+        ) == detents.halfOpenOffset)
+        #expect(detents.targetOffset(
+            startOffset: detents.halfOpenOffset, releaseOffset: detents.halfOpenOffset,
+            velocity: 0, maximumOffset: maximumOffset
+        ) == detents.halfOpenOffset)
+        #expect(queueCount < 16 ? fillerHeight > 0 : fillerHeight == 0)
     }
 
     @Test("Long queues stop at the last row plus their bottom inset")
     func longQueueScrollRange() {
         let viewportHeight: CGFloat = 614
         let queueHeight: CGFloat = 1200 // Includes the normal queue padding.
-        let contentHeight = max(detents.minimumContentHeight(viewportHeight: viewportHeight), 500 + queueHeight)
+        let naturalContentHeight = 500 + queueHeight
+        let fillerHeight = detents.bottomFillerHeight(naturalContentHeight: naturalContentHeight, viewportHeight: viewportHeight)
+        let contentHeight = naturalContentHeight + fillerHeight
         let maximumOffset = PlayerPanelScrollDetents.maximumOffset(contentHeight: contentHeight, viewportHeight: viewportHeight)
 
+        #expect(fillerHeight == 0)
         #expect(maximumOffset == 1086)
         #expect(PlayerPanelScrollDetents.clampedOffset(840, maximumOffset: maximumOffset) == 840)
         #expect(PlayerPanelScrollDetents.clampedOffset(1500, maximumOffset: maximumOffset) == maximumOffset)

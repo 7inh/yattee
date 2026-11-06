@@ -11,9 +11,14 @@ struct PlayerPanelScrollDetents: Sendable {
     let halfOpenOffset: CGFloat
     let fullQueueOffset: CGFloat
 
-    /// Add only the space needed to put C at the top of the visible viewport.
+    /// Keep C reachable even after the player has finished morphing.
     func minimumContentHeight(viewportHeight: CGFloat) -> CGFloat {
         fullQueueOffset + max(0, viewportHeight)
+    }
+
+    /// Natural content includes the player, queue rows and normal bottom inset.
+    func bottomFillerHeight(naturalContentHeight: CGFloat, viewportHeight: CGFloat) -> CGFloat {
+        max(0, minimumContentHeight(viewportHeight: viewportHeight) - naturalContentHeight)
     }
 
     static func viewportHeight(containerHeight: CGFloat, topInset: CGFloat, bottomInset: CGFloat) -> CGFloat {
