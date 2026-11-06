@@ -38,7 +38,7 @@ struct OnTheGoPanel: View {
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var panelScrollOffset: CGFloat = 0
     @State private var isPanelAtTop = true
-    @State private var hasScrolledPastTransport = false
+    @State private var playerContentHeight: CGFloat = 0
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
@@ -48,10 +48,6 @@ struct OnTheGoPanel: View {
     private enum PlayerPage: Hashable, Sendable {
         case artwork
         case lyrics
-    }
-
-    private enum ScrollCoordinateSpace: Hashable, Sendable {
-        case player
     }
 
     private enum Layout {
@@ -82,7 +78,11 @@ struct OnTheGoPanel: View {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
     private var isStickyPlayerVisible: Bool {
-        hasScrolledPastTransport && state.currentVideo != nil
+        guard !state.queue.isEmpty, state.currentVideo != nil, playerContentHeight > 0 else { return false }
+        // The layout's bottom padding follows transport/notices. Use content
+        // coordinates from the ScrollView, rather than a transformed child's
+        // frame inside the custom morph layout, to detect the full queue state.
+        return panelScrollOffset >= max(Layout.queueMorphDistance, playerContentHeight - Layout.mediumSpacing)
     }
     private var queueMorphProgress: CGFloat {
         guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
@@ -175,7 +175,10 @@ struct OnTheGoPanel: View {
                 if openingQueue { cancelPaging() }
             }
             .onChange(of: isStickyPlayerVisible) { _, visible in
-                LoggingService.shared.debug("Player queue sticky header: \(visible)", category: .player)
+                LoggingService.shared.debug(
+                    "Player queue sticky header: \(visible), offset=\(panelScrollOffset), contentHeight=\(playerContentHeight)",
+                    category: .player
+                )
             }
             .onDisappear {
                 isPaging = false
@@ -328,6 +331,9 @@ struct OnTheGoPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent(viewportHeight: viewportHeight, coverHeight: coverHeight, topSafeArea: geometry.safeAreaInsets.top)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            playerContentHeight = $0
+                        }
 
                     if !state.queue.isEmpty {
                         inlineQueue
@@ -354,10 +360,16 @@ struct OnTheGoPanel: View {
                 isPanelAtTop = offset <= 1
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                playerHeader(coverProgress: coverHeaderProgress)
-                    .zIndex(1)
+                Color.clear
+                    .frame(height: Layout.headerHeight)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
-            .coordinateSpace(name: ScrollCoordinateSpace.player)
+            .overlay(alignment: .top) {
+                // Keep the pinned card above the full-bleed artwork even when
+                // scrolling is allowed to draw beyond the viewport's bounds.
+                playerHeader(coverProgress: coverHeaderProgress)
+            }
         }
     }
 
@@ -381,10 +393,6 @@ struct OnTheGoPanel: View {
             seekTimeLabels
                 .opacity(Double(1 - queueMorphProgress))
             transportControls
-                .onGeometryChange(for: Bool.self) { geometry in
-                    // The viewport includes the reserved header above its visible content.
-                    geometry.frame(in: .named(ScrollCoordinateSpace.player)).maxY <= Layout.headerHeight
-                } action: { hasScrolledPastTransport = $0 }
             VStack(alignment: .leading, spacing: 0) {
                 playbackNotices
             }
