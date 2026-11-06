@@ -236,18 +236,11 @@ struct OnTheGoPanel: View {
 
     private var lyricsPanelContent: some View {
         VStack(spacing: 0) {
-            playerHeader
+            topBar
 
             VStack(spacing: 0) {
-                lyricsHeader
-                    .padding(.bottom, Layout.mediumSpacing)
-
-                Rectangle()
-                    .fill(.white.opacity(0.15))
-                    .frame(height: 0.5)
-                    .accessibilityHidden(true)
-
                 LyricsView(model: lyrics, playerState: state, isSeekDisabled: isSeekDisabled, onSeek: seek)
+                    .padding(.top, Layout.smallSpacing)
                     .frame(maxHeight: .infinity)
                     .layoutPriority(1)
 
@@ -266,29 +259,28 @@ struct OnTheGoPanel: View {
         .environment(\.colorScheme, .dark)
     }
 
-    private var lyricsHeader: some View {
-        HStack(spacing: 12) {
-            artworkImage(placeholderSize: 18)
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    private var lyricsVideoInfo: some View {
+        HStack(spacing: 8) {
+            artworkImage(placeholderSize: 14)
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(videoTitle)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(state.currentVideo?.author.name ?? "")
-                    .font(.footnote)
+                    .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
-
-            LyricsTrackPicker(model: lyrics)
-                .frame(maxWidth: 140, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Top Bar
@@ -330,7 +322,11 @@ struct OnTheGoPanel: View {
             .topBarCircle()
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
-            Spacer()
+            if showingLyrics {
+                lyricsVideoInfo
+            } else {
+                Spacer()
+            }
 
             Button {
                 showingLyrics.toggle()
@@ -339,13 +335,22 @@ struct OnTheGoPanel: View {
             }
             .buttonStyle(.plain)
             .topBarCircle()
+            .contextMenu {
+                if lyrics.tracks.count > 1 {
+                    Section("Lyrics language") {
+                        LyricsTrackOptions(model: lyrics)
+                    }
+                }
+            }
             .disabled(!hasLyrics || state.isControlsLocked)
             .opacity(hasLyrics ? 1 : 0)
             .accessibilityHidden(!hasLyrics)
             .accessibilityLabel("Lyrics")
             .accessibilityValue(showingLyrics ? "On" : "Off")
 
-            Spacer()
+            if !showingLyrics {
+                Spacer()
+            }
 
             Button {
                 showingPlayerMenu = true
@@ -403,6 +408,28 @@ struct OnTheGoPanel: View {
                 playerMenuRow(String(localized: "Lyrics"), systemImage: showingLyrics ? "quote.bubble.fill" : "quote.bubble")
             }
             .disabled(!hasLyrics || state.isControlsLocked)
+
+            if lyrics.tracks.count > 1 {
+                Menu {
+                    LyricsTrackOptions(model: lyrics)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Lyrics language")
+                        Spacer(minLength: 0)
+                        Text(lyrics.selectedTrack?.label ?? "")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(-1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
+                }
+                .menuIndicator(.hidden)
+                .accessibilityLabel("Lyrics language")
+                .accessibilityValue(lyrics.selectedTrack?.label ?? "")
+            }
 
             Button {
                 dismissPlayerMenu { presentAppSheet(.queue()) }

@@ -149,36 +149,20 @@ struct LyricsView: View {
 // MARK: - Track Selection
 
 @MainActor
-struct LyricsTrackPicker: View {
+struct LyricsTrackOptions: View {
     @Bindable var model: LyricsViewModel
 
     var body: some View {
-        Menu {
-            ForEach(model.tracks) { track in
-                Button {
-                    model.selectedTrack = track
-                } label: {
-                    if track == model.selectedTrack {
-                        Label(track.label, systemImage: "checkmark")
-                    } else {
-                        Text(track.label)
-                    }
+        ForEach(model.tracks) { track in
+            Button {
+                model.selectedTrack = track
+            } label: {
+                if track == model.selectedTrack {
+                    Label(track.label, systemImage: "checkmark")
+                } else {
+                    Text(track.label)
                 }
             }
-        } label: {
-            HStack(spacing: 4) {
-                Text(model.selectedTrack?.displayName ?? String(localized: "Captions"))
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.7))
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .menuIndicator(.hidden)
-        .accessibilityLabel("Caption track")
-        .accessibilityValue(model.selectedTrack?.label ?? "")
     }
 }
