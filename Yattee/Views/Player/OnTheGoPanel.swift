@@ -28,17 +28,28 @@ struct OnTheGoPanel: View {
     @State private var showingCommentDetails = false
     @State private var showingDeleteDownloadConfirmation = false
     @State private var downloadToDelete: Download?
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var hasScrolledPastTransport = false
+
+    private enum ScrollCoordinateSpace: Hashable, Sendable {
+        case player
+    }
 
     private enum Layout {
         static let horizontalPadding: CGFloat = 16
         static let smallSpacing: CGFloat = 8
         static let mediumSpacing: CGFloat = 16
+        // Reserve the same space for both headers to keep the scroll threshold stable.
+        static let headerHeight = CompactPlayerCard.height + smallSpacing * 2
         // Keeps the enlarged thumb inside the seek control at both endpoints.
         static let seekInset: CGFloat = 12
         static let seekTrackHeight: CGFloat = 6
     }
 
     private var state: PlayerState { playerService.state }
+    private var isStickyPlayerVisible: Bool {
+        hasScrolledPastTransport && state.currentVideo != nil
+    }
     private var sleepTimer: SleepTimer { .shared }
     private var isAutoPlayNextEnabled: Bool {
         appEnvironment?.settingsManager.queueAutoPlayNext ?? true
@@ -65,9 +76,6 @@ struct OnTheGoPanel: View {
 
     var body: some View {
         panelContent
-            .safeAreaInset(edge: .top, spacing: 0) {
-                topBar
-            }
             .background(Color(.systemBackground).ignoresSafeArea())
             .foregroundStyle(.primary)
             .tint(nowPlayingAccent)
@@ -111,19 +119,25 @@ struct OnTheGoPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent
-                        .frame(minHeight: geometry.size.height, alignment: .center)
+                        .frame(minHeight: max(0, geometry.size.height - Layout.headerHeight), alignment: .center)
 
                     if !state.queue.isEmpty {
                         inlineQueue
                             .frame(maxWidth: 560)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, Layout.horizontalPadding)
+                            .padding(.top, Layout.mediumSpacing)
                             .padding(.bottom, Layout.mediumSpacing)
                     }
                 }
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
+            .scrollPosition($scrollPosition)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                playerHeader
+            }
+            .coordinateSpace(name: ScrollCoordinateSpace.player)
         }
     }
 
@@ -139,6 +153,10 @@ struct OnTheGoPanel: View {
                 .padding(.top, Layout.smallSpacing)
             transportControls
                 .padding(.top, Layout.mediumSpacing)
+                .onGeometryChange(for: Bool.self) { geometry in
+                    // The viewport includes the reserved header above its visible content.
+                    geometry.frame(in: .named(ScrollCoordinateSpace.player)).maxY <= Layout.headerHeight
+                } action: { hasScrolledPastTransport = $0 }
             if case .failed(let error) = state.playbackState {
                 Text(error.localizedDescription).font(.caption).foregroundStyle(.secondary)
                 Button("Retry") { Task { await playerService.replayCurrentVideo() } }
@@ -158,6 +176,34 @@ struct OnTheGoPanel: View {
     }
 
     // MARK: - Top Bar
+
+    private var playerHeader: some View {
+        ZStack {
+            topBar
+                .opacity(isStickyPlayerVisible ? 0 : 1)
+                .allowsHitTesting(!isStickyPlayerVisible)
+                .accessibilityHidden(isStickyPlayerVisible)
+
+            if isStickyPlayerVisible {
+                CompactPlayerCard(
+                    playerService: playerService,
+                    actionLabel: "player.nowPlaying.title",
+                    actionHint: "Returns to the player controls"
+                ) {
+                    withAnimation(.snappy) {
+                        scrollPosition.scrollTo(edge: .top)
+                    }
+                }
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Layout.horizontalPadding)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .frame(height: CompactPlayerCard.height)
+        .padding(.vertical, Layout.smallSpacing)
+        .animation(.snappy, value: isStickyPlayerVisible)
+    }
 
     private var topBar: some View {
         HStack {
