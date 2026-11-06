@@ -737,7 +737,7 @@ struct OnTheGoPanel: View {
     private func transportSymbol(_ name: String) -> some View {
         Image(systemName: name)
             .symbolVariant(.none)
-            .font(.system(size: 24, weight: .regular))
+            .font(.system(size: 32, weight: .regular))
             .foregroundStyle(.primary)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
