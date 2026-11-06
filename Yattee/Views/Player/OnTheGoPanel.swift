@@ -378,7 +378,7 @@ struct OnTheGoPanel: View {
                         // the top during a list drag requires a new pull to B.
                         route = .queue
                     } else if detent == .normal, translation.height > 0 {
-                        // Preserve the native zoom/dismiss interaction from A.
+                        // Keep dismissal from A separate from detent snapping.
                         route = .dismissal
                     } else {
                         route = .panel
@@ -394,6 +394,11 @@ struct OnTheGoPanel: View {
             }
             .onEnded { value in
                 guard let drag = panelDrag else { return }
+                // Our pan can prevent the native zoom pan from beginning even
+                // on the dismissal route. Fall back to the chevron's action.
+                let shouldDismiss = drag.route == .dismissal && value.translation.height > 0 && (
+                    value.translation.height > 120 || value.velocity.height > 800
+                )
                 let target = drag.route == .panel ? panelCoverGeometry.detents.target(
                     from: drag.start,
                     translation: value.translation.height,
@@ -405,6 +410,13 @@ struct OnTheGoPanel: View {
                 )
                 #endif
                 settlePanel(at: target)
+                if drag.route == .dismissal {
+                    LoggingService.shared.debug(
+                        "Player dismissal drag ended: translation=\(value.translation.height), velocity=\(value.velocity.height), dismiss=\(shouldDismiss)",
+                        category: .player
+                    )
+                }
+                if shouldDismiss { onClose() }
             }
     }
 
@@ -435,8 +447,8 @@ struct OnTheGoPanel: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
             .coordinateSpace(name: PanelCoordinateSpace.panel)
-            // Simultaneous recognition leaves horizontal paging/scrubbing and
-            // native dismissal intact. Ownership is direction-locked above.
+            // Keep paging/scrubbing simultaneous. Native dismissal stays enabled
+            // in A, with a release fallback if our direction-locked pan wins.
             .simultaneousGesture(panelDragGesture(
                 queueRowsTop: layout.queueTop + Layout.smallSpacing + 5 + Layout.mediumSpacing
             ))
