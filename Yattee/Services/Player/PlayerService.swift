@@ -559,6 +559,16 @@ final class PlayerService {
         pause(saveProgress: !videoEndedNaturally && state.playbackState != .ended)
     }
 
+    /// Applies a persistent speed selection to playback and system metadata.
+    func setPlaybackRate(_ rate: PlaybackRate) {
+        state.rate = rate
+        currentBackend?.rate = Float(rate.rawValue)
+        nowPlayingService.updatePlaybackRate(
+            isPlaying: state.playbackState == .playing,
+            currentTime: state.currentTime
+        )
+    }
+
     /// Resumes playback.
     func resume() {
         if isPausedBySleepTimer && videoEndedNaturally {

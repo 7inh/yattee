@@ -66,7 +66,7 @@ final class NowPlayingService {
             MPNowPlayingInfoPropertyPlaybackQueueIndex: 0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: playerService?.state.rate.rawValue ?? 1.0
         ]
 
         // Only add duration for non-live content
@@ -107,6 +107,7 @@ final class NowPlayingService {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playerService?.state.rate.rawValue ?? 1.0
 
         cachedNowPlayingInfo = info
 
@@ -133,6 +134,7 @@ final class NowPlayingService {
         }
 
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? (playerService?.state.rate.rawValue ?? 1.0) : 0.0
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playerService?.state.rate.rawValue ?? 1.0
 
         // When pausing, we must also update the elapsed time to ensure iOS
         // properly preserves the Now Playing info in Control Center.

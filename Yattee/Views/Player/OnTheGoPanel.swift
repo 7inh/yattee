@@ -1019,10 +1019,7 @@ struct OnTheGoPanel: View {
         Menu {
             Picker(String(localized: "controls.button.speed"), selection: Binding(
                 get: { state.rate },
-                set: { rate in
-                    state.rate = rate
-                    playerService.currentBackend?.rate = Float(rate.rawValue)
-                }
+                set: { playerService.setPlaybackRate($0) }
             )) {
                 ForEach(PlaybackRate.allCases) { rate in
                     Text(rate.displayText).tag(rate)

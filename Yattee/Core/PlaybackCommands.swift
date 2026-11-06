@@ -224,8 +224,7 @@ struct PlaybackCommands: Commands {
 
     private var resetSpeedButton: some View {
         Button {
-            state.rate = .x1
-            playerService.currentBackend?.rate = 1.0
+            playerService.setPlaybackRate(.x1)
         } label: {
             Text(String(localized: "menu.playback.resetSpeed"))
         }
@@ -238,8 +237,7 @@ struct PlaybackCommands: Commands {
         guard let currentIndex = rates.firstIndex(of: state.rate) else { return }
         if currentIndex > 0 {
             let newRate = rates[currentIndex - 1]
-            state.rate = newRate
-            playerService.currentBackend?.rate = Float(newRate.rawValue)
+            playerService.setPlaybackRate(newRate)
         }
     }
 
@@ -248,8 +246,7 @@ struct PlaybackCommands: Commands {
         guard let currentIndex = rates.firstIndex(of: state.rate) else { return }
         if currentIndex < rates.count - 1 {
             let newRate = rates[currentIndex + 1]
-            state.rate = newRate
-            playerService.currentBackend?.rate = Float(newRate.rawValue)
+            playerService.setPlaybackRate(newRate)
         }
     }
 

@@ -18,6 +18,7 @@ final class AVAudioBackend: PlayerBackend {
         didSet {
             player.defaultRate = rate
             if wantsToPlay { player.rate = rate }
+            LoggingService.shared.logPlayer("Audio speed selected: \(rate)x, playing=\(wantsToPlay)")
         }
     }
     var volume: Float {
@@ -29,14 +30,14 @@ final class AVAudioBackend: PlayerBackend {
         set { player.isMuted = newValue }
     }
 
-    private let player = AVPlayer()
+    private let player: AVPlayer
     private var observations: [NSKeyValueObservation] = []
     private var notifications: [NSObjectProtocol] = []
     private var timeObserver: Any?
     private var generation = UUID()
     private var seekGeneration = UUID()
     private var loadingAsset: AVURLAsset?
-    private let dashPlaylistLoader = DASHAudioPlaylistLoader()
+    private let dashPlaylistLoader: DASHAudioPlaylistLoader
     private var playlistTask: Task<String, Error>?
     // AVAssetResourceLoader holds its delegate weakly; retain it for the whole item lifetime.
     private var playlistResourceLoader: DASHAudioResourceLoader?
@@ -45,7 +46,9 @@ final class AVAudioBackend: PlayerBackend {
     private var reportedReady = false
     private var playbackState: PlaybackState = .idle
 
-    init() {
+    init(player: AVPlayer = AVPlayer(), dashPlaylistLoader: DASHAudioPlaylistLoader = DASHAudioPlaylistLoader()) {
+        self.player = player
+        self.dashPlaylistLoader = dashPlaylistLoader
         player.allowsExternalPlayback = true
         player.automaticallyWaitsToMinimizeStalling = true
     }
@@ -96,6 +99,7 @@ final class AVAudioBackend: PlayerBackend {
                 try await Task.sleep(for: .milliseconds(25))
             }
             try checkLoad(token)
+            LoggingService.shared.logPlayer("Audio ready: rate=\(rate)x, canFastForward=\(item.canPlayFastForward), pitch=\(item.audioTimePitchAlgorithm.rawValue)")
             publishProgress()
             if !defersReady { reportReady() }
             if autoplay { play() }
@@ -113,8 +117,26 @@ final class AVAudioBackend: PlayerBackend {
 
     private func makeAudioAsset(for audio: Stream, generation token: UUID) async throws -> AVURLAsset {
         let options = audio.httpHeaders.map { ["AVURLAssetHTTPHeaderFieldsKey": $0] }
+        let directAsset = AVURLAsset(url: audio.url, options: options)
         if !audio.isLive, audio.mimeType?.lowercased().hasPrefix("audio/mp4") == true,
            audio.initRange != nil, audio.indexRange != nil {
+            // Keep seekable M4A as a file-based asset. Wrapping it in HLS can
+            // switch AVPlayer to trick play above 2x, even with spectral pitch
+            // correction and a requested rate of 2.5 or 3. Only use the DASH HLS
+            // adapter when AVFoundation cannot read the native rendition.
+            loadingAsset = directAsset
+            do {
+                let (isPlayable, duration) = try await directAsset.load(.isPlayable, .duration)
+                try checkLoad(token)
+                if isPlayable, duration.isNumeric, duration.seconds > 0 {
+                    LoggingService.shared.logPlayer("Audio: using native M4A for pitch-preserving variable-speed playback")
+                    return directAsset
+                }
+            } catch {
+                try checkLoad(token)
+                LoggingService.shared.logPlayerError("Native M4A inspection failed; trying DASH HLS playlist", error: error)
+            }
+
             let task = Task { try await dashPlaylistLoader.playlist(for: audio) }
             playlistTask = task
             do {
@@ -138,7 +160,7 @@ final class AVAudioBackend: PlayerBackend {
             }
         }
         try checkLoad(token)
-        return AVURLAsset(url: audio.url, options: options)
+        return directAsset
     }
 
     func play() {

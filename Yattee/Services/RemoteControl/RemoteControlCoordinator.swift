@@ -557,9 +557,10 @@ final class RemoteControlCoordinator {
 
         case .setRate(let rate):
             rcDebug("HANDLE", "[\(senderName)] Executing: setRate to \(rate)")
-            playerService?.currentBackend?.rate = rate
             if let playbackRate = PlaybackRate(rawValue: Double(rate)) {
-                playerService?.state.rate = playbackRate
+                playerService?.setPlaybackRate(playbackRate)
+            } else {
+                playerService?.currentBackend?.rate = rate
             }
 
         case .loadVideo(let videoID, let instanceURLString, let startTime, let awaitPlayCommand, let videoSource, let videoTitle):

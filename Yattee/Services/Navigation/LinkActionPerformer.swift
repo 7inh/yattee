@@ -365,8 +365,7 @@ struct LinkActionPerformer {
                 let supported = PlaybackRate.allCases.map { String($0.rawValue) }.joined(separator: ", ")
                 return .failure(code: "unsupportedRate", message: String(localized: "linkAction.error.unsupportedRate", defaultValue: "Supported rates: \(supported)"))
             }
-            player.currentBackend?.rate = Float(rate.rawValue)
-            player.state.rate = rate
+            player.setPlaybackRate(rate)
         }
         return .success(playerValues())
     }
