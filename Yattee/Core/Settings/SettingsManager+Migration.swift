@@ -2,14 +2,33 @@
 //  SettingsManager+Migration.swift
 //  Yattee
 //
-//  One-shot migrations that move legacy unprefixed values under
-//  platform-specific keys when `SettingsKey.isPlatformSpecific` flips to true.
+//  One-shot migrations for saved settings and platform-specific layout keys.
 //
 
 import Foundation
 
 extension SettingsManager {
     private static let migrationFlagKey = "didMigratePlatformSpecificLayoutKeys_v1"
+    private static let compactTabBarHistoryMigrationFlagKey = "didMigrateCompactTabBarHistory_v1"
+
+    /// Replaces Sources with History in saved compact tab visibility once, preserving
+    /// item order and all other visibility choices. Later user customizations are kept.
+    /// Run after the initial iCloud refresh so it cannot restore the old visibility.
+    func migrateCompactTabBarHistoryIfNeeded() {
+        guard !localDefaults.bool(forKey: Self.compactTabBarHistoryMigrationFlagKey) else { return }
+
+        var visibility = tabBarItemVisibility
+        visibility[.sources] = false
+        visibility[.history] = true
+        tabBarItemVisibility = visibility
+
+        if tabBarStartupTab == .sources {
+            tabBarStartupTab = .home
+        }
+
+        localDefaults.set(true, forKey: Self.compactTabBarHistoryMigrationFlagKey)
+        LoggingService.shared.logCloudKit("Migrated compact tab bar visibility from Sources to History")
+    }
 
     // Mirrors `SettingsManager+CloudSync.protectedVisibilityKeys`. Kept in sync manually
     // because that collection is fileprivate; the set is small and rarely changes.

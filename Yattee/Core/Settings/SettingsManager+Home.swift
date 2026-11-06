@@ -529,7 +529,7 @@ extension SettingsManager {
         }
     }
 
-    /// Visibility map for tab bar items. Default is only subscriptions visible.
+    /// Visibility map for tab bar items. History and Downloads are visible by default.
     var tabBarItemVisibility: [TabBarItem: Bool] {
         get {
             if let cached = _tabBarItemVisibility { return cached }

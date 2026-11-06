@@ -270,10 +270,13 @@ final class SettingsManager {
                 defer {
                     self?.isInitialSyncPending = false
                     LoggingService.shared.logCloudKit("SettingsManager.init: isInitialSyncPending = false, iCloud writes re-enabled")
+                    self?.migrateCompactTabBarHistoryIfNeeded()
                 }
                 self?.ubiquitousStore.synchronize()
                 self?.refreshFromiCloud()
             }
+        } else {
+            migrateCompactTabBarHistoryIfNeeded()
         }
     }
 
