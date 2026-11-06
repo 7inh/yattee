@@ -1143,22 +1143,52 @@ struct OnTheGoPanel: View {
             ScrollView {
                 if let video = state.currentVideo {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text(video.title).font(.title2.bold())
-                        Button(video.author.name) {
+                        Text(video.title)
+                            .font(.title2.bold())
+                            .accessibilityAddTraits(.isHeader)
+
+                        Button {
                             onClose()
                             appEnvironment?.navigationCoordinator.navigateToChannel(for: video, collapsePlayer: true)
+                        } label: {
+                            HStack {
+                                Text(video.author.name)
+                                Spacer()
+                                Image(systemName: "chevron.forward")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+
                         Text(DescriptionText.attributed(video.description ?? "", linkColor: .red))
+                            .handleTimestampLinks(using: playerService)
                             .textSelection(.enabled)
                     }
+                    .font(.body)
+                    .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                 }
             }
             .navigationTitle("Details")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { sheetCloseToolbarItem(action: onClose) }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                    }
+                    .tint(.primary)
+                    .accessibilityLabel(String(localized: "common.close"))
+                }
+            }
         }
+        .preferredColorScheme(colorScheme)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private var videoTitle: String {
