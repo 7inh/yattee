@@ -131,6 +131,13 @@ struct OnTheGoPanel: View {
                 selectedPage = .artwork
                 lyricsArtworkColor = .fallback
             }
+            .onChange(of: selectedPage) { _, page in
+                let backendID = playerService.currentBackend.map { String(describing: ObjectIdentifier($0)) } ?? "none"
+                LoggingService.shared.debug(
+                    "Player page: \(page), service: \(ObjectIdentifier(playerService)), backend: \(backendID), time: \(state.currentTime), state: \(state.playbackState)",
+                    category: .player
+                )
+            }
             .task(id: state.currentVideo?.id) {
                 let video = state.currentVideo
                 await lyrics.loadTracks(

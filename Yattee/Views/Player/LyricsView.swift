@@ -70,6 +70,7 @@ struct LyricsView: View {
                             Button {
                                 resumeFollowingAt = .now
                                 lastScrolledIndex = nil
+                                LoggingService.shared.debug("Lyrics seek to \(line.start)", category: .player)
                                 onSeek(line.start)
                             } label: {
                                 Text(line.text)
@@ -79,7 +80,7 @@ struct LyricsView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(LyricsSeekButtonStyle())
                             .disabled(isSeekDisabled)
                             .accessibilityLabel(line.text)
                             .accessibilityHint("Seeks to \(line.start.formattedAsTimestamp)")
@@ -143,6 +144,27 @@ struct LyricsView: View {
         withAnimation(.easeInOut(duration: reduceMotion ? 0 : 0.4)) {
             proxy.scrollTo(target, anchor: UnitPoint(x: 0.5, y: 1.0 / 3))
         }
+    }
+}
+
+// MARK: - Lyric Seeking
+
+@MainActor
+private struct LyricsSeekButtonStyle: PrimitiveButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        // Paging runs simultaneously with the lyrics' gestures. Require a tap
+        // so a horizontal drag cannot also activate a line's seek button.
+        configuration.label
+            .onTapGesture {
+                guard isEnabled else { return }
+                configuration.trigger()
+            }
+            .accessibilityAction {
+                guard isEnabled else { return }
+                configuration.trigger()
+            }
     }
 }
 
