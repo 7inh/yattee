@@ -17,7 +17,6 @@ struct OnTheGoPanel: View {
     @Environment(\.appEnvironment) private var appEnvironment
     @Environment(\.presentAppSheet) private var presentAppSheet
     @Environment(\.openURL) private var openURL
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let playerService: PlayerService
@@ -35,11 +34,16 @@ struct OnTheGoPanel: View {
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var hasScrolledPastTransport = false
-    @State private var showingLyrics = false
+    @State private var selectedPage = PlayerPage.artwork
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
     @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.38, dampingFraction: 0.85)))
     private var lyricsPageOffset: CGFloat = 0
+
+    private enum PlayerPage: Hashable, Sendable {
+        case artwork
+        case lyrics
+    }
 
     private enum ScrollCoordinateSpace: Hashable, Sendable {
         case player
@@ -57,6 +61,7 @@ struct OnTheGoPanel: View {
     }
 
     private var state: PlayerState { playerService.state }
+    private var showingLyrics: Bool { selectedPage == .lyrics }
     private var hasLyrics: Bool {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
@@ -92,8 +97,6 @@ struct OnTheGoPanel: View {
             .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(.primary)
             .tint(nowPlayingAccent)
-            .environment(\.colorScheme, showingLyrics ? .dark : colorScheme)
-            .preferredColorScheme(showingLyrics ? .dark : nil)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
@@ -125,7 +128,7 @@ struct OnTheGoPanel: View {
             }
             .onChange(of: state.currentVideo?.id) { _, _ in
                 pendingSeekTime = nil
-                showingLyrics = false
+                selectedPage = .artwork
                 lyricsArtworkColor = .fallback
             }
             .task(id: state.currentVideo?.id) {
@@ -179,7 +182,7 @@ struct OnTheGoPanel: View {
                 let distance = value.translation.width * direction
                 let predictedDistance = value.predictedEndTranslation.width * direction
                 if distance > 0, max(distance, predictedDistance) >= 60 {
-                    showingLyrics.toggle()
+                    selectedPage = showingLyrics ? .artwork : .lyrics
                 }
             }
         return hasLyrics && !state.isControlsLocked ? gesture : nil
@@ -210,8 +213,10 @@ struct OnTheGoPanel: View {
     private var panelBackground: some View {
         ZStack {
             Color(.systemBackground)
-            lyricsArtworkColor.color
-                .opacity(showingLyrics ? 1 : 0)
+            if showingLyrics {
+                lyricsArtworkColor.color
+                    .transition(.opacity)
+            }
         }
         .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: showingLyrics)
         .animation(.easeInOut(duration: reduceMotion ? 0 : 0.4), value: lyricsArtworkColor)
@@ -317,6 +322,7 @@ struct OnTheGoPanel: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, Layout.horizontalPadding)
         }
+        // Keep dark styling local: a sheet-wide preferredColorScheme can persist after paging back.
         .environment(\.colorScheme, .dark)
     }
 
@@ -440,7 +446,7 @@ struct OnTheGoPanel: View {
             playerMenuSeparator
 
             Button {
-                dismissPlayerMenu { showingLyrics.toggle() }
+                dismissPlayerMenu { selectedPage = showingLyrics ? .artwork : .lyrics }
             } label: {
                 playerMenuRow(String(localized: "Lyrics"), systemImage: showingLyrics ? "quote.bubble.fill" : "quote.bubble")
             }
