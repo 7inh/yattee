@@ -60,6 +60,8 @@ struct OnTheGoPanel: View {
         // Keeps the enlarged thumb inside the seek control at both endpoints.
         static let seekInset: CGFloat = 12
         static let seekTrackHeight: CGFloat = 6
+        static let transportHeight: CGFloat = 104
+        static let transportMenuWidth: CGFloat = 56
     }
 
     private var state: PlayerState { playerService.state }
@@ -916,30 +918,43 @@ struct OnTheGoPanel: View {
     }
 
     private var transportButtons: some View {
-        HStack(spacing: 0) {
-            playbackSpeedMenu
-            Spacer(minLength: 0)
-            transportButton("gobackward.10", label: String(localized: "menu.playback.seekBackward \(10)"), disabled: isSeekDisabled) {
-                playerService.seekBackward(by: 10)
+        GeometryReader { geometry in
+            let centerY = geometry.size.height / 2
+            let menuHalfWidth = Layout.transportMenuWidth / 2
+
+            // Use the timeline's full width, with the middle controls at quarter points.
+            // The edge menus' hit areas extend inward from the timeline endpoints.
+            ZStack {
+                playbackSpeedMenu
+                    .position(x: menuHalfWidth, y: centerY)
+
+                transportButton("gobackward.10", label: String(localized: "menu.playback.seekBackward \(10)"), disabled: isSeekDisabled) {
+                    playerService.seekBackward(by: 10)
+                }
+                .position(x: geometry.size.width / 4, y: centerY)
+
+                Button {
+                    transportFeedbackTrigger.toggle()
+                    playerService.togglePlayPause()
+                } label: {
+                    playPauseLabel
+                }
+                .modifier(OnTheGoPlayPauseStyleModifier())
+                .environment(\.colorScheme, colorScheme)
+                .disabled(isTransportDisabled)
+                .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
+                .position(x: geometry.size.width / 2, y: centerY)
+
+                transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
+                    playerService.seekForward(by: 10)
+                }
+                .position(x: geometry.size.width * 3 / 4, y: centerY)
+
+                sleepTimerMenu
+                    .position(x: geometry.size.width - menuHalfWidth, y: centerY)
             }
-            Spacer(minLength: 0)
-            Button {
-                transportFeedbackTrigger.toggle()
-                playerService.togglePlayPause()
-            } label: {
-                playPauseLabel
-            }
-            .modifier(OnTheGoPlayPauseStyleModifier())
-            .environment(\.colorScheme, colorScheme)
-            .disabled(isTransportDisabled)
-            .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
-            Spacer(minLength: 0)
-            transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
-                playerService.seekForward(by: 10)
-            }
-            Spacer(minLength: 0)
-            sleepTimerMenu
         }
+        .frame(height: Layout.transportHeight)
     }
 
     @ViewBuilder
@@ -952,7 +967,7 @@ struct OnTheGoPanel: View {
             playPauseSymbol
                 .font(.system(size: 38, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 104, height: 104)
+                .frame(width: Layout.transportHeight, height: Layout.transportHeight)
                 .background(nowPlayingAccent, in: Circle())
                 .opacity(isTransportDisabled ? 0.4 : 1)
                 .contentShape(Circle())
@@ -996,7 +1011,7 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : controlPrimaryColor)
+            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : controlPrimaryColor, alignment: .leading)
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
@@ -1030,7 +1045,7 @@ struct OnTheGoPanel: View {
             if sleepTimer.mode == .off {
                 sleepOffSymbol
             } else {
-                transportValue(sleepTimerText, color: nowPlayingAccent)
+                transportValue(sleepTimerText, color: nowPlayingAccent, alignment: .trailing)
             }
         }
         .transportMenuStyle()
@@ -1071,16 +1086,16 @@ struct OnTheGoPanel: View {
         Image(systemName: "moon.zzz")
             .font(.system(size: 22, weight: .regular))
             .foregroundStyle(controlPrimaryColor)
-            .frame(width: 56, height: 44, alignment: .center)
+            .frame(width: Layout.transportMenuWidth, height: 44, alignment: .trailing)
             .contentShape(Rectangle())
     }
 
-    private func transportValue(_ value: String, color: Color) -> some View {
+    private func transportValue(_ value: String, color: Color, alignment: Alignment) -> some View {
         Text(verbatim: value)
             .font(.system(size: 15, weight: .semibold).monospacedDigit())
             .foregroundStyle(color)
             .lineLimit(1)
-            .frame(width: 56, height: 44, alignment: .center)
+            .frame(width: Layout.transportMenuWidth, height: 44, alignment: alignment)
             .contentShape(Rectangle())
     }
 
