@@ -936,18 +936,7 @@ struct OnTheGoPanel: View {
 
     // MARK: - Transport
 
-    @ViewBuilder
     private var transportControls: some View {
-        if #available(iOS 26, *) {
-            GlassEffectContainer(spacing: Layout.mediumSpacing) {
-                transportButtons
-            }
-        } else {
-            transportButtons
-        }
-    }
-
-    private var transportButtons: some View {
         // Only visible content takes layout space; the four spacers share the remainder.
         HStack(spacing: 0) {
             playbackSpeedMenu
@@ -962,9 +951,9 @@ struct OnTheGoPanel: View {
             } label: {
                 playPauseLabel
             }
-            .modifier(OnTheGoPlayPauseStyleModifier())
-            .environment(\.colorScheme, colorScheme)
+            .buttonStyle(OnTheGoTransportButtonStyle())
             .disabled(isTransportDisabled)
+            .opacity(isTransportDisabled ? 0.4 : 1)
             .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
             Spacer(minLength: 0)
             transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
@@ -977,21 +966,12 @@ struct OnTheGoPanel: View {
         .frame(height: Layout.transportHeight)
     }
 
-    @ViewBuilder
     private var playPauseLabel: some View {
-        if #available(iOS 26, *) {
-            playPauseSymbol
-                .font(.system(size: 36, weight: .bold))
-                .frame(width: 64, height: 64)
-        } else {
-            playPauseSymbol
-                .font(.system(size: 38, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: Layout.transportHeight, height: Layout.transportHeight)
-                .background(nowPlayingAccent, in: Circle())
-                .opacity(isTransportDisabled ? 0.4 : 1)
-                .contentShape(Circle())
-        }
+        playPauseSymbol
+            .font(.system(size: 44, weight: .bold))
+            .foregroundStyle(controlPrimaryColor)
+            .fixedSize()
+            .contentShape(OnTheGoTransportHitArea(minimumSize: 56))
     }
 
     private var playPauseSymbol: some View {
@@ -1269,12 +1249,14 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
 
 // MARK: - Transport Styling
 
-/// Expands small labels to a 44pt tap target without adding layout space.
+/// Expands small labels to a minimum tap target without adding layout space.
 private struct OnTheGoTransportHitArea: Shape, Sendable {
+    var minimumSize: CGFloat = 44
+
     func path(in rect: CGRect) -> Path {
         Path(rect.insetBy(
-            dx: -max(0, (44 - rect.width) / 2),
-            dy: -max(0, (44 - rect.height) / 2)
+            dx: -max(0, (minimumSize - rect.width) / 2),
+            dy: -max(0, (minimumSize - rect.height) / 2)
         ))
     }
 }
@@ -1286,22 +1268,6 @@ private extension View {
             .buttonStyle(OnTheGoTransportButtonStyle())
             .menuIndicator(.hidden)
             .menuOrder(.fixed)
-    }
-}
-
-private struct OnTheGoPlayPauseStyleModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content
-                .buttonStyle(.glassProminent)
-                .tint(nowPlayingAccent)
-                .foregroundStyle(.white)
-                .buttonBorderShape(.circle)
-                .buttonSizing(.flexible)
-                .frame(width: 104, height: 104)
-        } else {
-            content.buttonStyle(OnTheGoTransportButtonStyle())
-        }
     }
 }
 
