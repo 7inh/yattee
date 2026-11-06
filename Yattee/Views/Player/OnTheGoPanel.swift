@@ -36,6 +36,7 @@ struct OnTheGoPanel: View {
     @State private var showingDeleteDownloadConfirmation = false
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var panelScrollOffset: CGFloat = 0
     @State private var isPanelAtTop = true
     @State private var hasScrolledPastTransport = false
     @State private var selectedPage = PlayerPage.artwork
@@ -62,7 +63,9 @@ struct OnTheGoPanel: View {
         // Keeps the enlarged thumb inside the seek control at both endpoints.
         static let seekInset: CGFloat = 12
         static let seekTrackHeight: CGFloat = 6
+        static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
+        static let queueMorphDistance: CGFloat = 140
     }
 
     private enum MenuLayout {
@@ -80,6 +83,13 @@ struct OnTheGoPanel: View {
     }
     private var isStickyPlayerVisible: Bool {
         hasScrolledPastTransport && state.currentVideo != nil
+    }
+    private var queueMorphProgress: CGFloat {
+        guard !state.queue.isEmpty, state.currentVideo != nil else { return 0 }
+        return min(1, max(0, panelScrollOffset / Layout.queueMorphDistance))
+    }
+    private var visibleLyricsProgress: CGFloat {
+        lyricsPageProgress * (1 - queueMorphProgress)
     }
     private var sleepTimer: SleepTimer { .shared }
     private var isAutoPlayNextEnabled: Bool {
@@ -109,7 +119,7 @@ struct OnTheGoPanel: View {
         panelContent
             // System presentations use the nearer page's scheme. Visible controls
             // resolve their original colors separately so this never flips them.
-            .environment(\.colorScheme, lyricsPageProgress > 0.5 ? .dark : colorScheme)
+            .environment(\.colorScheme, visibleLyricsProgress > 0.5 ? .dark : colorScheme)
             .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(controlPrimaryColor)
             .tint(nowPlayingAccent)
@@ -161,6 +171,9 @@ struct OnTheGoPanel: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { cancelPaging() }
             }
+            .onChange(of: queueMorphProgress > 0) { _, openingQueue in
+                if openingQueue { cancelPaging() }
+            }
             .onChange(of: isStickyPlayerVisible) { _, visible in
                 LoggingService.shared.debug("Player queue sticky header: \(visible)", category: .player)
             }
@@ -201,12 +214,16 @@ struct OnTheGoPanel: View {
     }
 
     private func pageColor(from normalColor: Color, to lyricsColor: Color) -> Color {
+        resolvedColor(from: normalColor, to: lyricsColor, progress: visibleLyricsProgress)
+    }
+
+    private func resolvedColor(from normalColor: Color, to overlayColor: Color, progress: CGFloat) -> Color {
         // Resolve before the panel's forced dark scheme. This is inexpensive
         // color interpolation; artwork sampling stays in the image-loading task.
         var environment = EnvironmentValues()
         environment.colorScheme = colorScheme
         let normalColor = Color(normalColor.resolve(in: environment))
-        return normalColor.mix(with: lyricsColor, by: Double(lyricsPageProgress))
+        return normalColor.mix(with: overlayColor, by: Double(progress))
     }
 
     private func selectPage(_ page: PlayerPage, animated: Bool = true) {
@@ -229,9 +246,9 @@ struct OnTheGoPanel: View {
     // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
     private func lyricsPageGesture(width: CGFloat) -> LyricsPageDragGesture {
         LyricsPageDragGesture(
-            isEnabled: hasLyrics && !state.isControlsLocked && scenePhase == .active,
+            isEnabled: hasLyrics && queueMorphProgress == 0 && !state.isControlsLocked && scenePhase == .active,
             onChanged: { translation in
-                guard hasLyrics, !state.isControlsLocked else { return }
+                guard hasLyrics, queueMorphProgress == 0, !state.isControlsLocked else { return }
                 if !isPaging {
                     isPaging = true
                     LoggingService.shared.debug(
@@ -279,7 +296,7 @@ struct OnTheGoPanel: View {
             .accessibilityLabel("Player pages")
             .accessibilityValue(showingLyrics ? "Lyrics" : "Artwork")
             .accessibilityAdjustableAction { direction in
-                guard !state.isControlsLocked else { return }
+                guard queueMorphProgress == 0, !state.isControlsLocked else { return }
                 switch direction {
                 case .increment: selectPage(.lyrics)
                 case .decrement: selectPage(.artwork)
@@ -294,7 +311,7 @@ struct OnTheGoPanel: View {
             Color(.systemBackground)
             lyricsArtworkColor.color
                 .animation(.easeInOut(duration: 0.4), value: lyricsArtworkColor)
-                .opacity(Double(lyricsPageProgress))
+                .opacity(Double(visibleLyricsProgress))
         }
         .environment(\.colorScheme, colorScheme)
     }
@@ -302,10 +319,15 @@ struct OnTheGoPanel: View {
     private var panelContent: some View {
         GeometryReader { geometry in
             let viewportHeight = max(0, geometry.size.height - Layout.headerHeight)
+            // Keep enough room below the cover for transport and queue rows,
+            // including in landscape and on wider presentations.
+            let coverHeight = min(geometry.size.width, (geometry.size.height + geometry.safeAreaInsets.top) * 0.5)
+            let coverHeaderProgress = queueMorphProgress * min(1, max(0,
+                (Layout.queueMorphDistance + coverHeight - geometry.safeAreaInsets.top - panelScrollOffset) / Layout.headerHeight
+            ))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    playerContent
-                        .frame(minHeight: viewportHeight, alignment: .center)
+                    playerContent(viewportHeight: viewportHeight, coverHeight: coverHeight, topSafeArea: geometry.safeAreaInsets.top)
 
                     if !state.queue.isEmpty {
                         inlineQueue
@@ -321,46 +343,135 @@ struct OnTheGoPanel: View {
                 }
             }
             .scrollIndicators(.hidden)
+            // The morphing cover can draw behind the reserved header and status bar.
+            .scrollClipDisabled(!state.queue.isEmpty && state.currentVideo != nil)
             .scrollBounceBehavior(.basedOnSize)
             .scrollPosition($scrollPosition)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top <= 1
-            } action: { _, atTop in
-                isPanelAtTop = atTop
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, offset in
+                panelScrollOffset = offset
+                isPanelAtTop = offset <= 1
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                playerHeader
+                playerHeader(coverProgress: coverHeaderProgress)
+                    .zIndex(1)
             }
             .coordinateSpace(name: ScrollCoordinateSpace.player)
         }
     }
 
-    private var playerContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
+    private func playerContent(viewportHeight: CGFloat, coverHeight: CGFloat, topSafeArea: CGFloat) -> some View {
+        PlayerContentLayout(
+            progress: queueMorphProgress,
+            viewportHeight: viewportHeight,
+            coverHeight: coverHeight,
+            topSafeArea: topSafeArea
+        ) {
             pagedContent
-                .padding(.bottom, Layout.mediumSpacing)
-            playerControls
-        }
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, Layout.horizontalPadding)
-        .padding(.vertical, Layout.mediumSpacing)
-    }
-
-    private var playerControls: some View {
-        VStack(alignment: .leading, spacing: 0) {
             videoInfo
-            lyricsPageIndicator
-            seekControls
+            VStack(spacing: 0) {
+                lyricsPageIndicator
+            }
+            .opacity(Double(1 - queueMorphProgress))
+            .allowsHitTesting(queueMorphProgress == 0)
+            .accessibilityHidden(queueMorphProgress > 0)
+            seekTrack
                 .id(state.currentVideo?.id)
-                .padding(.top, Layout.smallSpacing)
+            seekTimeLabels
+                .opacity(Double(1 - queueMorphProgress))
             transportControls
-                .padding(.top, Layout.mediumSpacing)
                 .onGeometryChange(for: Bool.self) { geometry in
                     // The viewport includes the reserved header above its visible content.
                     geometry.frame(in: .named(ScrollCoordinateSpace.player)).maxY <= Layout.headerHeight
                 } action: { hasScrolledPastTransport = $0 }
-            playbackNotices
+            VStack(alignment: .leading, spacing: 0) {
+                playbackNotices
+            }
+        }
+    }
+
+    /// Measures the normal player independently of scroll progress. Interpolating
+    /// its frames keeps the same views mounted without measuring a shrinking
+    /// frame to determine the next scroll threshold.
+    private struct PlayerContentLayout: SwiftUI.Layout, Sendable {
+        let progress: CGFloat
+        let viewportHeight: CGFloat
+        let coverHeight: CGFloat
+        let topSafeArea: CGFloat
+
+        // Matches the seven children in playerContent.
+        private enum Element: Int, CaseIterable, Sendable {
+            case pages, info, indicators, seek, time, transport, notices
+        }
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let width = proposal.replacingUnspecifiedDimensions().width
+            return frames(width: width, subviews: subviews).size
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let result = frames(width: bounds.width, subviews: subviews)
+            for (index, subview) in subviews.enumerated() {
+                let frame = result.frames[index]
+                subview.place(
+                    at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(frame.size)
+                )
+            }
+        }
+
+        private func frames(width: CGFloat, subviews: Subviews) -> (size: CGSize, frames: [CGRect]) {
+            let contentWidth = min(560, max(0, width - Layout.horizontalPadding * 2))
+            let contentX = (width - contentWidth) / 2
+            let proposal = ProposedViewSize(width: contentWidth, height: nil)
+            var normal: [CGRect] = []
+            var y = Layout.mediumSpacing
+
+            for element in Element.allCases {
+                switch element {
+                case .info, .transport: y += Layout.mediumSpacing
+                case .seek: y += Layout.smallSpacing
+                default: break
+                }
+                let height = element == .pages ? contentWidth : subviews[element.rawValue].sizeThatFits(proposal).height
+                normal.append(CGRect(x: contentX, y: y, width: contentWidth, height: height))
+                y += height
+            }
+
+            let naturalHeight = y + Layout.mediumSpacing
+            let normalHeight = max(viewportHeight, naturalHeight)
+            let centeringInset = (normalHeight - naturalHeight) / 2
+            normal = normal.map { $0.offsetBy(dx: 0, dy: centeringInset) }
+
+            // At the end of the morph the cover begins at the physical top of
+            // the screen. Further scrolling carries it away with the controls.
+            let coverTop = Layout.queueMorphDistance - Layout.headerHeight - topSafeArea
+            let coverBottom = coverTop + coverHeight
+            var queue = normal
+            queue[Element.pages.rawValue] = CGRect(x: 0, y: coverTop, width: width, height: coverHeight)
+            queue[Element.info.rawValue].origin.y = coverBottom - Layout.mediumSpacing - normal[Element.info.rawValue].height
+            queue[Element.indicators.rawValue].origin.y = coverBottom
+            queue[Element.seek.rawValue].origin.y = coverBottom - Layout.seekHitHeight / 2
+            queue[Element.time.rawValue].origin.y = coverBottom
+            queue[Element.transport.rawValue].origin.y = coverBottom + Layout.smallSpacing
+            queue[Element.notices.rawValue].origin.y = queue[Element.transport.rawValue].maxY
+            let queueHeight = queue[Element.notices.rawValue].maxY + Layout.mediumSpacing
+
+            let frames = zip(normal, queue).map { start, end in
+                CGRect(
+                    x: interpolate(start.minX, end.minX),
+                    y: interpolate(start.minY, end.minY),
+                    width: interpolate(start.width, end.width),
+                    height: interpolate(start.height, end.height)
+                )
+            }
+            return (CGSize(width: width, height: interpolate(normalHeight, queueHeight)), frames)
+        }
+
+        private func interpolate(_ start: CGFloat, _ end: CGFloat) -> CGFloat {
+            start + (end - start) * progress
         }
     }
 
@@ -382,12 +493,12 @@ struct OnTheGoPanel: View {
     // MARK: - Paged Content
 
     private var pagedContent: some View {
-        // Both pages occupy the artwork's square, so paging cannot resize or replace the controls.
+        // The layout proposes the artwork's square normally, then the full-bleed
+        // cover's bounds. Both pages stay mounted with the same shared controls.
         Color.clear
-            .aspectRatio(1, contentMode: .fit)
             .overlay {
                 GeometryReader { geometry in
-                    let progress = lyricsPageProgress
+                    let progress = visibleLyricsProgress
                     ZStack {
                         artwork
                             .environment(\.colorScheme, colorScheme)
@@ -400,7 +511,7 @@ struct OnTheGoPanel: View {
                                 model: lyrics,
                                 playerState: state,
                                 isSeekDisabled: isSeekDisabled,
-                                isActive: progress > 0 || showingLyrics,
+                                isActive: progress > 0,
                                 isPaging: isPaging,
                                 allowsManualScrolling: state.queue.isEmpty,
                                 onSeek: seek
@@ -409,8 +520,8 @@ struct OnTheGoPanel: View {
                             .scaleEffect(reduceMotion ? 1 : 0.95 + 0.05 * progress)
                             .opacity(Double(progress))
                             .offset(x: reduceMotion ? 0 : geometry.size.width * (1 - progress))
-                            .allowsHitTesting(showingLyrics)
-                            .accessibilityHidden(!showingLyrics)
+                            .allowsHitTesting(showingLyrics && queueMorphProgress == 0)
+                            .accessibilityHidden(!showingLyrics || queueMorphProgress > 0)
                         }
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
@@ -423,9 +534,9 @@ struct OnTheGoPanel: View {
 
     // MARK: - Top Bar
 
-    private var playerHeader: some View {
+    private func playerHeader(coverProgress: CGFloat) -> some View {
         ZStack {
-            topBar
+            topBar(overlayProgress: max(visibleLyricsProgress, coverProgress))
                 .opacity(isStickyPlayerVisible ? 0 : 1)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
@@ -448,16 +559,25 @@ struct OnTheGoPanel: View {
         }
         .frame(height: CompactPlayerCard.height)
         .padding(.vertical, Layout.smallSpacing)
+        .background {
+            // Once the image has scrolled away, keep rows behind an opaque
+            // header, just as they were with the ScrollView's original clipping.
+            panelBackground
+                .opacity(isStickyPlayerVisible ? 1 : Double(queueMorphProgress - coverProgress))
+                .ignoresSafeArea(edges: .top)
+        }
         .animation(.snappy, value: isStickyPlayerVisible)
     }
 
-    private var topBar: some View {
-        HStack {
+    private func topBar(overlayProgress: CGFloat) -> some View {
+        let foreground = resolvedColor(from: .primary, to: .white, progress: overlayProgress)
+
+        return HStack {
             Button(action: onClose) {
-                topBarSymbol("chevron.down")
+                topBarSymbol("chevron.down", foreground: foreground)
             }
             .buttonStyle(.plain)
-            .topBarCircle(colorScheme: colorScheme, lyricsProgress: Double(lyricsPageProgress))
+            .topBarCircle(colorScheme: colorScheme, overlayProgress: Double(overlayProgress))
             .accessibilityLabel(String(localized: "player.nowPlaying.close"))
 
             Spacer()
@@ -465,10 +585,10 @@ struct OnTheGoPanel: View {
             Button {
                 showingPlayerMenu = true
             } label: {
-                topBarSymbol("ellipsis")
+                topBarSymbol("ellipsis", foreground: foreground)
             }
             .buttonStyle(.plain)
-            .topBarCircle(colorScheme: colorScheme, lyricsProgress: Double(lyricsPageProgress))
+            .topBarCircle(colorScheme: colorScheme, overlayProgress: Double(overlayProgress))
             .background {
                 if let video = state.currentVideo {
                     // Keep the share presenter attached after the popover disappears.
@@ -488,17 +608,17 @@ struct OnTheGoPanel: View {
             .disabled(state.currentVideo == nil)
             .accessibilityLabel(String(localized: "controls.button.more"))
         }
-        .tint(controlPrimaryColor)
+        .tint(foreground)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Layout.horizontalPadding)
         .padding(.vertical, Layout.smallSpacing)
     }
 
-    private func topBarSymbol(_ name: String) -> some View {
+    private func topBarSymbol(_ name: String, foreground: Color) -> some View {
         Image(systemName: name)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(controlPrimaryColor)
+            .foregroundStyle(foreground)
             .frame(width: 34, height: 34, alignment: .center)
             .contentShape(Circle())
     }
@@ -789,12 +909,20 @@ struct OnTheGoPanel: View {
 
     private var artwork: some View {
         Rectangle().fill(.quaternary)
-            .aspectRatio(1, contentMode: .fit)
             .overlay {
                 artworkImage(placeholderSize: 64)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .frame(maxWidth: .infinity)
+            .overlay {
+                LinearGradient(stops: [
+                    .init(color: .black.opacity(0.25), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: .black.opacity(0.15), location: 0.5),
+                    .init(color: .black.opacity(0.9), location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .opacity(Double(queueMorphProgress))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16 * (1 - queueMorphProgress)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .accessibilityHidden(true)
     }
@@ -867,12 +995,12 @@ struct OnTheGoPanel: View {
             if let video = state.currentVideo {
                 PlayerMarqueeText(text: videoTitle)
                     .font(.title3.bold())
-                    .foregroundStyle(controlPrimaryColor)
+                    .foregroundStyle(controlPrimaryColor.mix(with: .white, by: Double(queueMorphProgress)))
                     .id(video.id)
 
                 Text(video.author.name)
                     .font(.subheadline)
-                    .foregroundStyle(controlSecondaryColor)
+                    .foregroundStyle(controlSecondaryColor.mix(with: .white.opacity(0.8), by: Double(queueMorphProgress)))
                     .lineLimit(1)
             }
         }
@@ -880,67 +1008,69 @@ struct OnTheGoPanel: View {
 
     // MARK: - Seeking
 
-    private var seekControls: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            GeometryReader { geometry in
-                let trackWidth = max(1, geometry.size.width)
-                let progress = duration > 0 ? CGFloat(displayedTime / duration) : 0
+    private var seekTrack: some View {
+        GeometryReader { geometry in
+            let trackWidth = max(1, geometry.size.width)
+            let progress = duration > 0 ? CGFloat(displayedTime / duration) : 0
+            let trackHeight = Layout.seekTrackHeight + (2 - Layout.seekTrackHeight) * queueMorphProgress
 
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(controlSecondaryColor.opacity(0.25))
-                        .frame(height: Layout.seekTrackHeight)
-                    Capsule()
-                        .fill(nowPlayingAccent)
-                        .frame(width: trackWidth * progress, height: Layout.seekTrackHeight)
-                    Circle()
-                        .fill(nowPlayingAccent)
-                        .frame(width: 20, height: 20)
-                        .scaleEffect(scrubTime == nil ? 1 : 1.2)
-                        .animation(.easeOut(duration: 0.15), value: scrubTime != nil)
-                        .offset(x: min(max(0, trackWidth * progress - 10), trackWidth - 20))
-                }
-                .frame(width: trackWidth, height: 44)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .updating($scrubTime) { value, time, _ in
-                            guard !isSeekDisabled else { return }
-                            time = seekTime(at: value.location.x, trackWidth: trackWidth)
-                        }
-                        .onEnded { value in
-                            seek(to: seekTime(at: value.location.x, trackWidth: trackWidth))
-                        }
-                )
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(controlSecondaryColor.opacity(0.25))
+                    .frame(height: trackHeight)
+                Capsule()
+                    .fill(nowPlayingAccent)
+                    .frame(width: trackWidth * progress, height: trackHeight)
+                Circle()
+                    .fill(nowPlayingAccent)
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(scrubTime == nil ? 1 : 1.2)
+                    .animation(.easeOut(duration: 0.15), value: scrubTime != nil)
+                    .opacity(Double(1 - queueMorphProgress))
+                    .offset(x: min(max(0, trackWidth * progress - 10), trackWidth - 20))
             }
-            .frame(height: 44)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "player.nowPlaying.playbackPosition"))
-            .accessibilityValue(timeLabel)
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: seek(to: displayedTime + 10)
-                case .decrement: seek(to: displayedTime - 10)
-                @unknown default: break
-                }
-            }
-            .disabled(isSeekDisabled)
-            .opacity(isSeekDisabled ? 0.4 : 1)
-
-            HStack {
-                if state.isLive {
-                    Text(String(localized: "player.live"))
-                } else {
-                    Text(verbatim: displayedTime.formattedAsTimestamp)
-                    Spacer(minLength: Layout.smallSpacing)
-                    Text(verbatim: "-\(max(0, duration - displayedTime).formattedAsTimestamp)")
-                }
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(controlSecondaryColor)
-            .accessibilityHidden(true)
+            .frame(width: trackWidth, height: Layout.seekHitHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($scrubTime) { value, time, _ in
+                        guard !isSeekDisabled else { return }
+                        time = seekTime(at: value.location.x, trackWidth: trackWidth)
+                    }
+                    .onEnded { value in
+                        seek(to: seekTime(at: value.location.x, trackWidth: trackWidth))
+                    }
+            )
         }
+        .frame(height: Layout.seekHitHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "player.nowPlaying.playbackPosition"))
+        .accessibilityValue(timeLabel)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: seek(to: displayedTime + 10)
+            case .decrement: seek(to: displayedTime - 10)
+            @unknown default: break
+            }
+        }
+        .disabled(isSeekDisabled)
+        .opacity(isSeekDisabled ? 0.4 : 1)
+    }
+
+    private var seekTimeLabels: some View {
+        HStack {
+            if state.isLive {
+                Text(String(localized: "player.live"))
+            } else {
+                Text(verbatim: displayedTime.formattedAsTimestamp)
+                Spacer(minLength: Layout.smallSpacing)
+                Text(verbatim: "-\(max(0, duration - displayedTime).formattedAsTimestamp)")
+            }
+        }
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(controlSecondaryColor)
+        .accessibilityHidden(true)
     }
 
     private func boundedTime(_ time: TimeInterval) -> TimeInterval {
@@ -1244,10 +1374,10 @@ private struct OnTheGoShareLinkStyle: PrimitiveButtonStyle {
 private extension View {
     /// Glass is applied outside Button/Menu so both get an identical 34pt circle;
     /// the outer frame keeps a 44pt hit area.
-    func topBarCircle(colorScheme: ColorScheme, lyricsProgress: Double) -> some View {
+    func topBarCircle(colorScheme: ColorScheme, overlayProgress: Double) -> some View {
         self
             .frame(width: 34, height: 34)
-            .modifier(OnTheGoTopBarStyleModifier(colorScheme: colorScheme, lyricsProgress: lyricsProgress))
+            .modifier(OnTheGoTopBarStyleModifier(colorScheme: colorScheme, overlayProgress: overlayProgress))
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
     }
@@ -1255,7 +1385,7 @@ private extension View {
 
 private struct OnTheGoTopBarStyleModifier: ViewModifier {
     let colorScheme: ColorScheme
-    let lyricsProgress: Double
+    let overlayProgress: Double
 
     func body(content: Content) -> some View {
         // Crossfade only the decoration: there is still one interactive button.
@@ -1263,10 +1393,10 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
             ZStack {
                 circleBackground
                     .environment(\.colorScheme, colorScheme)
-                    .opacity(1 - lyricsProgress)
+                    .opacity(1 - overlayProgress)
                 circleBackground
                     .environment(\.colorScheme, .dark)
-                    .opacity(lyricsProgress)
+                    .opacity(overlayProgress)
             }
             .allowsHitTesting(false)
         }
