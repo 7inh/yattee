@@ -61,7 +61,6 @@ struct OnTheGoPanel: View {
         static let seekInset: CGFloat = 12
         static let seekTrackHeight: CGFloat = 6
         static let transportHeight: CGFloat = 104
-        static let transportMenuWidth: CGFloat = 56
     }
 
     private var state: PlayerState { playerService.state }
@@ -918,42 +917,32 @@ struct OnTheGoPanel: View {
     }
 
     private var transportButtons: some View {
-        GeometryReader { geometry in
-            let centerY = geometry.size.height / 2
-            let menuHalfWidth = Layout.transportMenuWidth / 2
-
-            // Use the timeline's full width, with the middle controls at quarter points.
-            // The edge menus' hit areas extend inward from the timeline endpoints.
-            ZStack {
-                playbackSpeedMenu
-                    .position(x: menuHalfWidth, y: centerY)
-
-                transportButton("gobackward.10", label: String(localized: "menu.playback.seekBackward \(10)"), disabled: isSeekDisabled) {
-                    playerService.seekBackward(by: 10)
-                }
-                .position(x: geometry.size.width / 4, y: centerY)
-
-                Button {
-                    transportFeedbackTrigger.toggle()
-                    playerService.togglePlayPause()
-                } label: {
-                    playPauseLabel
-                }
-                .modifier(OnTheGoPlayPauseStyleModifier())
-                .environment(\.colorScheme, colorScheme)
-                .disabled(isTransportDisabled)
-                .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
-                .position(x: geometry.size.width / 2, y: centerY)
-
-                transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
-                    playerService.seekForward(by: 10)
-                }
-                .position(x: geometry.size.width * 3 / 4, y: centerY)
-
-                sleepTimerMenu
-                    .position(x: geometry.size.width - menuHalfWidth, y: centerY)
+        // Only visible content takes layout space; the four spacers share the remainder.
+        HStack(spacing: 0) {
+            playbackSpeedMenu
+            Spacer(minLength: 0)
+            transportButton("gobackward.10", label: String(localized: "menu.playback.seekBackward \(10)"), disabled: isSeekDisabled) {
+                playerService.seekBackward(by: 10)
             }
+            Spacer(minLength: 0)
+            Button {
+                transportFeedbackTrigger.toggle()
+                playerService.togglePlayPause()
+            } label: {
+                playPauseLabel
+            }
+            .modifier(OnTheGoPlayPauseStyleModifier())
+            .environment(\.colorScheme, colorScheme)
+            .disabled(isTransportDisabled)
+            .accessibilityLabel(state.playbackState == .playing ? String(localized: "player.controls.pause") : String(localized: "player.controls.play"))
+            Spacer(minLength: 0)
+            transportButton("goforward.10", label: String(localized: "menu.playback.seekForward \(10)"), disabled: isSeekDisabled) {
+                playerService.seekForward(by: 10)
+            }
+            Spacer(minLength: 0)
+            sleepTimerMenu
         }
+        .frame(maxWidth: .infinity)
         .frame(height: Layout.transportHeight)
     }
 
@@ -1011,7 +1000,7 @@ struct OnTheGoPanel: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : controlPrimaryColor, alignment: .leading)
+            transportValue(playbackSpeedText, color: state.rate != .x1 ? nowPlayingAccent : controlPrimaryColor)
         }
         .transportMenuStyle()
         .disabled(state.isControlsLocked)
@@ -1045,7 +1034,7 @@ struct OnTheGoPanel: View {
             if sleepTimer.mode == .off {
                 sleepOffSymbol
             } else {
-                transportValue(sleepTimerText, color: nowPlayingAccent, alignment: .trailing)
+                transportValue(sleepTimerText, color: nowPlayingAccent)
             }
         }
         .transportMenuStyle()
@@ -1086,17 +1075,17 @@ struct OnTheGoPanel: View {
         Image(systemName: "moon.zzz")
             .font(.system(size: 22, weight: .regular))
             .foregroundStyle(controlPrimaryColor)
-            .frame(width: Layout.transportMenuWidth, height: 44, alignment: .trailing)
-            .contentShape(Rectangle())
+            .fixedSize()
+            .contentShape(OnTheGoTransportHitArea())
     }
 
-    private func transportValue(_ value: String, color: Color, alignment: Alignment) -> some View {
+    private func transportValue(_ value: String, color: Color) -> some View {
         Text(verbatim: value)
             .font(.system(size: 15, weight: .semibold).monospacedDigit())
             .foregroundStyle(color)
             .lineLimit(1)
-            .frame(width: Layout.transportMenuWidth, height: 44, alignment: alignment)
-            .contentShape(Rectangle())
+            .fixedSize()
+            .contentShape(OnTheGoTransportHitArea())
     }
 
     private func transportSymbol(_ name: String) -> some View {
@@ -1104,8 +1093,8 @@ struct OnTheGoPanel: View {
             .symbolVariant(.none)
             .font(.system(size: 32, weight: .regular))
             .foregroundStyle(controlPrimaryColor)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+            .fixedSize()
+            .contentShape(OnTheGoTransportHitArea())
     }
 
     private func sleepTimerOption(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -1251,6 +1240,16 @@ private struct OnTheGoTopBarStyleModifier: ViewModifier {
 }
 
 // MARK: - Transport Styling
+
+/// Expands small labels to a 44pt tap target without adding layout space.
+private struct OnTheGoTransportHitArea: Shape, Sendable {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(
+            dx: -max(0, (44 - rect.width) / 2),
+            dy: -max(0, (44 - rect.height) / 2)
+        ))
+    }
+}
 
 private extension View {
     func transportMenuStyle() -> some View {
