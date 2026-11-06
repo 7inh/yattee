@@ -17,6 +17,7 @@ struct LyricsView: View {
     let isSeekDisabled: Bool
     let isActive: Bool
     let isPaging: Bool
+    let allowsManualScrolling: Bool
     let onSeek: (TimeInterval) -> Void
 
     @State private var currentIndex: Int?
@@ -95,7 +96,10 @@ struct LyricsView: View {
                     .padding(.bottom, geometry.size.height * 2 / 3)
                 }
                 .scrollIndicators(.hidden)
-                .scrollDisabled(isPaging)
+                // With an inline queue, vertical drags belong to the panel so
+                // they can reveal the queue even when they start on a lyric.
+                // Programmatic playback following and line taps still work.
+                .scrollDisabled(isPaging || !allowsManualScrolling)
                 .onChange(of: geometry.size) { _, _ in
                     lastScrolledIndex = nil
                 }

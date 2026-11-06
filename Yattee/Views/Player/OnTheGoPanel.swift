@@ -20,6 +20,7 @@ struct OnTheGoPanel: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     let playerService: PlayerService
     let onClose: () -> Void
@@ -35,6 +36,7 @@ struct OnTheGoPanel: View {
     @State private var showingDeleteDownloadConfirmation = false
     @State private var downloadToDelete: Download?
     @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var isPanelAtTop = true
     @State private var hasScrolledPastTransport = false
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
@@ -111,6 +113,7 @@ struct OnTheGoPanel: View {
             .background(panelBackground.ignoresSafeArea())
             .foregroundStyle(controlPrimaryColor)
             .tint(nowPlayingAccent)
+            .interactiveDismissDisabled(!isPanelAtTop || isPaging)
             .sensoryFeedback(.impact(weight: .light), trigger: transportFeedbackTrigger) { _, _ in
                 isHapticFeedbackEnabled
             }
@@ -147,7 +150,19 @@ struct OnTheGoPanel: View {
                 lyricsArtworkColor = .fallback
             }
             .onChange(of: hasLyrics) { _, available in
-                if !available { selectPage(.artwork, animated: false) }
+                if !available {
+                    isPaging = false
+                    selectPage(.artwork, animated: false)
+                }
+            }
+            .onChange(of: state.isControlsLocked) { _, locked in
+                if locked { cancelPaging() }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { cancelPaging() }
+            }
+            .onChange(of: isStickyPlayerVisible) { _, visible in
+                LoggingService.shared.debug("Player queue sticky header: \(visible)", category: .player)
             }
             .onDisappear {
                 isPaging = false
@@ -206,17 +221,23 @@ struct OnTheGoPanel: View {
         return min(1, max(0, start - translation / max(1, width)))
     }
 
+    private func cancelPaging() {
+        isPaging = false
+        selectPage(selectedPage)
+    }
+
     // Only the content area accepts paging; the shared header, controls and queue keep their gestures.
     private func lyricsPageGesture(width: CGFloat) -> LyricsPageDragGesture {
         LyricsPageDragGesture(
+            isEnabled: hasLyrics && !state.isControlsLocked && scenePhase == .active,
             onChanged: { translation in
+                guard hasLyrics, !state.isControlsLocked else { return }
                 if !isPaging {
                     isPaging = true
                     LoggingService.shared.debug(
                         "Player paging began: \(selectedPage), translation: \(translation)", category: .player
                     )
                 }
-                guard hasLyrics, !state.isControlsLocked else { return }
                 // Never ease or spring while tracking the finger.
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
@@ -234,8 +255,7 @@ struct OnTheGoPanel: View {
                 selectPage(projectedProgress > 0.5 ? .lyrics : .artwork)
             },
             onCancelled: {
-                isPaging = false
-                selectPage(selectedPage)
+                cancelPaging()
                 LoggingService.shared.debug("Player paging cancelled: \(selectedPage)", category: .player)
             }
         )
@@ -281,10 +301,11 @@ struct OnTheGoPanel: View {
 
     private var panelContent: some View {
         GeometryReader { geometry in
+            let viewportHeight = max(0, geometry.size.height - Layout.headerHeight)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     playerContent
-                        .frame(minHeight: max(0, geometry.size.height - Layout.headerHeight), alignment: .center)
+                        .frame(minHeight: viewportHeight, alignment: .center)
 
                     if !state.queue.isEmpty {
                         inlineQueue
@@ -293,12 +314,20 @@ struct OnTheGoPanel: View {
                             .padding(.horizontal, Layout.horizontalPadding)
                             .padding(.top, Layout.mediumSpacing)
                             .padding(.bottom, Layout.mediumSpacing)
+                            // A short queue still needs enough scroll range to
+                            // move all player controls behind the sticky header.
+                            .frame(minHeight: viewportHeight, alignment: .top)
                     }
                 }
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .scrollPosition($scrollPosition)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top <= 1
+            } action: { _, atTop in
+                isPanelAtTop = atTop
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 playerHeader
             }
@@ -373,6 +402,7 @@ struct OnTheGoPanel: View {
                                 isSeekDisabled: isSeekDisabled,
                                 isActive: progress > 0 || showingLyrics,
                                 isPaging: isPaging,
+                                allowsManualScrolling: state.queue.isEmpty,
                                 onSeek: seek
                             )
                             .environment(\.colorScheme, .dark)
@@ -1121,6 +1151,7 @@ struct OnTheGoPanel: View {
 
 @MainActor
 private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
+    let isEnabled: Bool
     let onChanged: (CGFloat) -> Void
     let onEnded: (CGFloat) -> Void
     let onCancelled: () -> Void
@@ -1132,11 +1163,18 @@ private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let recognizer = UIPanGestureRecognizer()
         recognizer.maximumNumberOfTouches = 1
+        recognizer.isEnabled = isEnabled
         recognizer.delegate = context.coordinator
         return recognizer
     }
 
-    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {}
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        // Disabling an active pan cancels it, including when lyrics disappear
+        // or the app leaves the foreground during a drag.
+        if recognizer.isEnabled != isEnabled {
+            recognizer.isEnabled = isEnabled
+        }
+    }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
         let translation = recognizer.translation(in: recognizer.view).x
@@ -1147,7 +1185,7 @@ private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
             // Project a short flick ahead, just as DragGesture's predicted end
             // translation did, while keeping tracking tied to the actual finger.
             onEnded(translation + recognizer.velocity(in: recognizer.view).x * 0.2)
-        case .cancelled:
+        case .cancelled, .failed:
             onCancelled()
         default:
             break
@@ -1161,20 +1199,18 @@ private struct LyricsPageDragGesture: UIGestureRecognizerRepresentable {
             let translation = pan.translation(in: pan.view)
             // Decide once, before recognition. Filtering inside onChanged is
             // too late to stop a ScrollView or native zoom back-swipe winning.
-            // Reserve diagonal starts for paging too; only predominantly
-            // vertical drags may reach scrolling or downward dismissal.
-            return abs(translation.x) * 1.5 > abs(translation.y)
+            // Require a predominantly horizontal start. UIKit keeps this
+            // decision for the touch and resets it on end, failure or cancel.
+            return abs(translation.x) > abs(translation.y) * 1.5
         }
 
         func gestureRecognizer(
             _ gestureRecognizer: UIGestureRecognizer,
             shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
-            // Both scroll pans and the presentation's dismiss/edge recognizers
-            // must wait for our direction decision. A horizontal start belongs
-            // to the pager for the entire touch, including at either endpoint;
-            // vertical starts fail immediately and keep normal scroll/dismiss.
-            true
+            // Only competing pans need our direction decision. Taps and other
+            // recognizers must not acquire a blanket failure dependency.
+            otherGestureRecognizer is UIPanGestureRecognizer
         }
     }
 }
