@@ -2,7 +2,7 @@
 //  YouTubeHomeFeed.swift
 //  Yattee
 //
-//  Compact iOS Home feed with local shelves, subscriptions, and trending videos.
+//  Compact iOS Home feed with local shelves, listening suggestions, and subscriptions.
 //
 
 import Foundation
@@ -14,10 +14,10 @@ struct YouTubeHomeFeed: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var feedCache = SubscriptionFeedCache.shared
+    @State private var suggestionsCache = HomeSuggestionsCache.shared
     @State private var continueWatching: [Video] = []
     @State private var recentPlaylists: [PlaylistListItem] = []
-    @State private var trendingVideos: [Video] = []
-    @State private var trendingError: String?
+    @State private var recentHistoryIDs: [String] = []
     @State private var isLoading = true
     @State private var reloadToken = 0
     @State private var loadGeneration = 0
@@ -29,12 +29,30 @@ struct YouTubeHomeFeed: View {
         settingsManager?.homeSectionItemsLimit ?? SettingsManager.defaultHomeSectionItemsLimit
     }
 
-    private var trendingInstance: Instance? {
+    private var suggestionsInstance: Instance? {
         guard let instances = appEnvironment?.instancesManager else { return nil }
-        if let active = instances.activeInstance, active.type == .invidious {
+        if let active = instances.activeInstance, active.isEnabled, active.type == .invidious {
             return active
         }
         return instances.enabledInstances.first { $0.type == .invidious }
+    }
+
+    private var currentVideoID: String? {
+        appEnvironment?.playerService.state.currentVideo?.id.videoID
+    }
+
+    private var suggestionSeedIDs: [String] {
+        HomeSuggestionsCache.seedIDs(historyIDs: recentHistoryIDs, currentVideoID: currentVideoID)
+    }
+
+    private var suggestionsRequest: HomeSuggestionsCache.Request? {
+        guard let instance = suggestionsInstance else { return nil }
+        return HomeSuggestionsCache.Request(seedIDs: suggestionSeedIDs, instance: instance)
+    }
+
+    private var suggestedVideos: [Video] {
+        let excludedIDs = Set(recentHistoryIDs + [currentVideoID].compactMap { $0 })
+        return suggestionsCache.videos(for: suggestionsRequest, excluding: excludedIDs)
     }
 
     private var subscriptionVideos: [Video] {
@@ -42,14 +60,14 @@ struct YouTubeHomeFeed: View {
         return feedCache.videos
     }
 
-    /// Preserve subscription order, then append trending without repeating a video.
+    /// Suggestions lead; subscription videos keep their order after deduplication.
     private var videos: [Video] {
-        var seen = Set<VideoID>()
-        return (subscriptionVideos + trendingVideos).filter { seen.insert($0.id).inserted }
+        var seen = Set<String>()
+        return (suggestedVideos + subscriptionVideos).filter { seen.insert($0.id.videoID).inserted }
     }
 
     private var errorMessage: String? {
-        if let trendingError { return trendingError }
+        if let error = suggestionsCache.error(for: suggestionsRequest) { return error }
         guard appEnvironment?.subscriptionService.cachedSubscriptionCount != 0,
               case let .error(error) = feedCache.feedLoadState else { return nil }
         switch error {
@@ -73,6 +91,11 @@ struct YouTubeHomeFeed: View {
                 if !recentPlaylists.isEmpty {
                     playlistsShelf
                 }
+                if !videos.isEmpty {
+                    Text(String(localized: "home.section.suggestedForYou"))
+                        .font(.headline)
+                        .padding(.horizontal)
+                }
                 videoCards
                 loadingOrEmptyState
             }
@@ -81,7 +104,9 @@ struct YouTubeHomeFeed: View {
         .refreshable { await loadFeed(forceRefresh: true) }
         .task(id: reloadToken) { await loadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
+            let previousSeeds = suggestionSeedIDs
             loadLocalShelves()
+            if previousSeeds != suggestionSeedIDs { reloadToken += 1 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .playlistsDidChange)) { _ in
             loadLocalShelves()
@@ -99,8 +124,10 @@ struct YouTubeHomeFeed: View {
         .onChange(of: appEnvironment?.dataContextValidator.effectiveContext) { _, _ in
             reloadToken += 1
         }
-        .onChange(of: trendingInstance) { _, _ in
-            trendingVideos = []
+        .onChange(of: suggestionsInstance) { _, _ in
+            reloadToken += 1
+        }
+        .onChange(of: currentVideoID) { _, _ in
             reloadToken += 1
         }
         .onChange(of: settingsManager?.saveRecentPlaylists) { _, _ in
@@ -147,9 +174,9 @@ struct YouTubeHomeFeed: View {
 
     private var videoCards: some View {
         let videoList = videos
-        let subscriptionIDs = Set(subscriptionVideos.map(\.id))
+        let suggestionIDs = Set(suggestedVideos.map { $0.id.videoID })
         return ForEach(Array(videoList.enumerated()), id: \.element.id) { index, video in
-            let isSubscription = subscriptionIDs.contains(video.id)
+            let isSubscription = !suggestionIDs.contains(video.id.videoID)
             VideoCardView(video: video)
                 .frame(maxWidth: .infinity)
                 .tappableVideo(
@@ -157,7 +184,7 @@ struct YouTubeHomeFeed: View {
                     queueSource: isSubscription ? .subscriptions(continuation: nil) : .manual,
                     sourceLabel: isSubscription
                         ? String(localized: "queue.source.subscriptions")
-                        : String(localized: "home.instanceContent.trending"),
+                        : String(localized: "home.section.suggestedForYou"),
                     videoList: videoList,
                     videoIndex: index
                 )
@@ -171,6 +198,12 @@ struct YouTubeHomeFeed: View {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
+        } else if videos.isEmpty && suggestionSeedIDs.isEmpty && errorMessage == nil {
+            ContentUnavailableView {
+                Label(String(localized: "home.suggestions.empty.title"), systemImage: "headphones")
+            } description: {
+                Text(String(localized: "home.suggestions.empty.description"))
+            }
         } else if videos.isEmpty || errorMessage != nil {
             ContentUnavailableView {
                 Label(
@@ -229,6 +262,7 @@ struct YouTubeHomeFeed: View {
 
     private func loadLocalShelves() {
         let history = dataManager?.watchHistory(limit: 100) ?? []
+        recentHistoryIDs = history.map(\.videoID)
         continueWatching = Array(history.filter {
             !$0.isFinished && !$0.isLive && $0.watchedSeconds > 10
         }.prefix(shelfLimit)).map { $0.toVideo() }
@@ -254,23 +288,18 @@ struct YouTubeHomeFeed: View {
         loadGeneration += 1
         let generation = loadGeneration
         isLoading = true
-        trendingError = nil
         loadLocalShelves()
         defer {
             if generation == loadGeneration { isLoading = false }
         }
 
-        // Trending can arrive even while the subscription backend is still loading.
+        // Suggestions can arrive while the subscription backend is still loading.
         async let subscriptionRefresh: Void = Self.refreshSubscriptions(using: appEnvironment, forceRefresh: forceRefresh)
-        if let instance = trendingInstance {
-            do {
-                let fetched = try await appEnvironment.contentService.trending(for: instance)
-                guard !Task.isCancelled, generation == loadGeneration else { return }
-                trendingVideos = fetched
-            } catch {
-                guard !Task.isCancelled, generation == loadGeneration else { return }
-                trendingError = error.localizedDescription
-                LoggingService.shared.warning("Home trending failed: \(error.localizedDescription)", category: .general)
+        if let request = suggestionsRequest {
+            let contentService = appEnvironment.contentService
+            await suggestionsCache.load(request: request, forceRefresh: forceRefresh) { seedID in
+                let video = try await contentService.video(id: seedID, instance: request.instance)
+                return video.relatedVideos ?? []
             }
         }
         await subscriptionRefresh

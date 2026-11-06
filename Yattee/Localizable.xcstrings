@@ -4837,6 +4837,17 @@
         }
       }
     },
+    "home.section.suggestedForYou" : {
+      "comment" : "Home feed header and queue source for suggestions based on recent listening",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggested for you"
+          }
+        }
+      }
+    },
     "home.sections.layout.grid" : {
       "comment" : "Grid layout option for library sections",
       "localizations" : {
@@ -5416,6 +5427,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Subscriptions"
+          }
+        }
+      }
+    },
+    "home.suggestions.empty.description" : {
+      "comment" : "Home feed prompt when there is no listening history or subscription content",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search for something to listen to and play it. You'll find similar audio here."
+          }
+        }
+      }
+    },
+    "home.suggestions.empty.title" : {
+      "comment" : "Home feed empty state before the user starts listening",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find your next listen"
           }
         }
       }
