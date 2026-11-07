@@ -5,14 +5,28 @@
 //  View count and published date metadata line.
 //
 
+import Foundation
 import SwiftUI
 
 /// Displays video metadata: view count and/or published date with separator.
 struct VideoMetadataLine: View {
     let viewCount: String?
     let publishedText: String?
+    var authorName: String? = nil
 
     var body: some View {
+        if let authorName {
+            // A single text view can wrap naturally on narrow iPhone cards.
+            Text([authorName, viewCount.map { String(localized: "video.views \($0)") }, publishedText]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: " · "))
+        } else {
+            stats
+        }
+    }
+
+    private var stats: some View {
         HStack(spacing: 4) {
             if let views = viewCount {
                 Text("video.views \(views)")

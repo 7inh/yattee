@@ -201,17 +201,16 @@ struct Video: Identifiable, Codable, Sendable {
 
     /// Formatted published date, preferring parsed Date over API-provided text.
     ///
-    /// A date that would render as "in 0 seconds" is shown as nothing at all:
-    /// it is what an instance sends in place of an upload date it does not
-    /// have, and the metadata line is better one segment short than wrong.
+    /// Ignore dates that would render as "in 0 seconds", and fall back to
+    /// nonempty API text. Hide the segment when neither is available.
     var formattedPublishedDate: String? {
-        if let publishedAt {
-            guard !RelativeDateFormatter.isEffectivelyNow(publishedAt) else { return nil }
+        if let publishedAt, !RelativeDateFormatter.isEffectivelyNow(publishedAt) {
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .full
             return formatter.localizedString(for: publishedAt, relativeTo: Date())
         }
-        return publishedText
+        guard let text = publishedText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
     }
 
     /// URL for sharing this video.

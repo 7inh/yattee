@@ -19,6 +19,7 @@ actor ContentService: ContentServiceProtocol {
 
     // Cached API instances for default SSL mode
     private let defaultInvidiousAPI: InvidiousAPI
+    private let channelAvatarCache = ChannelAvatarCache()
 
     private struct LyricsCacheKey: Hashable, Sendable {
         let videoID: String
@@ -149,6 +150,18 @@ actor ContentService: ContentServiceProtocol {
 
     func channel(id: String, instance: Instance) async throws -> Channel {
         try await api(for: instance).channel(id: id, instance: instance)
+    }
+
+    /// Avatar-only consumers share a bounded cache and in-flight channel requests.
+    func channelAvatarURL(id: String, instance: Instance) async throws -> URL? {
+        try await channelAvatarCache.thumbnailURL(channelID: id, instanceURL: instance.url) {
+            do {
+                return try await self.channel(id: id, instance: instance).thumbnailURL
+            } catch {
+                LoggingService.shared.warning("Channel avatar lookup failed: \(error.localizedDescription)", category: .general)
+                throw error
+            }
+        }
     }
 
     func channelVideos(id: String, instance: Instance, continuation: String? = nil) async throws -> ChannelVideosPage {

@@ -7,6 +7,9 @@
 
 import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// A video row for list layouts.
 ///
@@ -44,6 +47,14 @@ struct VideoRowView: View {
     }
     private var metadataFont: Font {
         style == .compact ? .caption2 : .caption2
+    }
+
+    private var usesPhoneLayout: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
     }
 
     private var thumbnailTapAction: VideoTapAction {
@@ -122,7 +133,7 @@ struct VideoRowView: View {
                 Text(playlistMetadataText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(usesPhoneLayout ? 2 : 1)
             } else {
                 standardMetadata
             }
@@ -139,7 +150,9 @@ struct VideoRowView: View {
     }
 
     private var playlistMetadataText: String {
-        let metadata = customMetadata.map { [$0] } ?? [video.formattedViewCount, video.formattedPublishedDate].compactMap { $0 }
+        let metadata = customMetadata.map { custom in
+            [custom, usesPhoneLayout ? video.formattedPublishedDate : nil].compactMap { $0 }
+        } ?? [video.formattedViewCount, video.formattedPublishedDate].compactMap { $0 }
         return ([video.author.name] + metadata).filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -169,9 +182,9 @@ struct VideoRowView: View {
             }
         }
 
-        if style != .compact {
+        if style != .compact || usesPhoneLayout {
             if let custom = customMetadata {
-                Text(custom)
+                Text([custom, usesPhoneLayout ? video.formattedPublishedDate : nil].compactMap { $0 }.joined(separator: " · "))
                     .font(metadataFont)
                     .foregroundStyle(.tertiary)
             } else if video.viewCount != nil || video.formattedPublishedDate != nil {

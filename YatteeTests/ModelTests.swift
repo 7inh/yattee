@@ -181,11 +181,30 @@ struct VideoTests {
         #expect(video.bestThumbnail?.quality == .maxres)
     }
 
+    @Test("Publication dates use relative text before API text")
+    func relativePublishedDate() {
+        let date = Date().addingTimeInterval(-3 * 86400)
+        let video = makeVideo(publishedAt: date, publishedText: "API fallback")
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        #expect(video.formattedPublishedDate == formatter.localizedString(for: date, relativeTo: Date()))
+    }
+
+    @Test("Missing or unusable dates fall back to nonempty API text")
+    func publishedTextFallback() {
+        #expect(makeVideo(publishedText: "3 days ago").formattedPublishedDate == "3 days ago")
+        #expect(makeVideo(publishedAt: Date(), publishedText: "Streamed yesterday").formattedPublishedDate == "Streamed yesterday")
+        #expect(makeVideo().formattedPublishedDate == nil)
+        #expect(makeVideo(publishedText: " \n ").formattedPublishedDate == nil)
+    }
+
     private func makeVideo(
         duration: TimeInterval = 100,
         isLive: Bool = false,
         viewCount: Int? = nil,
-        thumbnails: [Thumbnail] = []
+        thumbnails: [Thumbnail] = [],
+        publishedAt: Date? = nil,
+        publishedText: String? = nil
     ) -> Video {
         Video(
             id: .global("test"),
@@ -193,8 +212,8 @@ struct VideoTests {
             description: nil,
             author: Author(id: "channel", name: "Test Channel"),
             duration: duration,
-            publishedAt: nil,
-            publishedText: nil,
+            publishedAt: publishedAt,
+            publishedText: publishedText,
             viewCount: viewCount,
             likeCount: nil,
             thumbnails: thumbnails,

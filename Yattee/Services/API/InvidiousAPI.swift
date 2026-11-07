@@ -1131,20 +1131,24 @@ private struct InvidiousAuthPlaylistVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
+    let authorThumbnails: [InvidiousThumbnail]?
+    let published: Int64?
+    let publishedText: String?
     let videoThumbnails: [InvidiousThumbnail]?
     let index: Int?
     let indexId: String?
     let lengthSeconds: Int
 
     nonisolated func toVideo(baseURL: URL) -> Video {
-        Video(
+        let publishedReading = InvidiousSentinel.published(published, text: publishedText, isUpcoming: false)
+        return Video(
             id: .global(videoId),
             title: title,
             description: nil,
-            author: Author(id: authorId, name: author),
+            author: Author(id: authorId, name: author, thumbnailURL: authorThumbnails?.authorThumbnailURL(baseURL: baseURL)),
             duration: TimeInterval(lengthSeconds),
-            publishedAt: nil,
-            publishedText: nil,
+            publishedAt: publishedReading.date,
+            publishedText: publishedReading.text,
             viewCount: nil,
             likeCount: nil,
             thumbnails: videoThumbnails?.map { $0.toThumbnail(baseURL: baseURL) } ?? [],
@@ -1198,6 +1202,7 @@ private struct InvidiousVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
+    let authorThumbnails: [InvidiousThumbnail]?
     let lengthSeconds: Int
     let published: Int64?
     let publishedText: String?
@@ -1231,7 +1236,7 @@ private struct InvidiousVideo: Decodable, Sendable {
             id: .global(videoId),
             title: title,
             description: description,
-            author: Author(id: authorId, name: author),
+            author: Author(id: authorId, name: author, thumbnailURL: authorThumbnails?.authorThumbnailURL(baseURL: baseURL)),
             duration: TimeInterval(lengthSeconds),
             publishedAt: publishedReading.date,
             publishedText: publishedReading.text,
@@ -1444,6 +1449,9 @@ private struct InvidiousRecommendedVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
+    let authorThumbnails: [InvidiousThumbnail]?
+    let published: Int64?
+    let publishedText: String?
     let videoThumbnails: [InvidiousThumbnail]?
     let lengthSeconds: Int
     let viewCountText: String?
@@ -1452,6 +1460,7 @@ private struct InvidiousRecommendedVideo: Decodable, Sendable {
     nonisolated func toVideo(baseURL: URL) -> Video {
         // Parse view count from text if numeric viewCount not available
         let views: Int? = viewCount ?? parseViewCount(from: viewCountText)
+        let publishedReading = InvidiousSentinel.published(published, text: publishedText, isUpcoming: false)
 
         return Video(
             id: .global(videoId),
@@ -1459,10 +1468,14 @@ private struct InvidiousRecommendedVideo: Decodable, Sendable {
             description: nil,
             // An empty authorId (unlinked recommendation author) can't open a
             // channel, so it hides Go to Channel instead of failing to load.
-            author: Author(id: authorId, name: author, hasRealChannelInfo: !authorId.isEmpty),
+            author: Author(
+                id: authorId, name: author,
+                thumbnailURL: authorThumbnails?.authorThumbnailURL(baseURL: baseURL),
+                hasRealChannelInfo: !authorId.isEmpty
+            ),
             duration: TimeInterval(lengthSeconds),
-            publishedAt: nil,
-            publishedText: nil,
+            publishedAt: publishedReading.date,
+            publishedText: publishedReading.text,
             viewCount: views,
             likeCount: nil,
             thumbnails: videoThumbnails?.map { $0.toThumbnail(baseURL: baseURL) } ?? [],

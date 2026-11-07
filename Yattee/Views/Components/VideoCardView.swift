@@ -5,7 +5,11 @@
 //  Reusable video card component with thumbnail, progress, and metadata.
 //
 
+import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// A video card for grid/horizontal scroll layouts.
 ///
@@ -29,6 +33,14 @@ struct VideoCardView: View {
     private var titleFont: Font { .subheadline }
     private var authorFont: Font { isCompact ? .caption2 : .caption }
     private var metadataFont: Font { isCompact ? .caption2 : .caption }
+
+    private var usesPhoneLayout: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
 
     private var thumbnailTapAction: VideoTapAction {
         .playVideo
@@ -69,6 +81,55 @@ struct VideoCardView: View {
 
     @ViewBuilder
     private var metadataView: some View {
+        Group {
+            if usesPhoneLayout {
+                phoneMetadata
+            } else {
+                standardMetadata
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .if(textAreaTapAction != .playVideo) { view in
+            view.highPriorityGesture(
+                TapGesture().onEnded {
+                    handleTapAction(textAreaTapAction)
+                }
+            )
+        }
+    }
+
+    private var phoneMetadata: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VideoChannelAvatarView(video: video, size: isCompact ? 28 : 36)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
+                    .font(titleFont)
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                VideoMetadataLine(
+                    viewCount: customMetadata == nil ? video.formattedViewCount : nil,
+                    publishedText: video.formattedPublishedDate,
+                    authorName: video.author.name
+                )
+                .font(metadataFont)
+                .foregroundStyle(.secondary)
+                .lineLimit(isCompact ? 3 : 2)
+
+                if let customMetadata {
+                    Text(customMetadata)
+                        .font(metadataFont)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var standardMetadata: some View {
         VStack(alignment: .leading, spacing: isCompact ? 2 : 4) {
             Text(video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
                 .font(titleFont)
@@ -97,15 +158,6 @@ struct VideoCardView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .if(textAreaTapAction != .playVideo) { view in
-            view.highPriorityGesture(
-                TapGesture().onEnded {
-                    handleTapAction(textAreaTapAction)
-                }
-            )
         }
     }
 
