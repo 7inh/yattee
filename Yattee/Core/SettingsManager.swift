@@ -283,8 +283,21 @@ final class SettingsManager {
     // MARK: - Storage Helpers
     // Internal access for extension use.
 
+    var usesPhoneTabBar: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
+
     func platformKey(_ key: SettingsKey) -> String {
         let baseKey = key.rawValue
+        // iPhone tabs have their own defaults; syncing them must preserve iPad tabs.
+        if usesPhoneTabBar,
+           [SettingsKey.tabBarItemOrder, .tabBarItemVisibility, .tabBarStartupTab].contains(key) {
+            return "iOS.iPhone.\(baseKey)"
+        }
         return key.isPlatformSpecific ? "iOS.\(baseKey)" : baseKey
     }
 

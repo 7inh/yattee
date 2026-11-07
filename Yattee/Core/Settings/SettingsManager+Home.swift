@@ -498,20 +498,36 @@ extension SettingsManager {
 
     // MARK: - Tab Bar Settings (Compact Size Class)
 
+    private var defaultTabBarItemOrder: [TabBarItem] {
+        guard usesPhoneTabBar else { return TabBarItem.defaultOrder }
+        var order = TabBarItem.defaultOrder.filter { $0 != .bookmarks }
+        order.insert(.bookmarks, at: order.firstIndex(of: .downloads) ?? order.endIndex)
+        return order
+    }
+
+    private var defaultTabBarItemVisibility: [TabBarItem: Bool] {
+        var visibility = TabBarItem.defaultVisibility
+        if usesPhoneTabBar {
+            visibility[.bookmarks] = true
+            visibility[.downloads] = false
+        }
+        return visibility
+    }
+
     /// Ordered list of tab bar items. Default order is subscriptions first, then others.
     var tabBarItemOrder: [TabBarItem] {
         get {
             if let cached = _tabBarItemOrder { return cached }
             guard let data = data(for: .tabBarItemOrder),
                   let savedOrder = try? JSONDecoder().decode([TabBarItem].self, from: data) else {
-                return TabBarItem.defaultOrder
+                return defaultTabBarItemOrder
             }
 
             // Merge saved order with default order to include any new items
             var mergedOrder = savedOrder
-            for item in TabBarItem.defaultOrder {
+            for item in defaultTabBarItemOrder {
                 if !mergedOrder.contains(item) {
-                    if let defaultIndex = TabBarItem.defaultOrder.firstIndex(of: item) {
+                    if let defaultIndex = defaultTabBarItemOrder.firstIndex(of: item) {
                         let insertIndex = min(defaultIndex, mergedOrder.count)
                         mergedOrder.insert(item, at: insertIndex)
                     } else {
@@ -529,18 +545,18 @@ extension SettingsManager {
         }
     }
 
-    /// Visibility map for tab bar items. History, Downloads, and Settings are visible by default.
+    /// History and Settings are visible by default, with Bookmarks on iPhone and Downloads elsewhere.
     var tabBarItemVisibility: [TabBarItem: Bool] {
         get {
             if let cached = _tabBarItemVisibility { return cached }
             guard let data = data(for: .tabBarItemVisibility),
                   let savedVisibility = try? JSONDecoder().decode([TabBarItem: Bool].self, from: data) else {
-                return TabBarItem.defaultVisibility
+                return defaultTabBarItemVisibility
             }
 
             // Merge saved visibility with defaults for any new items
             var mergedVisibility = savedVisibility
-            for (item, defaultValue) in TabBarItem.defaultVisibility {
+            for (item, defaultValue) in defaultTabBarItemVisibility {
                 if mergedVisibility[item] == nil {
                     mergedVisibility[item] = defaultValue
                 }

@@ -24,6 +24,8 @@ struct VideoCardView: View {
     var watchProgress: Double? = nil
     /// Use compact styling for dense grids (3+ columns).
     var isCompact: Bool = false
+    /// Edge-to-edge thumbnails with inset metadata for the iPhone Home feed.
+    var isFullWidth: Bool = false
     /// Custom metadata text to show instead of views/date (e.g., progress percentage).
     var customMetadata: String? = nil
     /// Custom duration text to show on thumbnail (e.g., remaining time). If nil, uses video.formattedDuration.
@@ -46,6 +48,10 @@ struct VideoCardView: View {
         .playVideo
     }
 
+    private var usesFullWidthLayout: Bool {
+        isFullWidth && usesPhoneLayout
+    }
+
     private var textAreaTapAction: VideoTapAction {
         .playVideo
     }
@@ -57,6 +63,7 @@ struct VideoCardView: View {
 
             // Metadata
             metadataView
+                .padding(.horizontal, usesFullWidthLayout ? 16 : 0)
         }
         .contentShape(Rectangle())
         .zoomTransitionSource(id: video.id)
@@ -66,6 +73,7 @@ struct VideoCardView: View {
     private var thumbnailView: some View {
         DeArrowVideoThumbnail(
             video: video,
+            cornerRadius: usesFullWidthLayout ? 0 : 8,
             watchProgress: watchProgress,
             duration: customDuration ?? video.formattedDuration
         )

@@ -7,6 +7,9 @@
 
 import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 @MainActor
 struct YouTubeHomeFeed: View {
@@ -24,6 +27,14 @@ struct YouTubeHomeFeed: View {
 
     private var dataManager: DataManager? { appEnvironment?.dataManager }
     private var settingsManager: SettingsManager? { appEnvironment?.settingsManager }
+
+    private var usesPhoneLayout: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
 
     private var shelfLimit: Int {
         settingsManager?.homeSectionItemsLimit ?? SettingsManager.defaultHomeSectionItemsLimit
@@ -101,6 +112,19 @@ struct YouTubeHomeFeed: View {
             }
             .padding(.vertical, 16)
         }
+        .toolbar {
+            if usesPhoneLayout {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        NavigationLink(value: NavigationDestination.downloads) {
+                            Label(String(localized: "home.downloads.title"), systemImage: "arrow.down.circle")
+                        }
+                    } label: {
+                        Label(String(localized: "common.more"), systemImage: "ellipsis.circle")
+                    }
+                }
+            }
+        }
         .refreshable { await loadFeed(forceRefresh: true) }
         .task(id: reloadToken) { await loadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
@@ -177,7 +201,7 @@ struct YouTubeHomeFeed: View {
         let suggestionIDs = Set(suggestedVideos.map { $0.id.videoID })
         return ForEach(Array(videoList.enumerated()), id: \.element.id) { index, video in
             let isSubscription = !suggestionIDs.contains(video.id.videoID)
-            VideoCardView(video: video)
+            VideoCardView(video: video, isFullWidth: usesPhoneLayout)
                 .frame(maxWidth: .infinity)
                 .tappableVideo(
                     video,
@@ -188,7 +212,7 @@ struct YouTubeHomeFeed: View {
                     videoList: videoList,
                     videoIndex: index
                 )
-                .padding(.horizontal)
+                .padding(.horizontal, usesPhoneLayout ? 0 : 16)
         }
     }
 
