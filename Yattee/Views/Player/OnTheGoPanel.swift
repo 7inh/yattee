@@ -81,6 +81,10 @@ struct OnTheGoPanel: View {
         static let coverInfoSeekSpacing: CGFloat = 10
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
+
+        static func contentWidth(for panelWidth: CGFloat) -> CGFloat {
+            min(560, max(0, panelWidth - horizontalPadding * 2))
+        }
     }
 
     private enum MenuLayout {
@@ -458,7 +462,7 @@ struct OnTheGoPanel: View {
             let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: 0)
             ZStack(alignment: .top) {
                 playerContent(
-                    panelHeight: geometry.size.height, progress: progress, coverGeometry: coverGeometry
+                    panelSize: geometry.size, progress: progress, coverGeometry: coverGeometry
                 )
                 playerHeader(coverProgress: layout.coverHeaderProgress, queueProgress: layout.queueProgress)
             }
@@ -477,15 +481,18 @@ struct OnTheGoPanel: View {
     }
 
     private func playerContent(
-        panelHeight: CGFloat, progress: CGFloat, coverGeometry: PlayerPanelCoverGeometry
+        panelSize: CGSize, progress: CGFloat, coverGeometry: PlayerPanelCoverGeometry
     ) -> some View {
         let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: 0)
+        let normalArtworkHeight = Layout.contentWidth(for: panelSize.width)
+        let artworkHeight = normalArtworkHeight
+            + (coverGeometry.coverHeight - normalArtworkHeight) * layout.morphProgress
         return PlayerContentLayout(
             progress: progress,
-            panelHeight: panelHeight,
+            panelHeight: panelSize.height,
             coverGeometry: coverGeometry
         ) {
-            pagedContent
+            pagedContent(artworkHeight: artworkHeight)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
             videoInfo
@@ -556,7 +563,7 @@ struct OnTheGoPanel: View {
         }
 
         private func frames(width: CGFloat, subviews: Subviews) -> (size: CGSize, frames: [CGRect]) {
-            let contentWidth = min(560, max(0, width - Layout.horizontalPadding * 2))
+            let contentWidth = Layout.contentWidth(for: width)
             let contentX = (width - contentWidth) / 2
             let proposal = ProposedViewSize(width: contentWidth, height: nil)
             var normal: [CGRect] = []
@@ -582,6 +589,12 @@ struct OnTheGoPanel: View {
             let normalHeight = max(panelHeight - Layout.headerHeight, naturalHeight)
             let centeringInset = (normalHeight - naturalHeight) / 2
             normal = normal.map { $0.offsetBy(dx: 0, dy: centeringInset) }
+
+            // Keep all shared controls anchored to the square artwork layout.
+            // Only the pager expands, from the header's bottom to the title.
+            normal[Element.pages.rawValue] = CGRect(
+                x: contentX, y: 0, width: contentWidth, height: normal[Element.info.rawValue].minY
+            )
 
             let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: normalHeight)
             // B's artwork starts at the physical top. B-to-C translates the
@@ -634,19 +647,22 @@ struct OnTheGoPanel: View {
 
     // MARK: - Paged Content
 
-    private var pagedContent: some View {
-        // The layout proposes the artwork's square normally, then the full-bleed
-        // cover's bounds. Both pages stay mounted with the same shared controls.
+    private func pagedContent(artworkHeight: CGFloat) -> some View {
+        // Lyrics fill the space above the title. Artwork keeps its original
+        // bounds inside that viewport, including throughout the queue morph.
         Color.clear
             .overlay {
                 GeometryReader { geometry in
                     let progress = visibleLyricsProgress
                     ZStack {
                         artwork
+                            .frame(height: artworkHeight)
                             .environment(\.colorScheme, colorScheme)
                             .scaleEffect(reduceMotion ? 1 : 1 - 0.1 * progress)
                             .opacity(Double(1 - progress))
                             .offset(x: reduceMotion ? 0 : -geometry.size.width * progress)
+                            .padding(.bottom, Layout.mediumSpacing * (1 - queueMorphProgress))
+                            .frame(maxHeight: .infinity, alignment: .bottom)
 
                         if hasLyrics {
                             LyricsView(
