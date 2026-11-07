@@ -71,7 +71,7 @@ struct LyricsView: View {
             let contentHeight = max(0, geometry.size.height - topInset - bottomInset)
             let restingOffset = topInset + contentHeight / 3
             let scrollAnchor = UnitPoint(x: 0.5, y: restingOffset / viewportHeight)
-            // Fade through the overlaid dots, reaching clear before the seek control.
+            // Fade through the overlaid dots and timeline, reaching clear at transport.
             let bottomFadeStart = 1 - max(bottomInset, contentHeight * 0.12) / viewportHeight
             let topFadeEnd = min(bottomFadeStart, (topInset + contentHeight * 0.08) / viewportHeight)
             ScrollViewReader { proxy in
@@ -102,7 +102,7 @@ struct LyricsView: View {
                     }
                     .padding(.horizontal, 4)
                     // Preserve the resting position between the original bounds
-                    // while letting lines scroll behind the header and dots.
+                    // while letting lines scroll behind the header, dots and timeline.
                     .padding(.top, restingOffset)
                     .padding(.bottom, contentHeight * 2 / 3 + bottomInset)
                 }

@@ -57,6 +57,7 @@ struct OnTheGoPanel: View {
     @State private var playbackNoticesHeight: CGFloat = 0
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
+    @State private var lyricsBottomInset: CGFloat = 0
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
     @State private var isPaging = false
@@ -71,8 +72,6 @@ struct OnTheGoPanel: View {
         static let smallSpacing: CGFloat = 8
         static let mediumSpacing: CGFloat = 16
         static let pageIndicatorSize: CGFloat = 6
-        // The dots row and the gap before the seek control, reclaimed by lyrics.
-        static let lyricsBottomInset = pageIndicatorSize + smallSpacing * 3
         // Both headers occupy the same fixed space above the player or queue.
         static let headerHeight = CompactPlayerCard.height + smallSpacing * 2
         // Keeps the enlarged thumb inside the seek control at both endpoints.
@@ -500,7 +499,7 @@ struct OnTheGoPanel: View {
                 .accessibilityHidden(isStickyPlayerVisible)
             lyricsPage(
                 topInset: (Layout.headerHeight + coverGeometry.topSafeArea) * (1 - layout.morphProgress),
-                bottomInset: Layout.lyricsBottomInset * (1 - layout.morphProgress)
+                bottomInset: lyricsBottomInset
             )
                 .allowsHitTesting(showingLyrics && queueMorphProgress == 0)
                 .accessibilityHidden(!showingLyrics || queueMorphProgress > 0)
@@ -508,6 +507,16 @@ struct OnTheGoPanel: View {
                 .opacity(Double(1 - visibleLyricsProgress))
                 .allowsHitTesting(!isStickyPlayerVisible && visibleLyricsProgress < 0.5)
                 .accessibilityHidden(isStickyPlayerVisible || visibleLyricsProgress >= 0.5)
+            // Cover the entire dots/timeline region, including gaps and disabled
+            // controls. The controls above this barrier retain their own gestures.
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {}
+                .allowsHitTesting(showingLyrics && queueMorphProgress == 0)
+                .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    lyricsBottomInset = $0
+                }
             VStack(spacing: 0) {
                 lyricsPageIndicator
             }
@@ -550,9 +559,9 @@ struct OnTheGoPanel: View {
             set { progress = newValue }
         }
 
-        // The eight player children are followed by the queue viewport.
+        // The player children are followed by the queue viewport.
         private enum Element: Int, CaseIterable, Sendable {
-            case artwork, lyrics, info, indicators, seek, time, transport, notices
+            case artwork, lyrics, info, timelineBarrier, indicators, seek, time, transport, notices
         }
 
         func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -588,7 +597,7 @@ struct OnTheGoPanel: View {
                 let height: CGFloat
                 switch element {
                 case .artwork: height = contentWidth
-                case .lyrics: height = 0
+                case .lyrics, .timelineBarrier: height = 0
                 case .transport: height = Layout.transportHeight
                 default: height = subviews[element.rawValue].sizeThatFits(proposal).height
                 }
@@ -602,15 +611,23 @@ struct OnTheGoPanel: View {
             normal = normal.map { $0.offsetBy(dx: 0, dy: centeringInset) }
 
             // Keep all shared controls anchored to the square artwork layout.
-            // Lyrics extend behind the header, status bar and dots, stopping
-            // above the seek control without changing any shared control frame.
+            // Lyrics extend behind the header, dots and timeline, ending at the
+            // transport row without changing any shared control frame.
             normal[Element.artwork.rawValue] = CGRect(
                 x: contentX, y: 0, width: contentWidth, height: normal[Element.info.rawValue].minY
             )
             let lyricsTopInset = Layout.headerHeight + coverGeometry.topSafeArea
+            let lyricsBottom = normal[Element.transport.rawValue].minY
             normal[Element.lyrics.rawValue] = CGRect(
                 x: contentX, y: -lyricsTopInset, width: contentWidth,
-                height: normal[Element.seek.rawValue].minY + lyricsTopInset
+                height: lyricsBottom + lyricsTopInset
+            )
+            // Measure the reclaimed region so the resting line stays anchored
+            // above the dots even when the time labels' height changes.
+            let timelineTop = normal[Element.indicators.rawValue].minY
+            normal[Element.timelineBarrier.rawValue] = CGRect(
+                x: contentX, y: timelineTop, width: contentWidth,
+                height: lyricsBottom - timelineTop
             )
 
             let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: normalHeight)
@@ -620,6 +637,7 @@ struct OnTheGoPanel: View {
             var queue = normal
             queue[Element.artwork.rawValue] = CGRect(x: 0, y: 0, width: width, height: coverGeometry.coverHeight)
             queue[Element.lyrics.rawValue] = queue[Element.artwork.rawValue]
+            queue[Element.timelineBarrier.rawValue] = CGRect(x: contentX, y: coverBottom, width: contentWidth, height: 0)
             // Anchor the visible track inside the gradient, then stack the
             // title/channel above it without changing the scrub target's size.
             let coverSeekCenterY = coverBottom - Layout.coverSeekBottomInset - Layout.coverSeekTrackHeight / 2
