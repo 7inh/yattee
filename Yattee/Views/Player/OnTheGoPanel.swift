@@ -70,6 +70,9 @@ struct OnTheGoPanel: View {
         static let horizontalPadding: CGFloat = 16
         static let smallSpacing: CGFloat = 8
         static let mediumSpacing: CGFloat = 16
+        static let pageIndicatorSize: CGFloat = 6
+        // The dots row and the gap before the seek control, reclaimed by lyrics.
+        static let lyricsBottomInset = pageIndicatorSize + smallSpacing * 3
         // Both headers occupy the same fixed space above the player or queue.
         static let headerHeight = CompactPlayerCard.height + smallSpacing * 2
         // Keeps the enlarged thumb inside the seek control at both endpoints.
@@ -326,7 +329,7 @@ struct OnTheGoPanel: View {
                         .fill(controlPrimaryColor.opacity(page == 0
                             ? 0.85 - 0.6 * Double(lyricsPageProgress)
                             : 0.25 + 0.6 * Double(lyricsPageProgress)))
-                        .frame(width: 6, height: 6)
+                        .frame(width: Layout.pageIndicatorSize, height: Layout.pageIndicatorSize)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -495,7 +498,10 @@ struct OnTheGoPanel: View {
             artworkPage(artworkHeight: artworkHeight)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
-            lyricsPage(topInset: (Layout.headerHeight + coverGeometry.topSafeArea) * (1 - layout.morphProgress))
+            lyricsPage(
+                topInset: (Layout.headerHeight + coverGeometry.topSafeArea) * (1 - layout.morphProgress),
+                bottomInset: Layout.lyricsBottomInset * (1 - layout.morphProgress)
+            )
                 .allowsHitTesting(showingLyrics && queueMorphProgress == 0)
                 .accessibilityHidden(!showingLyrics || queueMorphProgress > 0)
             videoInfo
@@ -596,15 +602,15 @@ struct OnTheGoPanel: View {
             normal = normal.map { $0.offsetBy(dx: 0, dy: centeringInset) }
 
             // Keep all shared controls anchored to the square artwork layout.
-            // Lyrics extend behind the overlaid header and status bar, down
-            // to the dots, without changing any shared control frame.
+            // Lyrics extend behind the header, status bar and dots, stopping
+            // above the seek control without changing any shared control frame.
             normal[Element.artwork.rawValue] = CGRect(
                 x: contentX, y: 0, width: contentWidth, height: normal[Element.info.rawValue].minY
             )
             let lyricsTopInset = Layout.headerHeight + coverGeometry.topSafeArea
             normal[Element.lyrics.rawValue] = CGRect(
                 x: contentX, y: -lyricsTopInset, width: contentWidth,
-                height: normal[Element.indicators.rawValue].minY + lyricsTopInset
+                height: normal[Element.seek.rawValue].minY + lyricsTopInset
             )
 
             let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: normalHeight)
@@ -673,7 +679,7 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private func lyricsPage(topInset: CGFloat) -> some View {
+    private func lyricsPage(topInset: CGFloat, bottomInset: CGFloat) -> some View {
         pageViewport { size in
             if hasLyrics {
                 let progress = visibleLyricsProgress
@@ -685,6 +691,7 @@ struct OnTheGoPanel: View {
                     isPaging: isPaging,
                     allowsManualScrolling: state.currentVideo == nil,
                     topInset: topInset,
+                    bottomInset: bottomInset,
                     onSeek: seek
                 )
                 .environment(\.colorScheme, .dark)

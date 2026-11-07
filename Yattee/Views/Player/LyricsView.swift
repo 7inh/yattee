@@ -19,6 +19,7 @@ struct LyricsView: View {
     let isPaging: Bool
     let allowsManualScrolling: Bool
     let topInset: CGFloat
+    let bottomInset: CGFloat
     let onSeek: (TimeInterval) -> Void
 
     @State private var currentIndex: Int?
@@ -67,10 +68,11 @@ struct LyricsView: View {
     private var syncedLines: some View {
         GeometryReader { geometry in
             let viewportHeight = max(1, geometry.size.height)
-            let contentHeight = max(0, geometry.size.height - topInset)
+            let contentHeight = max(0, geometry.size.height - topInset - bottomInset)
             let restingOffset = topInset + contentHeight / 3
             let scrollAnchor = UnitPoint(x: 0.5, y: restingOffset / viewportHeight)
-            let bottomFadeStart = 1 - contentHeight * 0.12 / viewportHeight
+            // Fade through the overlaid dots, reaching clear before the seek control.
+            let bottomFadeStart = 1 - max(bottomInset, contentHeight * 0.12) / viewportHeight
             let topFadeEnd = min(bottomFadeStart, (topInset + contentHeight * 0.08) / viewportHeight)
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
@@ -99,10 +101,10 @@ struct LyricsView: View {
                         }
                     }
                     .padding(.horizontal, 4)
-                    // Preserve the resting line's position below the header
-                    // while letting earlier lines scroll all the way behind it.
+                    // Preserve the resting position between the original bounds
+                    // while letting lines scroll behind the header and dots.
                     .padding(.top, restingOffset)
-                    .padding(.bottom, contentHeight * 2 / 3)
+                    .padding(.bottom, contentHeight * 2 / 3 + bottomInset)
                 }
                 .scrollIndicators(.hidden)
                 // The viewport already includes the status bar; its space is
