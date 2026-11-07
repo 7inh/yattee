@@ -495,7 +495,7 @@ struct OnTheGoPanel: View {
             artworkPage(artworkHeight: artworkHeight)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
-            lyricsPage
+            lyricsPage(topInset: (Layout.headerHeight + coverGeometry.topSafeArea) * (1 - layout.morphProgress))
                 .allowsHitTesting(showingLyrics && queueMorphProgress == 0)
                 .accessibilityHidden(!showingLyrics || queueMorphProgress > 0)
             videoInfo
@@ -596,13 +596,15 @@ struct OnTheGoPanel: View {
             normal = normal.map { $0.offsetBy(dx: 0, dy: centeringInset) }
 
             // Keep all shared controls anchored to the square artwork layout.
-            // Artwork keeps its existing viewport; lyrics reclaim the title's
-            // space down to the dots without changing any shared control frame.
+            // Lyrics extend behind the overlaid header and status bar, down
+            // to the dots, without changing any shared control frame.
             normal[Element.artwork.rawValue] = CGRect(
                 x: contentX, y: 0, width: contentWidth, height: normal[Element.info.rawValue].minY
             )
+            let lyricsTopInset = Layout.headerHeight + coverGeometry.topSafeArea
             normal[Element.lyrics.rawValue] = CGRect(
-                x: contentX, y: 0, width: contentWidth, height: normal[Element.indicators.rawValue].minY
+                x: contentX, y: -lyricsTopInset, width: contentWidth,
+                height: normal[Element.indicators.rawValue].minY + lyricsTopInset
             )
 
             let layout = coverGeometry.layout(progress: progress, normalPlayerHeight: normalHeight)
@@ -671,7 +673,7 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private var lyricsPage: some View {
+    private func lyricsPage(topInset: CGFloat) -> some View {
         pageViewport { size in
             if hasLyrics {
                 let progress = visibleLyricsProgress
@@ -682,6 +684,7 @@ struct OnTheGoPanel: View {
                     isActive: progress > 0,
                     isPaging: isPaging,
                     allowsManualScrolling: state.currentVideo == nil,
+                    topInset: topInset,
                     onSeek: seek
                 )
                 .environment(\.colorScheme, .dark)

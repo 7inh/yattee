@@ -18,6 +18,7 @@ struct LyricsView: View {
     let isActive: Bool
     let isPaging: Bool
     let allowsManualScrolling: Bool
+    let topInset: CGFloat
     let onSeek: (TimeInterval) -> Void
 
     @State private var currentIndex: Int?
@@ -65,6 +66,12 @@ struct LyricsView: View {
 
     private var syncedLines: some View {
         GeometryReader { geometry in
+            let viewportHeight = max(1, geometry.size.height)
+            let contentHeight = max(0, geometry.size.height - topInset)
+            let restingOffset = topInset + contentHeight / 3
+            let scrollAnchor = UnitPoint(x: 0.5, y: restingOffset / viewportHeight)
+            let bottomFadeStart = 1 - contentHeight * 0.12 / viewportHeight
+            let topFadeEnd = min(bottomFadeStart, (topInset + contentHeight * 0.08) / viewportHeight)
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 24) {
@@ -92,10 +99,15 @@ struct LyricsView: View {
                         }
                     }
                     .padding(.horizontal, 4)
-                    .padding(.top, geometry.size.height / 3)
-                    .padding(.bottom, geometry.size.height * 2 / 3)
+                    // Preserve the resting line's position below the header
+                    // while letting earlier lines scroll all the way behind it.
+                    .padding(.top, restingOffset)
+                    .padding(.bottom, contentHeight * 2 / 3)
                 }
                 .scrollIndicators(.hidden)
+                // The viewport already includes the status bar; its space is
+                // accounted for by topInset rather than an automatic inset.
+                .ignoresSafeArea(.container, edges: .top)
                 // With an inline queue, vertical drags belong to the panel so
                 // they can reveal the queue even when they start on a lyric.
                 // Programmatic playback following and line taps still work.
@@ -115,17 +127,18 @@ struct LyricsView: View {
                 .mask {
                     LinearGradient(stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.08),
-                        .init(color: .black, location: 0.88),
+                        .init(color: .black.opacity(0.15), location: topFadeEnd * 0.5),
+                        .init(color: .black, location: topFadeEnd),
+                        .init(color: .black, location: bottomFadeStart),
                         .init(color: .clear, location: 1)
                     ], startPoint: .top, endPoint: .bottom)
                 }
-                .task(id: scenePhase == .active && isActive && !isPaging) {
+                .task(id: scenePhase == .active && isActive && !isPaging ? scrollAnchor.y : nil) {
                     // Keep the page mounted during transitions without polling
                     // or moving its scroll position while hidden or paging.
                     guard scenePhase == .active, isActive, !isPaging else { return }
                     while !Task.isCancelled {
-                        followPlayback(using: proxy)
+                        followPlayback(using: proxy, anchor: scrollAnchor)
                         do {
                             try await Task.sleep(for: .milliseconds(250))
                         } catch {
@@ -137,7 +150,7 @@ struct LyricsView: View {
         }
     }
 
-    private func followPlayback(using proxy: ScrollViewProxy) {
+    private func followPlayback(using proxy: ScrollViewProxy, anchor: UnitPoint) {
         guard playerState.publishesTimeUpdates else { return }
         let index = LyricLine.currentIndex(at: playerState.untrackedCurrentTime, in: model.lines)
         if currentIndex != index {
@@ -151,7 +164,7 @@ struct LyricsView: View {
               let target, target != lastScrolledIndex else { return }
         lastScrolledIndex = target
         withAnimation(.easeInOut(duration: reduceMotion ? 0 : 0.4)) {
-            proxy.scrollTo(target, anchor: UnitPoint(x: 0.5, y: 1.0 / 3))
+            proxy.scrollTo(target, anchor: anchor)
         }
     }
 }
