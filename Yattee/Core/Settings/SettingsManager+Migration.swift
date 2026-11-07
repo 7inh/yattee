@@ -12,8 +12,9 @@ extension SettingsManager {
     private static let compactTabBarHistoryMigrationFlagKey = "didMigrateCompactTabBarHistory_v1"
     private static let compactTabBarSettingsMigrationFlagKey = "didMigrateCompactTabBarSettings_v1"
     private static let phoneBookmarksTabMigrationFlagKey = "didMigratePhoneBookmarksTab_v1"
+    private static let phoneHistoryTabMigrationFlagKey = "didMigratePhoneHistoryTab_v1"
 
-    /// Replaces Sources with History and adds Settings after Downloads once.
+    /// Applies shared compact tab migrations, then iPhone-specific visibility.
     /// Independent flags let existing installs receive each migration, while later
     /// user customizations are kept.
     /// Run after the initial iCloud refresh so it cannot restore the old visibility.
@@ -34,22 +35,24 @@ extension SettingsManager {
             LoggingService.shared.logCloudKit("Migrated compact tab bar visibility from Sources to History")
         }
 
-        guard !localDefaults.bool(forKey: Self.compactTabBarSettingsMigrationFlagKey) else { return }
+        if !localDefaults.bool(forKey: Self.compactTabBarSettingsMigrationFlagKey) {
+            var visibility = tabBarItemVisibility
+            visibility[.settings] = true
+            tabBarItemVisibility = visibility
 
-        var visibility = tabBarItemVisibility
-        visibility[.settings] = true
-        tabBarItemVisibility = visibility
+            var order = tabBarItemOrder.filter { $0 != .settings }
+            if let downloadsIndex = order.firstIndex(of: .downloads) {
+                order.insert(.settings, at: downloadsIndex + 1)
+            } else {
+                order.append(.settings)
+            }
+            tabBarItemOrder = order
 
-        var order = tabBarItemOrder.filter { $0 != .settings }
-        if let downloadsIndex = order.firstIndex(of: .downloads) {
-            order.insert(.settings, at: downloadsIndex + 1)
-        } else {
-            order.append(.settings)
+            localDefaults.set(true, forKey: Self.compactTabBarSettingsMigrationFlagKey)
+            LoggingService.shared.logCloudKit("Added Settings after Downloads in the compact tab bar")
         }
-        tabBarItemOrder = order
 
-        localDefaults.set(true, forKey: Self.compactTabBarSettingsMigrationFlagKey)
-        LoggingService.shared.logCloudKit("Added Settings after Downloads in the compact tab bar")
+        migratePhoneHistoryTabIfNeeded()
     }
 
     /// Seeds the separate iPhone preferences from the old iOS settings, then
@@ -86,6 +89,24 @@ extension SettingsManager {
 
         localDefaults.set(true, forKey: Self.phoneBookmarksTabMigrationFlagKey)
         LoggingService.shared.logCloudKit("Replaced Downloads with Bookmarks in the iPhone tab bar")
+    }
+
+    /// Hides History after the older compact tab migrations, which may enable it.
+    /// Uses the iPhone-only settings namespace to preserve other platforms.
+    private func migratePhoneHistoryTabIfNeeded() {
+        guard usesPhoneTabBar,
+              !localDefaults.bool(forKey: Self.phoneHistoryTabMigrationFlagKey) else { return }
+
+        var visibility = tabBarItemVisibility
+        visibility[.history] = false
+        tabBarItemVisibility = visibility
+
+        if tabBarStartupTab == .history {
+            tabBarStartupTab = .home
+        }
+
+        localDefaults.set(true, forKey: Self.phoneHistoryTabMigrationFlagKey)
+        LoggingService.shared.logCloudKit("Moved History from the iPhone tab bar to the Home menu")
     }
 
     // Mirrors `SettingsManager+CloudSync.protectedVisibilityKeys`. Kept in sync manually

@@ -116,6 +116,9 @@ struct YouTubeHomeFeed: View {
             if usesPhoneLayout {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        NavigationLink(value: NavigationDestination.history) {
+                            Label(String(localized: "home.history.title"), systemImage: "clock")
+                        }
                         NavigationLink(value: NavigationDestination.downloads) {
                             Label(String(localized: "home.downloads.title"), systemImage: "arrow.down.circle")
                         }

@@ -510,6 +510,7 @@ extension SettingsManager {
         if usesPhoneTabBar {
             visibility[.bookmarks] = true
             visibility[.downloads] = false
+            visibility[.history] = false
         }
         return visibility
     }
@@ -545,7 +546,7 @@ extension SettingsManager {
         }
     }
 
-    /// History and Settings are visible by default, with Bookmarks on iPhone and Downloads elsewhere.
+    /// Bookmarks and Settings are visible by default on iPhone; History, Downloads, and Settings elsewhere.
     var tabBarItemVisibility: [TabBarItem: Bool] {
         get {
             if let cached = _tabBarItemVisibility { return cached }
