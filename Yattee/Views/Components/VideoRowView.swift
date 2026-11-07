@@ -127,7 +127,7 @@ struct VideoRowView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(video.displayTitle(using: appEnvironment?.deArrowBrandingProvider))
                 .font(titleFont)
-                .lineLimit(style == .large ? 3 : style == .regular ? 2 : 1)
+                .lineLimit(style == .compact ? 1 : 2)
 
             if usesCompactPlaylistLayout {
                 Text(playlistMetadataText)
