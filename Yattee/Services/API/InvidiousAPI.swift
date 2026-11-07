@@ -1043,6 +1043,65 @@ struct ChannelVideosPage: Sendable {
 
 // MARK: - Auth Response Models
 
+/// Optional display metadata must never make an otherwise usable response fail.
+@propertyWrapper
+private struct InvidiousOptional<Value: Decodable & Sendable>: Decodable, Sendable {
+    let wrappedValue: Value?
+
+    init(wrappedValue: Value? = nil) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        wrappedValue = try? Value(from: decoder)
+    }
+}
+
+/// Instances may omit timestamps or send them as integers, decimals or numeric strings.
+@propertyWrapper
+private struct InvidiousOptionalTimestamp: Decodable, Sendable {
+    let wrappedValue: Int64?
+
+    init(wrappedValue: Int64? = nil) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        guard let container = try? decoder.singleValueContainer() else {
+            wrappedValue = nil
+            return
+        }
+        if let value = try? container.decode(Int64.self) {
+            wrappedValue = value
+        } else if let value = try? container.decode(Double.self) {
+            wrappedValue = Int64(exactly: value.rounded(.towardZero))
+        } else if let text = try? container.decode(String.self) {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            wrappedValue = Int64(trimmed) ?? Double(trimmed).flatMap { Int64(exactly: $0.rounded(.towardZero)) }
+        } else {
+            wrappedValue = nil
+        }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    // Synthesized decoding calls decode, even when a wrapper's value is optional.
+    // These overloads also tolerate absent keys without invoking the wrapper.
+    func decode<Value>(
+        _ type: InvidiousOptional<Value>.Type,
+        forKey key: Key
+    ) throws -> InvidiousOptional<Value> {
+        (try? decodeIfPresent(type, forKey: key)) ?? InvidiousOptional()
+    }
+
+    func decode(
+        _ type: InvidiousOptionalTimestamp.Type,
+        forKey key: Key
+    ) throws -> InvidiousOptionalTimestamp {
+        (try? decodeIfPresent(type, forKey: key)) ?? InvidiousOptionalTimestamp()
+    }
+}
+
 /// Response for Invidious feed endpoint.
 struct InvidiousFeedResponse: Sendable {
     let videos: [Video]
@@ -1107,7 +1166,7 @@ private struct InvidiousAuthPlaylist: Decodable, Sendable {
     let author: String?
     let description: String?
     let videoCount: Int
-    let updated: Int64?
+    @InvidiousOptionalTimestamp var updated: Int64?
     let isListed: Bool?
     let videos: [InvidiousAuthPlaylistVideo]?
 
@@ -1131,9 +1190,9 @@ private struct InvidiousAuthPlaylistVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
-    let authorThumbnails: [InvidiousThumbnail]?
-    let published: Int64?
-    let publishedText: String?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptionalTimestamp var published: Int64?
+    @InvidiousOptional var publishedText: String?
     let videoThumbnails: [InvidiousThumbnail]?
     let index: Int?
     let indexId: String?
@@ -1202,16 +1261,16 @@ private struct InvidiousVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
-    let authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
     let lengthSeconds: Int
-    let published: Int64?
-    let publishedText: String?
+    @InvidiousOptionalTimestamp var published: Int64?
+    @InvidiousOptional var publishedText: String?
     let viewCount: Int?
     let likeCount: Int?
     let videoThumbnails: [InvidiousThumbnail]?
     let liveNow: Bool?
     let isUpcoming: Bool?
-    let premiereTimestamp: Int64?
+    @InvidiousOptionalTimestamp var premiereTimestamp: Int64?
 
     /// Whether this subscription-feed or popular entry is most likely a Short.
     ///
@@ -1258,17 +1317,17 @@ private struct InvidiousVideoDetails: Decodable, Sendable {
     let descriptionHtml: String?
     let author: String
     let authorId: String
-    let authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
     let subCountText: String?
     let lengthSeconds: Int
-    let published: Int64?
-    let publishedText: String?
+    @InvidiousOptionalTimestamp var published: Int64?
+    @InvidiousOptional var publishedText: String?
     let viewCount: Int?
     let likeCount: Int?
     let videoThumbnails: [InvidiousThumbnail]?
     let liveNow: Bool?
     let isUpcoming: Bool?
-    let premiereTimestamp: Int64?
+    @InvidiousOptionalTimestamp var premiereTimestamp: Int64?
     let hlsUrl: String?
     let dashUrl: String?
     let formatStreams: [InvidiousFormatStream]?
@@ -1449,9 +1508,9 @@ private struct InvidiousRecommendedVideo: Decodable, Sendable {
     let author: String
     let authorId: String
     let authorUrl: String?
-    let authorThumbnails: [InvidiousThumbnail]?
-    let published: Int64?
-    let publishedText: String?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptionalTimestamp var published: Int64?
+    @InvidiousOptional var publishedText: String?
     let videoThumbnails: [InvidiousThumbnail]?
     let lengthSeconds: Int
     let viewCountText: String?
@@ -1869,7 +1928,7 @@ private struct InvidiousChannel: Decodable, Sendable {
     let description: String?
     let subCount: Int?
     let totalViews: Int64?
-    let authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
     let authorBanners: [InvidiousThumbnail]?
     let authorVerified: Bool?
 
@@ -2098,7 +2157,7 @@ private struct InvidiousSearchChannel: Decodable, Sendable {
     let description: String?
     let subCount: Int?
     let videoCount: Int?
-    let authorThumbnails: [InvidiousThumbnail]?
+    @InvidiousOptional var authorThumbnails: [InvidiousThumbnail]?
     let authorVerified: Bool?
 
     nonisolated func toChannel(baseURL: URL) -> Channel {
