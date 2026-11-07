@@ -117,14 +117,6 @@ struct SettingsView: View {
                     }
 
                     Section {
-                        NavigationLink {
-                            AboutView()
-                        } label: {
-                            Label(String(localized: "settings.about.title"), systemImage: "info.circle")
-                        }
-                    }
-
-                    Section {
                         VStack(spacing: 4) {
                             Text(verbatim: "Yattee")
                                 .font(.headline)
