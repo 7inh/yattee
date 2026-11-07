@@ -96,6 +96,9 @@ struct YouTubeHomeFeed: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
+                if usesPhoneLayout {
+                    scrollingHeader
+                }
                 if !continueWatching.isEmpty {
                     continueWatchingShelf
                 }
@@ -111,22 +114,6 @@ struct YouTubeHomeFeed: View {
                 loadingOrEmptyState
             }
             .padding(.vertical, 16)
-        }
-        .toolbar {
-            if usesPhoneLayout {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        NavigationLink(value: NavigationDestination.history) {
-                            Label(String(localized: "home.history.title"), systemImage: "clock")
-                        }
-                        NavigationLink(value: NavigationDestination.downloads) {
-                            Label(String(localized: "home.downloads.title"), systemImage: "arrow.down.circle")
-                        }
-                    } label: {
-                        Label(String(localized: "common.more"), systemImage: "ellipsis.circle")
-                    }
-                }
-            }
         }
         .refreshable { await loadFeed(forceRefresh: true) }
         .task(id: reloadToken) { await loadFeed() }
@@ -163,6 +150,39 @@ struct YouTubeHomeFeed: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reloadToken += 1 }
         }
+    }
+
+    private var scrollingHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(localized: "tabs.home"))
+                    .font(.largeTitle.bold())
+                    .accessibilityAddTraits(.isHeader)
+                if settingsManager?.incognitoModeEnabled == true {
+                    Text(String(localized: "home.incognitoMode.subtitle"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Menu {
+                NavigationLink(value: NavigationDestination.history) {
+                    Label(String(localized: "home.history.title"), systemImage: "clock")
+                }
+                NavigationLink(value: NavigationDestination.downloads) {
+                    Label(String(localized: "home.downloads.title"), systemImage: "arrow.down.circle")
+                }
+            } label: {
+                Label(String(localized: "common.more"), systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .glassBackground(.regular, in: .circle)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal)
     }
 
     private var continueWatchingShelf: some View {

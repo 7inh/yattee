@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  Yattee
 //
-//  Home tab with shortcuts dashboard for Playlists, History, and Downloads.
+//  Home tab with a compact feed and a customizable shortcuts dashboard.
 //
 
 import SwiftUI
@@ -137,6 +137,18 @@ struct HomeView: View {
         dataObservers(chrome)
     }
 
+    #if os(iOS)
+    private var navigationBarVisibility: Visibility {
+        guard horizontalSizeClass == .compact,
+              UIDevice.current.userInterfaceIdiom == .phone else { return .automatic }
+
+        // Only Home's root has a scrolling header. Restore the bar for every
+        // pushed destination, including navigation outside the header menu.
+        let isAtRoot = appEnvironment?.navigationCoordinator.router.stack(for: .home).isEmpty ?? true
+        return isAtRoot ? .hidden : .visible
+    }
+    #endif
+
     private var chrome: some View {
         mainContent
         .navigationTitle(String(localized: "tabs.home"))
@@ -146,6 +158,9 @@ struct HomeView: View {
                 : nil
         )
         .toolbarTitleDisplayMode(.inlineLarge)
+        #if os(iOS)
+        .toolbar(navigationBarVisibility, for: .navigationBar)
+        #endif
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
