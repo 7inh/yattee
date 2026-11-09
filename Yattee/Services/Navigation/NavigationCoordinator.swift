@@ -289,10 +289,17 @@ final class NavigationCoordinator {
     /// Expand the mini player to full screen.
     func expandPlayer(animated: Bool = true) {
         LoggingService.shared.debug("NavigationCoordinator: expandPlayer(animated=\(animated)) - isPlayerExpanded was \(isPlayerExpanded), trigger=\(playerExpandTrigger)", category: .player)
-        if !animated {
-            skipNextPlayerExpandAnimation = true
+        if !animated || skipNextPlayerExpandAnimation {
+            // Present the player in place, without its zoom-in.
+            skipNextPlayerExpandAnimation = false
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                isPlayerExpanded = true
+            }
+        } else {
+            isPlayerExpanded = true
         }
-        isPlayerExpanded = true
         playerExpandTrigger += 1
         LoggingService.shared.debug("NavigationCoordinator: expandPlayer complete - isPlayerExpanded=\(isPlayerExpanded), trigger=\(playerExpandTrigger)", category: .player)
     }
