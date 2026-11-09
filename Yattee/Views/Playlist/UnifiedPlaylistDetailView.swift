@@ -85,6 +85,8 @@ struct UnifiedPlaylistDetailView: View {
     @State private var isImporting = false
     @State private var importProgress: (current: Int, total: Int)?
     @State private var remotePlaylist: Playlist?
+    /// Bumped when device playlists change, so "Saved to Library" re-evaluates.
+    @State private var libraryRevision = 0
 
     // MARK: - Owned Remote Playlist State
 
@@ -253,6 +255,9 @@ struct UnifiedPlaylistDetailView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: .playlistsDidChange)) { _ in
+            libraryRevision += 1
+        }
         .sheet(isPresented: $showingEditSheet) {
             if let localPlaylist {
                 PlaylistFormSheet(mode: .edit(localPlaylist)) { newTitle, newDescription in
@@ -496,16 +501,19 @@ struct UnifiedPlaylistDetailView: View {
             if case .remote = source, let remotePlaylist, !remotePlaylist.isLocal {
                 // Nothing to copy out of an empty playlist.
                 if !videos.isEmpty {
+                    let isSaved = isSavedToLibrary(remotePlaylist)
                     Button {
                         Task { await importToLocal() }
                     } label: {
                         if isImporting, let progress = importProgress {
                             Label(String(localized: "playlist.savingToLibrary \(progress.current) \(progress.total)"), systemImage: "plus.rectangle.on.folder")
+                        } else if isSaved {
+                            Label(String(localized: "Saved to Library"), systemImage: "checkmark.rectangle.stack")
                         } else {
                             Label(String(localized: "playlist.saveToLibrary"), systemImage: "plus.rectangle.on.folder")
                         }
                     }
-                    .disabled(isImporting)
+                    .disabled(isImporting || isSaved)
                 }
 
                 ShareLink(item: playlistShareURL()) {
@@ -539,7 +547,7 @@ struct UnifiedPlaylistDetailView: View {
     }
 
     private var compactPlaylistActionButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             if !videos.isEmpty {
                 if isQueueEnabled {
                     Button(action: playAll) {
@@ -547,15 +555,6 @@ struct UnifiedPlaylistDetailView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .modifier(PlaylistActionStyleModifier(isProminent: true))
-
-                    Button {
-                        appEnvironment?.playerService.state.queueMode = .shuffle
-                        playAll()
-                    } label: {
-                        Label(String(localized: "queue.mode.shuffle"), systemImage: "shuffle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .modifier(PlaylistActionStyleModifier())
                 }
 
                 compactDownloadButton
@@ -1208,6 +1207,14 @@ struct UnifiedPlaylistDetailView: View {
         }
     }
 
+    /// Whether a device playlist already holds this one. Save to Library keeps
+    /// the source title, so a playlist with the same title is the saved copy.
+    private func isSavedToLibrary(_ playlist: Playlist) -> Bool {
+        _ = libraryRevision
+        guard let dataManager = appEnvironment?.dataManager else { return false }
+        return dataManager.playlists().contains { $0.title == playlist.title }
+    }
+
     /// Imports the remote playlist to local storage.
     private func importToLocal() async {
         guard let appEnvironment, let remotePlaylist else { return }
@@ -1246,39 +1253,59 @@ struct UnifiedPlaylistDetailView: View {
 
 // MARK: - iOS Action Styling
 
+/// One look for the playlist header actions: a full-width prominent capsule and
+/// equal-sized icon circles, all the same height.
+///
+/// Applied as a `ButtonStyle` so the frame and shape sit inside the label —
+/// the whole capsule is the tap target, for `Menu` as well as `Button`.
+/// Sizing the control from the outside left only the glyph tappable.
 private struct PlaylistActionStyleModifier: ViewModifier {
     var isProminent = false
     var isIconOnly = false
 
     func body(content: Content) -> some View {
+        content
+            .menuStyle(.button)
+            .buttonStyle(PlaylistActionButtonStyle(isProminent: isProminent, isIconOnly: isIconOnly))
+            .frame(maxWidth: isIconOnly ? nil : .infinity)
+    }
+}
+
+private struct PlaylistActionButtonStyle: ButtonStyle {
+    let isProminent: Bool
+    let isIconOnly: Bool
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    private static let height: CGFloat = 44
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(isIconOnly ? .system(size: 17, weight: .semibold) : .body.weight(.semibold))
+            .foregroundStyle(isProminent ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .frame(width: isIconOnly ? Self.height : nil, height: Self.height)
+            .frame(maxWidth: isIconOnly ? nil : .infinity)
+            .contentShape(Capsule())
+            .modifier(PlaylistActionBackground(isProminent: isProminent))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.5)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+private struct PlaylistActionBackground: ViewModifier {
+    let isProminent: Bool
+
+    func body(content: Content) -> some View {
         if #available(iOS 26, *) {
-            Group {
-                if isProminent {
-                    content.buttonStyle(.glassProminent)
-                        .tint(.red)
-                        .foregroundStyle(.white)
-                } else {
-                    content.buttonStyle(.glass)
-                        .tint(.primary)
-                }
-            }
-            .buttonBorderShape(.capsule)
-            .buttonSizing(.flexible)
-            .frame(width: isIconOnly ? 40 : nil, height: 40)
+            // Not `.interactive()`: the glass would compete with the
+            // button/menu for the touch.
+            content.glassEffect(isProminent ? .regular.tint(.red) : .regular, in: Capsule())
         } else {
-            Group {
-                if isProminent {
-                    content.buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .foregroundStyle(.white)
-                } else {
-                    content.buttonStyle(.bordered)
-                        .tint(.primary)
-                }
-            }
-            .buttonBorderShape(.capsule)
-            .controlSize(.regular)
-            .frame(width: isIconOnly ? 40 : nil, height: 40)
+            content.background(
+                isProminent ? AnyShapeStyle(Color.red) : AnyShapeStyle(.fill.secondary),
+                in: Capsule()
+            )
         }
     }
 }
