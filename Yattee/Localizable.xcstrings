@@ -1151,26 +1151,6 @@
         }
       }
     },
-    "channel.noShorts" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Shorts"
-          }
-        }
-      }
-    },
-    "channel.noStreams" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Streams"
-          }
-        }
-      }
-    },
     "channel.noVideos" : {
       "localizations" : {
         "en" : {
@@ -1273,26 +1253,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playlists"
-          }
-        }
-      }
-    },
-    "channel.tab.shorts" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shorts"
-          }
-        }
-      }
-    },
-    "channel.tab.streams" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Streams"
           }
         }
       }

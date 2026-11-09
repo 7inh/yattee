@@ -172,14 +172,6 @@ actor ContentService: ContentServiceProtocol {
         try await api(for: instance).channelPlaylists(id: id, instance: instance, continuation: continuation)
     }
 
-    func channelShorts(id: String, instance: Instance, continuation: String? = nil) async throws -> ChannelVideosPage {
-        try await api(for: instance).channelShorts(id: id, instance: instance, continuation: continuation)
-    }
-
-    func channelStreams(id: String, instance: Instance, continuation: String? = nil) async throws -> ChannelVideosPage {
-        try await api(for: instance).channelStreams(id: id, instance: instance, continuation: continuation)
-    }
-
     func playlist(id: String, instance: Instance) async throws -> Playlist {
         try await api(for: instance).playlist(id: id, instance: instance)
     }

@@ -168,34 +168,6 @@ actor InvidiousAPI: InstanceAPI {
         )
     }
 
-    func channelShorts(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage {
-        var query: [String: String] = [:]
-        if let continuation {
-            query["continuation"] = continuation
-        }
-        let id = try await channelID(for: id, instance: instance)
-        let endpoint = GenericEndpoint.get("/api/v1/channels/\(id)/shorts", query: query)
-        let response: InvidiousChannelVideosWithContinuation = try await httpClient.fetch(endpoint, baseURL: instance.url)
-        return ChannelVideosPage(
-            videos: response.videos.map { $0.toVideo(baseURL: instance.url) },
-            continuation: response.continuation
-        )
-    }
-
-    func channelStreams(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage {
-        var query: [String: String] = [:]
-        if let continuation {
-            query["continuation"] = continuation
-        }
-        let id = try await channelID(for: id, instance: instance)
-        let endpoint = GenericEndpoint.get("/api/v1/channels/\(id)/streams", query: query)
-        let response: InvidiousChannelVideosWithContinuation = try await httpClient.fetch(endpoint, baseURL: instance.url)
-        return ChannelVideosPage(
-            videos: response.videos.map { $0.toVideo(baseURL: instance.url) },
-            continuation: response.continuation
-        )
-    }
-
     func playlist(id: String, instance: Instance) async throws -> Playlist {
         let firstEndpoint = GenericEndpoint.get("/api/v1/playlists/\(id)")
         let firstResponse: InvidiousPlaylist = try await httpClient.fetch(firstEndpoint, baseURL: instance.url)
@@ -1035,7 +1007,7 @@ struct ChannelPlaylistsPage: Sendable {
     let continuation: String?
 }
 
-/// Response page for channel videos (shorts, streams).
+/// Response page for channel videos.
 struct ChannelVideosPage: Sendable {
     let videos: [Video]
     let continuation: String?

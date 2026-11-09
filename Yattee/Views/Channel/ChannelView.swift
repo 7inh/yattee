@@ -72,16 +72,6 @@ struct ChannelView: View {
     @State private var playlistsContinuation: String?
     @State private var playlistsLoaded = false
 
-    // Shorts tab state
-    @State private var shorts: [Video] = []
-    @State private var shortsContinuation: String?
-    @State private var shortsLoaded = false
-
-    // Streams tab state
-    @State private var streams: [Video] = []
-    @State private var streamsContinuation: String?
-    @State private var streamsLoaded = false
-
     // Search state
     @State private var searchText = ""
     @State private var isSearchActive = false
@@ -121,14 +111,6 @@ struct ChannelView: View {
     // Filtered video arrays (for hideWatched)
     private var filteredVideos: [Video] {
         hideWatched ? videos.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : videos
-    }
-
-    private var filteredShorts: [Video] {
-        hideWatched ? shorts.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : shorts
-    }
-
-    private var filteredStreams: [Video] {
-        hideWatched ? streams.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : streams
     }
 
     /// Whether inset grouped background should be shown.
@@ -977,8 +959,6 @@ struct ChannelView: View {
         Picker("", selection: $selectedTab) {
             Text(ChannelTab.about.title).tag(ChannelTab.about)
             Text(ChannelTab.videos.title).tag(ChannelTab.videos)
-            Text(ChannelTab.shorts.title).tag(ChannelTab.shorts)
-            Text(ChannelTab.streams.title).tag(ChannelTab.streams)
             Text(ChannelTab.playlists.title).tag(ChannelTab.playlists)
         }
         .pickerStyle(.segmented)
@@ -1003,10 +983,6 @@ struct ChannelView: View {
             videosGrid
         case .playlists:
             playlistsGrid
-        case .shorts:
-            shortsGrid
-        case .streams:
-            streamsGrid
         }
     }
 
@@ -1285,242 +1261,6 @@ struct ChannelView: View {
         }
 
         if isLoadingMore && selectedTab == .playlists {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-        }
-    }
-
-    // MARK: - Shorts Grid
-
-    private var shortsQueueSource: QueueSource {
-        .channel(channelID: channelID, source: source, continuation: shortsContinuation)
-    }
-
-    @ViewBuilder
-    private var shortsGrid: some View {
-        switch layout {
-        case .list:
-            shortsListContent
-        case .grid:
-            shortsGridContent
-        }
-    }
-
-    @ViewBuilder
-    private var shortsListContent: some View {
-        // Loading state
-        if !shortsLoaded && filteredShorts.isEmpty && shorts.isEmpty {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-                .onAppear {
-                    Task { await loadShorts() }
-                }
-        }
-
-        if shortsLoaded && filteredShorts.isEmpty {
-            ContentUnavailableView {
-                Label(String(localized: "channel.noShorts"), systemImage: "bolt")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 40)
-        } else if !filteredShorts.isEmpty {
-            VideoListContent(listStyle: listStyle) {
-                ForEach(Array(filteredShorts.enumerated()), id: \.element.id) { index, video in
-                    VideoListRow(
-                        isLast: index == filteredShorts.count - 1,
-                        rowStyle: rowStyle,
-                        listStyle: listStyle
-                    ) {
-                        VideoRowView(video: video, style: rowStyle, watchProgress: watchProgress(for: video))
-                            .tappableVideo(
-                                video,
-                                queueSource: shortsQueueSource,
-                                sourceLabel: channel?.name,
-                                videoList: filteredShorts,
-                                videoIndex: index,
-                                loadMoreVideos: loadMoreShortsCallback
-                            )
-                    }
-                    .videoSwipeActions(video: video)
-                }
-
-                LoadMoreTrigger(
-                    isLoading: isLoadingMore && selectedTab == .shorts,
-                    hasMore: shortsContinuation != nil
-                ) {
-                    Task { await loadMoreShorts() }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var shortsGridContent: some View {
-        if !shortsLoaded && filteredShorts.isEmpty && shorts.isEmpty {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-                .onAppear {
-                    Task {
-                        await loadShorts()
-                    }
-                }
-        }
-
-        VideoGridContent(columns: gridConfig.effectiveColumns) {
-            ForEach(Array(filteredShorts.enumerated()), id: \.element.id) { index, video in
-                VideoCardView(video: video, watchProgress: watchProgress(for: video), isCompact: gridConfig.isCompactCards)
-                    .tappableVideo(
-                        video,
-                        queueSource: shortsQueueSource,
-                        sourceLabel: channel?.name,
-                        videoList: filteredShorts,
-                        videoIndex: index,
-                        loadMoreVideos: loadMoreShortsCallback
-                    )
-
-                // Load more trigger
-                if video.id == filteredShorts.last?.id && shortsContinuation != nil && !isLoadingMore {
-                    Color.clear
-                        .frame(height: 1)
-                        .onAppear {
-                            Task {
-                                await loadMoreShorts()
-                            }
-                        }
-                }
-            }
-        }
-
-        if shortsLoaded && filteredShorts.isEmpty {
-            ContentUnavailableView {
-                Label(String(localized: "channel.noShorts"), systemImage: "bolt")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 40)
-        }
-
-        if isLoadingMore && selectedTab == .shorts {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-        }
-    }
-
-    // MARK: - Streams Grid
-
-    private var streamsQueueSource: QueueSource {
-        .channel(channelID: channelID, source: source, continuation: streamsContinuation)
-    }
-
-    @ViewBuilder
-    private var streamsGrid: some View {
-        switch layout {
-        case .list:
-            streamsListContent
-        case .grid:
-            streamsGridContent
-        }
-    }
-
-    @ViewBuilder
-    private var streamsListContent: some View {
-        // Loading state
-        if !streamsLoaded && filteredStreams.isEmpty && streams.isEmpty {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-                .onAppear {
-                    Task { await loadStreams() }
-                }
-        }
-
-        if streamsLoaded && filteredStreams.isEmpty {
-            ContentUnavailableView {
-                Label(String(localized: "channel.noStreams"), systemImage: "video")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 40)
-        } else if !filteredStreams.isEmpty {
-            VideoListContent(listStyle: listStyle) {
-                ForEach(Array(filteredStreams.enumerated()), id: \.element.id) { index, video in
-                    VideoListRow(
-                        isLast: index == filteredStreams.count - 1,
-                        rowStyle: rowStyle,
-                        listStyle: listStyle
-                    ) {
-                        VideoRowView(video: video, style: rowStyle, watchProgress: watchProgress(for: video))
-                            .tappableVideo(
-                                video,
-                                queueSource: streamsQueueSource,
-                                sourceLabel: channel?.name,
-                                videoList: filteredStreams,
-                                videoIndex: index,
-                                loadMoreVideos: loadMoreStreamsCallback
-                            )
-                    }
-                    .videoSwipeActions(video: video)
-                }
-
-                LoadMoreTrigger(
-                    isLoading: isLoadingMore && selectedTab == .streams,
-                    hasMore: streamsContinuation != nil
-                ) {
-                    Task { await loadMoreStreams() }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var streamsGridContent: some View {
-        if !streamsLoaded && filteredStreams.isEmpty && streams.isEmpty {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding()
-                .onAppear {
-                    Task {
-                        await loadStreams()
-                    }
-                }
-        }
-
-        VideoGridContent(columns: gridConfig.effectiveColumns) {
-            ForEach(Array(filteredStreams.enumerated()), id: \.element.id) { index, video in
-                VideoCardView(video: video, watchProgress: watchProgress(for: video), isCompact: gridConfig.isCompactCards)
-                    .tappableVideo(
-                        video,
-                        queueSource: streamsQueueSource,
-                        sourceLabel: channel?.name,
-                        videoList: filteredStreams,
-                        videoIndex: index,
-                        loadMoreVideos: loadMoreStreamsCallback
-                    )
-
-                // Load more trigger
-                if video.id == filteredStreams.last?.id && streamsContinuation != nil && !isLoadingMore {
-                    Color.clear
-                        .frame(height: 1)
-                        .onAppear {
-                            Task {
-                                await loadMoreStreams()
-                            }
-                        }
-                }
-            }
-        }
-
-        if streamsLoaded && filteredStreams.isEmpty {
-            ContentUnavailableView {
-                Label(String(localized: "channel.noStreams"), systemImage: "video")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 40)
-        }
-
-        if isLoadingMore && selectedTab == .streams {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -1947,42 +1687,6 @@ struct ChannelView: View {
         return (result.videos, result.continuation)
     }
 
-    /// Callback for loading more shorts via continuation
-    @Sendable
-    private func loadMoreShortsCallback() async throws -> ([Video], String?) {
-        guard let appEnvironment,
-              let instance = instanceForSource(),
-              let continuation = shortsContinuation else {
-            throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No continuation available"])
-        }
-
-        let result = try await appEnvironment.contentService.channelShorts(
-            id: channelID,
-            instance: instance,
-            continuation: continuation
-        )
-
-        return (result.videos, result.continuation)
-    }
-
-    /// Callback for loading more streams via continuation
-    @Sendable
-    private func loadMoreStreamsCallback() async throws -> ([Video], String?) {
-        guard let appEnvironment,
-              let instance = instanceForSource(),
-              let continuation = streamsContinuation else {
-            throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No continuation available"])
-        }
-
-        let result = try await appEnvironment.contentService.channelStreams(
-            id: channelID,
-            instance: instance,
-            continuation: continuation
-        )
-
-        return (result.videos, result.continuation)
-    }
-
     // MARK: - Tab Loading
 
     private func loadTabContentIfNeeded(_ tab: ChannelTab) async {
@@ -1996,14 +1700,6 @@ struct ChannelView: View {
         case .playlists:
             if !playlistsLoaded {
                 await loadPlaylists()
-            }
-        case .shorts:
-            if !shortsLoaded {
-                await loadShorts()
-            }
-        case .streams:
-            if !streamsLoaded {
-                await loadStreams()
             }
         }
     }
@@ -2064,125 +1760,6 @@ struct ChannelView: View {
         }
     }
 
-    // MARK: - Shorts Loading
-
-    private func loadShorts() async {
-        guard let appEnvironment,
-              let instance = instanceForSource() else {
-            return
-        }
-
-        do {
-            let result = try await appEnvironment.contentService.channelShorts(
-                id: channelID,
-                instance: instance,
-                continuation: nil
-            )
-
-            await MainActor.run {
-                shorts = result.videos
-                shortsContinuation = result.continuation
-                shortsLoaded = true
-            }
-        } catch {
-            await MainActor.run {
-                shortsLoaded = true
-            }
-        }
-    }
-
-    private func loadMoreShorts() async {
-        guard let appEnvironment,
-              let instance = instanceForSource(),
-              let continuation = shortsContinuation,
-              !isLoadingMore else {
-            return
-        }
-
-        isLoadingMore = true
-
-        do {
-            let result = try await appEnvironment.contentService.channelShorts(
-                id: channelID,
-                instance: instance,
-                continuation: continuation
-            )
-
-            await MainActor.run {
-                // Filter out duplicates before appending
-                let existingIDs = Set(shorts.map(\.id))
-                let newShorts = result.videos.filter { !existingIDs.contains($0.id) }
-                shorts.append(contentsOf: newShorts)
-                // Stop pagination if all returned videos are duplicates
-                shortsContinuation = newShorts.isEmpty ? nil : result.continuation
-                isLoadingMore = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoadingMore = false
-            }
-        }
-    }
-
-    // MARK: - Streams Loading
-
-    private func loadStreams() async {
-        guard let appEnvironment,
-              let instance = instanceForSource() else {
-            return
-        }
-
-        do {
-            let result = try await appEnvironment.contentService.channelStreams(
-                id: channelID,
-                instance: instance,
-                continuation: nil
-            )
-
-            await MainActor.run {
-                streams = result.videos
-                streamsContinuation = result.continuation
-                streamsLoaded = true
-            }
-        } catch {
-            await MainActor.run {
-                streamsLoaded = true
-            }
-        }
-    }
-
-    private func loadMoreStreams() async {
-        guard let appEnvironment,
-              let instance = instanceForSource(),
-              let continuation = streamsContinuation,
-              !isLoadingMore else {
-            return
-        }
-
-        isLoadingMore = true
-
-        do {
-            let result = try await appEnvironment.contentService.channelStreams(
-                id: channelID,
-                instance: instance,
-                continuation: continuation
-            )
-
-            await MainActor.run {
-                // Filter out duplicates before appending
-                let existingIDs = Set(streams.map(\.id))
-                let newStreams = result.videos.filter { !existingIDs.contains($0.id) }
-                streams.append(contentsOf: newStreams)
-                // Stop pagination if all returned videos are duplicates
-                streamsContinuation = newStreams.isEmpty ? nil : result.continuation
-                isLoadingMore = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoadingMore = false
-            }
-        }
-    }
 }
 
 // MARK: - Scroll Offset Tracking Modifier

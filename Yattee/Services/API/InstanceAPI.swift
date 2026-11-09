@@ -17,8 +17,6 @@ protocol InstanceAPI: Sendable {
     func channel(id: String, instance: Instance) async throws -> Channel
     func channelVideos(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage
     func channelPlaylists(id: String, instance: Instance, continuation: String?) async throws -> ChannelPlaylistsPage
-    func channelShorts(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage
-    func channelStreams(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage
     func playlist(id: String, instance: Instance) async throws -> Playlist
     func comments(videoID: String, instance: Instance, continuation: String?, sort: CommentSort) async throws -> CommentsPage
     func captions(videoID: String, instance: Instance) async throws -> [Caption]
@@ -46,16 +44,6 @@ extension InstanceAPI {
     /// Default implementation for backends that don't support channel playlists tab.
     func channelPlaylists(id: String, instance: Instance, continuation: String?) async throws -> ChannelPlaylistsPage {
         ChannelPlaylistsPage(playlists: [], continuation: nil)
-    }
-
-    /// Default implementation for backends that don't support channel shorts tab.
-    func channelShorts(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage {
-        ChannelVideosPage(videos: [], continuation: nil)
-    }
-
-    /// Default implementation for backends that don't support channel streams tab.
-    func channelStreams(id: String, instance: Instance, continuation: String?) async throws -> ChannelVideosPage {
-        ChannelVideosPage(videos: [], continuation: nil)
     }
 
     /// Default implementation for backends that don't support channel search.

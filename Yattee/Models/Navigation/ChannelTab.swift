@@ -12,8 +12,6 @@ enum ChannelTab: String, CaseIterable, Identifiable {
     case about
     case videos
     case playlists
-    case shorts
-    case streams
 
     var id: String { rawValue }
 
@@ -26,10 +24,6 @@ enum ChannelTab: String, CaseIterable, Identifiable {
             return String(localized: "channel.tab.videos")
         case .playlists:
             return String(localized: "channel.tab.playlists")
-        case .shorts:
-            return String(localized: "channel.tab.shorts")
-        case .streams:
-            return String(localized: "channel.tab.streams")
         }
     }
 
@@ -42,10 +36,6 @@ enum ChannelTab: String, CaseIterable, Identifiable {
             return "play.rectangle.fill"
         case .playlists:
             return "list.bullet.rectangle.fill"
-        case .shorts:
-            return "bolt.fill"
-        case .streams:
-            return "video.fill"
         }
     }
 }
