@@ -565,6 +565,7 @@ final class PlayerService {
     /// Applies a persistent speed selection to playback and system metadata.
     func setPlaybackRate(_ rate: PlaybackRate) {
         state.rate = rate
+        rate.save()
         currentBackend?.rate = Float(rate.rawValue)
         nowPlayingService.updatePlaybackRate(
             isPlaying: state.playbackState == .playing,

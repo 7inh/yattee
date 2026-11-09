@@ -108,6 +108,20 @@ struct QueuedVideo: Identifiable, Equatable, Sendable, Codable {
 
 /// Playback rate options.
 enum PlaybackRate: Double, CaseIterable, Identifiable, Sendable {
+    // MARK: - Persistence
+
+    private static let defaultsKey = "playbackRate"
+
+    /// The last speed the user selected, or `.x1` if none was saved.
+    static var saved: PlaybackRate {
+        guard UserDefaults.standard.object(forKey: defaultsKey) != nil else { return .x1 }
+        return PlaybackRate(rawValue: UserDefaults.standard.double(forKey: defaultsKey)) ?? .x1
+    }
+
+    func save() {
+        UserDefaults.standard.set(rawValue, forKey: Self.defaultsKey)
+    }
+
     case x025 = 0.25
     case x05 = 0.5
     case x075 = 0.75
@@ -326,7 +340,7 @@ final class PlayerState {
     // MARK: - Playback Settings
 
     /// Current playback rate.
-    var rate: PlaybackRate = .x1
+    var rate: PlaybackRate = PlaybackRate.saved
 
     /// Whether playback is muted.
     var isMuted: Bool = false
