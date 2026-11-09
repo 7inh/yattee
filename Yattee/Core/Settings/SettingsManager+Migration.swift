@@ -13,6 +13,7 @@ extension SettingsManager {
     private static let compactTabBarSettingsMigrationFlagKey = "didMigrateCompactTabBarSettings_v1"
     private static let phoneBookmarksTabMigrationFlagKey = "didMigratePhoneBookmarksTab_v1"
     private static let phoneHistoryTabMigrationFlagKey = "didMigratePhoneHistoryTab_v1"
+    private static let phonePlaylistsTabMigrationFlagKey = "didMigratePhonePlaylistsTab_v1"
 
     /// Applies shared compact tab migrations, then iPhone-specific visibility.
     /// Independent flags let existing installs receive each migration, while later
@@ -53,6 +54,30 @@ extension SettingsManager {
         }
 
         migratePhoneHistoryTabIfNeeded()
+        migratePhonePlaylistsTabIfNeeded()
+    }
+
+    /// Replaces the Bookmarks slot with Playlists in the iPhone tab bar.
+    /// Runs after the Bookmarks migration so fresh installs end up with Playlists too.
+    private func migratePhonePlaylistsTabIfNeeded() {
+        guard usesPhoneTabBar,
+              !localDefaults.bool(forKey: Self.phonePlaylistsTabMigrationFlagKey) else { return }
+
+        var visibility = tabBarItemVisibility
+        visibility[.playlists] = true
+        visibility[.bookmarks] = false
+        tabBarItemVisibility = visibility
+
+        var order = tabBarItemOrder.filter { $0 != .playlists }
+        order.insert(.playlists, at: order.firstIndex(of: .bookmarks) ?? order.endIndex)
+        tabBarItemOrder = order
+
+        if tabBarStartupTab == .bookmarks {
+            tabBarStartupTab = .playlists
+        }
+
+        localDefaults.set(true, forKey: Self.phonePlaylistsTabMigrationFlagKey)
+        LoggingService.shared.logCloudKit("Replaced Bookmarks with Playlists in the iPhone tab bar")
     }
 
     /// Seeds the separate iPhone preferences from the old iOS settings, then

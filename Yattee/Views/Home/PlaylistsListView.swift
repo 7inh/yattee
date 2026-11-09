@@ -13,6 +13,7 @@ struct PlaylistsListView: View {
     @Namespace private var sheetTransition
     @State private var localPlaylists: [LocalPlaylist] = []
     @State private var searchText = ""
+    @State private var isSearchShown = false
     @State private var playlistToEdit: LocalPlaylist?
 
     // MARK: - Remote state
@@ -170,10 +171,12 @@ struct PlaylistsListView: View {
     }
 
     private var items: [PlaylistListItem] {
-        guard contextAccount != nil else {
-            return localPlaylists.map { .local($0) }
-        }
-        return (remotePlaylists ?? []).map { .remote($0) }
+        let local = localPlaylists.map { PlaylistListItem.local($0) }
+        guard contextAccount != nil else { return local }
+        // One list: the account's playlists and the ones saved on this device
+        // ("Save to Library" always lands here), merged by title.
+        return ((remotePlaylists ?? []).map { PlaylistListItem.remote($0) } + local)
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
     /// Playlists filtered by search.
@@ -184,7 +187,7 @@ struct PlaylistsListView: View {
     /// Nothing fetched yet and no reason given — the spinner is for the first
     /// load only, a refetch leaves the previous list on screen.
     private var isLoadingRemoteList: Bool {
-        contextAccount != nil && remotePlaylists == nil && remoteErrorMessage == nil
+        contextAccount != nil && remotePlaylists == nil && remoteErrorMessage == nil && localPlaylists.isEmpty
     }
 
     var body: some View {
@@ -205,33 +208,23 @@ struct PlaylistsListView: View {
         }
         .navigationTitle(String(localized: "home.playlists.title"))
         .toolbarTitleDisplayMode(.inlineLarge)
-        .searchable(text: $searchText, prompt: Text(String(localized: "playlists.search.placeholder")))
+        // Search lives behind a toolbar button rather than a field that is
+        // always on screen; the field appears when the button is tapped.
+        .modifier(PlaylistsSearchModifier(
+            isShown: $isSearchShown,
+            text: $searchText,
+            prompt: String(localized: "playlists.search.placeholder")
+        ))
         .refreshable {
             await load()
         }
         .toolbar {
-            // No switcher wherever a sidebar shows one: the macOS sidebar row
-            // and the iPad sidebar's bottom bar are the persistent switcher
-            // surfaces there, so the toolbar menu is compact-width-only.
-            if DataContextSwitcherVisibility.showsToolbarPickers(in: appEnvironment, horizontalSizeClass: horizontalSizeClass) {
-                ToolbarItem(placement: viewOptionsPlacement) {
-                    DataContextSwitcherMenu()
-                }
-            }
-            ToolbarItem(placement: viewOptionsPlacement) {
-                Button {
-                    showViewOptions = true
-                } label: {
-                    Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
-                }
-                .liquidGlassTransitionSource(id: "playlistsViewOptions", in: sheetTransition)
-            }
-            if canCreatePlaylist {
+            if !isSearchShown {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        beginCreate()
+                        isSearchShown = true
                     } label: {
-                        Image(systemName: "plus")
+                        Label(String(localized: "tabs.search"), systemImage: "magnifyingglass")
                     }
                 }
             }
@@ -821,10 +814,10 @@ struct PlaylistsListView: View {
         loadGeneration += 1
         remoteErrorMessage = nil
 
-        guard let account = contextAccount else {
-            loadPlaylists()
-            return nil
-        }
+        // Device playlists show in every context, beside an account's.
+        loadPlaylists()
+
+        guard let account = contextAccount else { return nil }
 
         return (account, loadGeneration)
     }
@@ -846,5 +839,37 @@ struct PlaylistsListView: View {
 
     private func loadPlaylists() {
         localPlaylists = (dataManager?.playlists() ?? []).sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+}
+
+// MARK: - Search
+
+/// Attaches the search field only while search is shown, focused, and takes
+/// it away again when the user cancels.
+private struct PlaylistsSearchModifier: ViewModifier {
+    @Binding var isShown: Bool
+    @Binding var text: String
+    let prompt: String
+
+    @State private var isPresented = false
+
+    func body(content: Content) -> some View {
+        if isShown {
+            content
+                .searchable(
+                    text: $text,
+                    isPresented: $isPresented,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: Text(prompt)
+                )
+                .onAppear { isPresented = true }
+                .onChange(of: isPresented) { _, presented in
+                    guard !presented else { return }
+                    text = ""
+                    isShown = false
+                }
+        } else {
+            content
+        }
     }
 }
