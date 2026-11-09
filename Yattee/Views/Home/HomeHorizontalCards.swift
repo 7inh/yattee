@@ -16,7 +16,6 @@ struct HomeHorizontalCards: View {
     var loadMoreVideos: LoadMoreVideosCallback? = nil
 
     private let cardWidth: CGFloat = 180
-    private let cardHeight: CGFloat = 210
     private let spacing: CGFloat = 28
     private let verticalPadding: CGFloat = 8
 
@@ -25,7 +24,7 @@ struct HomeHorizontalCards: View {
             LazyHStack(alignment: .top, spacing: spacing) {
                 ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
                     VideoCardView(video: video, isCompact: true)
-                        .frame(width: cardWidth, height: cardHeight, alignment: .top)
+                        .frame(width: cardWidth, alignment: .top)
                         .tappableVideo(
                             video,
                             queueSource: queueSource,
