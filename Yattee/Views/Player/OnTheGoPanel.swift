@@ -844,9 +844,9 @@ struct OnTheGoPanel: View {
 
     private func topBarSymbol(_ name: String, foreground: Color) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 17, weight: .medium))
             .foregroundStyle(foreground)
-            .frame(width: 34, height: 34, alignment: .center)
+            .frame(width: 44, height: 44, alignment: .center)
             .contentShape(Circle())
     }
 
@@ -1712,9 +1712,8 @@ private extension View {
     /// the outer frame keeps a 44pt hit area.
     func topBarCircle(colorScheme: ColorScheme, overlayProgress: Double) -> some View {
         self
-            .frame(width: 34, height: 34)
-            .modifier(OnTheGoTopBarStyleModifier(colorScheme: colorScheme, overlayProgress: overlayProgress))
             .frame(width: 44, height: 44)
+            .modifier(OnTheGoTopBarStyleModifier(colorScheme: colorScheme, overlayProgress: overlayProgress))
             .contentShape(Rectangle())
     }
 }
