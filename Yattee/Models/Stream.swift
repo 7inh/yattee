@@ -77,6 +77,9 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
     /// Whether this is the original audio track (not dubbed).
     let isOriginalAudio: Bool
 
+    /// What kind of voice this audio track is (original, human dub, AI dub), when known.
+    let audioTrackKind: AudioTrackKind?
+
     /// Custom HTTP headers required for streaming (cookies, referer, etc.).
     let httpHeaders: [String: String]?
 
@@ -99,6 +102,7 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
         audioLanguage: String? = nil,
         audioTrackName: String? = nil,
         isOriginalAudio: Bool = false,
+        audioTrackKind: AudioTrackKind? = nil,
         httpHeaders: [String: String]? = nil,
         fps: Int? = nil,
         initRange: String? = nil,
@@ -119,6 +123,7 @@ struct Stream: Identifiable, Codable, Hashable, Sendable {
         self.audioLanguage = audioLanguage
         self.audioTrackName = audioTrackName
         self.isOriginalAudio = isOriginalAudio
+        self.audioTrackKind = audioTrackKind ?? (isOriginalAudio ? .original : nil)
         self.httpHeaders = httpHeaders
         self.fps = fps
     }
@@ -224,10 +229,43 @@ extension Stream {
             audioLanguage: audioLanguage,
             audioTrackName: audioTrackName,
             isOriginalAudio: isOriginalAudio,
+            audioTrackKind: audioTrackKind,
             httpHeaders: httpHeaders,
             initRange: initRange,
             indexRange: indexRange
         )
+    }
+}
+
+// MARK: - Audio Track Kind
+
+/// The kind of voice an audio track carries. YouTube tags each track in the
+/// stream URL's `xtags` (`acont=original`, `acont=dubbed-auto`, ...).
+enum AudioTrackKind: String, Codable, Hashable, Sendable {
+    case original
+    case dubbed
+    case autoDubbed
+    case descriptive
+
+    /// Maps a YouTube `acont` xtag value.
+    init?(acont: String?) {
+        switch acont?.lowercased() {
+        case "original": self = .original
+        case "dubbed": self = .dubbed
+        case "dubbed-auto": self = .autoDubbed
+        case "descriptive": self = .descriptive
+        default: return nil
+        }
+    }
+
+    /// Short suffix shown next to the language name in the track picker.
+    var label: String {
+        switch self {
+        case .original: return String(localized: "audioTrack.kind.original", defaultValue: "Original")
+        case .dubbed: return String(localized: "audioTrack.kind.dubbed", defaultValue: "Dubbed")
+        case .autoDubbed: return String(localized: "audioTrack.kind.autoDubbed", defaultValue: "AI dub")
+        case .descriptive: return String(localized: "audioTrack.kind.descriptive", defaultValue: "Descriptive")
+        }
     }
 }
 
@@ -251,6 +289,7 @@ extension Stream {
             audioLanguage: audioLanguage,
             audioTrackName: audioTrackName,
             isOriginalAudio: isOriginalAudio,
+            audioTrackKind: audioTrackKind,
             httpHeaders: httpHeaders,
             fps: fps,
             initRange: initRange,

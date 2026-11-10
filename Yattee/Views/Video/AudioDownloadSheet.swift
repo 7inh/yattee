@@ -40,7 +40,8 @@ struct AudioDownloadSheet: View {
         isDownloading = true
         defer { isDownloading = false }
         do {
-            let language = appEnvironment.settingsManager.preferredAudioLanguage
+            // Use the voice playing now (e.g. an AI dub) when this is the current video.
+            let language = appEnvironment.playerService.downloadAudioLanguage(for: video)
             if let stream = AudioStreamSelector.downloadStream(from: streams, preferredLanguage: language) {
                 try await appEnvironment.downloadManager.enqueue(video, stream: stream)
             } else {

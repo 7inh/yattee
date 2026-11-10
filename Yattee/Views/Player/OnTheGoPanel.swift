@@ -937,6 +937,8 @@ struct OnTheGoPanel: View {
                 .accessibilityValue(lyrics.selectedTrack?.label ?? "")
             }
 
+            audioTrackMenuRow
+
             Button {
                 dismissPlayerMenu { presentAppSheet(.queue()) }
             } label: {
@@ -1059,6 +1061,50 @@ struct OnTheGoPanel: View {
             // Let the popover finish dismissing before presenting sheets or sharing.
             try? await Task.sleep(for: .milliseconds(350))
             action()
+        }
+    }
+
+    /// Voice picker (original / dubbed / AI dub). Shown only when the video has 2+ voices.
+    @ViewBuilder
+    private var audioTrackMenuRow: some View {
+        let options = playerService.audioTrackOptions
+        if options.count > 1 {
+            let current = options.first { $0.matches(state.currentStream) }
+            Menu {
+                Picker("Audio", selection: Binding(
+                    get: { current?.id },
+                    set: { id in
+                        guard let option = options.first(where: { $0.id == id }) else { return }
+                        dismissPlayerMenu {
+                            Task { await playerService.switchAudioTrack(to: option) }
+                        }
+                    }
+                )) {
+                    ForEach(options) { option in
+                        Text(option.label).tag(Optional(option.id))
+                    }
+                }
+            } label: {
+                HStack(spacing: MenuLayout.iconSpacing) {
+                    Image(systemName: "waveform")
+                        .frame(width: MenuLayout.iconWidth)
+                        .accessibilityHidden(true)
+                    Text("Audio")
+                    Spacer(minLength: 0)
+                    Text(current?.languageName ?? "")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(-1)
+                }
+                .frame(maxWidth: .infinity, minHeight: MenuLayout.rowHeight, alignment: .leading)
+                .padding(.horizontal, MenuLayout.horizontalPadding)
+                .contentShape(Rectangle())
+            }
+            .menuIndicator(.hidden)
+            .disabled(state.isControlsLocked)
+            .accessibilityLabel("Audio")
+            .accessibilityValue(current?.label ?? "")
         }
     }
 

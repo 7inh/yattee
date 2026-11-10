@@ -75,3 +75,67 @@ extension AudioStreamSelector {
         }.first
     }
 }
+
+// MARK: - Audio Track Options
+
+/// One selectable voice of a video (e.g. "English · Original", "Vietnamese · AI dub").
+struct AudioTrackOption: Identifiable, Hashable, Sendable {
+    /// Language code as reported by the source (may carry a YouTube suffix like "en.4").
+    let language: String
+    let kind: AudioTrackKind?
+    /// Best playable stream for this voice.
+    let stream: Stream
+
+    var id: String { "\(language)|\(kind?.rawValue ?? "")" }
+
+    /// Language name in the user's locale, e.g. "Vietnamese".
+    var languageName: String {
+        // "en-US.4" -> "en": show "English", not "English (United States)".
+        let code = String(language.split(separator: ".").first ?? Substring(language))
+        let base = String(code.split(separator: "-").first ?? Substring(code))
+        if let name = Locale.current.localizedString(forLanguageCode: base) ?? Locale.current.localizedString(forIdentifier: code) {
+            return name.prefix(1).uppercased() + name.dropFirst()
+        }
+        return stream.audioTrackName ?? code
+    }
+
+    var label: String {
+        guard let kind else { return languageName }
+        return "\(languageName) · \(kind.label)"
+    }
+
+    func matches(_ stream: Stream?) -> Bool {
+        guard let stream else { return false }
+        return stream.audioLanguage == language && stream.audioTrackKind == kind
+    }
+}
+
+extension AudioStreamSelector {
+    /// Distinct voices available for a video, original first. Empty when the
+    /// streams carry no language information (single-voice videos).
+    static func trackOptions(from streams: [Stream]) -> [AudioTrackOption] {
+        let playable = streams.filter { $0.isAVPlayerAudioPlayable && $0.audioLanguage != nil }
+        let groups = Dictionary(grouping: playable) { "\($0.audioLanguage ?? "")|\($0.audioTrackKind?.rawValue ?? "")" }
+        let options = groups.values.compactMap { group -> AudioTrackOption? in
+            guard let best = select(from: group), let language = best.audioLanguage else { return nil }
+            return AudioTrackOption(language: language, kind: best.audioTrackKind, stream: best)
+        }
+        return options.sorted { first, second in
+            let firstOriginal = first.kind == .original
+            let secondOriginal = second.kind == .original
+            if firstOriginal != secondOriginal { return firstOriginal }
+            return first.label.localizedStandardCompare(second.label) == .orderedAscending
+        }
+    }
+
+    /// Picks the stream for the same voice (language and kind) as `current`,
+    /// falling back to language-only matching, then to the preferred language.
+    static func select(from streams: [Stream], sameVoiceAs current: Stream?, preferredLanguage: String?) -> Stream? {
+        if let current, let language = current.audioLanguage {
+            let sameVoice = streams.filter { $0.audioLanguage == language && $0.audioTrackKind == current.audioTrackKind }
+            if let match = select(from: sameVoice) { return match }
+            return select(from: streams, preferredLanguage: language)
+        }
+        return select(from: streams, preferredLanguage: preferredLanguage)
+    }
+}

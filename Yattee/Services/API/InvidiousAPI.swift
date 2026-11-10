@@ -1702,6 +1702,7 @@ private struct InvidiousAdaptiveFormat: Decodable, Sendable {
             audioLanguage: language,
             audioTrackName: trackName,
             isOriginalAudio: isOriginal,
+            audioTrackKind: isAudioOnly ? parseAudioTrackKind(isOriginal: isOriginal) : nil,
             fps: isAudioOnly ? nil : fps,
             initRange: initRange,
             indexRange: indexRange
@@ -1768,6 +1769,22 @@ private struct InvidiousAdaptiveFormat: Decodable, Sendable {
         let trackName = generateTrackName(langCode: langCode, contentType: contentType)
 
         return (langCode, trackName, isOriginal)
+    }
+
+    /// Determine whether the track is the original voice, a human dub or an AI (auto) dub.
+    /// URL xtags are authoritative; the audioTrack display name is the fallback.
+    private nonisolated func parseAudioTrackKind(isOriginal: Bool) -> AudioTrackKind? {
+        if let urlString = url, let xtags = parseXtags(from: urlString),
+           let kind = AudioTrackKind(acont: xtags["acont"]) {
+            return kind
+        }
+        if let name = audioTrack?.displayName?.lowercased() {
+            if name.contains("original") { return .original }
+            if name.contains("auto") || (name.contains("ai") && name.contains("dub")) { return .autoDubbed }
+            if name.contains("descriptive") { return .descriptive }
+            if name.contains("dub") { return .dubbed }
+        }
+        return isOriginal ? .original : nil
     }
 
     /// Check if the stream URL's xtags indicate this is the original audio track.

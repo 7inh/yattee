@@ -1085,7 +1085,34 @@ final class PlayerService {
     }
 
     private func findMatchingAudioStream(in streams: [Stream], preferring preferred: Stream?) -> Stream? {
-        AudioStreamSelector.select(from: streams, preferredLanguage: preferred?.audioLanguage ?? settingsManager?.preferredAudioLanguage)
+        AudioStreamSelector.select(from: streams, sameVoiceAs: preferred, preferredLanguage: settingsManager?.preferredAudioLanguage)
+    }
+
+    // MARK: - Audio Tracks
+
+    /// Voices available for the current video (original, dubs, AI dubs).
+    var audioTrackOptions: [AudioTrackOption] {
+        AudioStreamSelector.trackOptions(from: availableStreams)
+    }
+
+    /// Switches the current video to another voice, keeping the playback position.
+    /// The choice lasts for this video only; the next video uses the Preferred Language setting.
+    func switchAudioTrack(to option: AudioTrackOption) async {
+        guard let video = state.currentVideo, !option.matches(state.currentStream) else { return }
+        let resumeTime = state.currentTime
+        let wasPaused = state.playbackState == .paused
+        LoggingService.shared.logPlayer("Switching audio track to \(option.label) at \(resumeTime)s")
+        await play(video: video, stream: option.stream, startTime: resumeTime, forceStartTime: true)
+        if wasPaused { pause() }
+    }
+
+    /// Audio language to download for a video: the voice playing now when it's the
+    /// current video, otherwise the Preferred Language setting.
+    func downloadAudioLanguage(for video: Video) -> String? {
+        if state.currentVideo?.id == video.id, let language = state.currentStream?.audioLanguage {
+            return language
+        }
+        return settingsManager?.preferredAudioLanguage
     }
     // MARK: - Private Methods
 
