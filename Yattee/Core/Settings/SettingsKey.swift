@@ -32,6 +32,7 @@ enum SettingsKey: String, CaseIterable {
     case resumeAction
     case allowSoftwareDecodedFormats
     case audioOnlyMode
+    case systemControlsSeekDuration
 
     // SponsorBlock
     case sponsorBlockEnabled

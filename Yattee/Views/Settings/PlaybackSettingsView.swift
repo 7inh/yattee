@@ -15,6 +15,7 @@ struct PlaybackSettingsView: View {
             if let settings = appEnvironment?.settingsManager {
                 AudioSection(settings: settings)
                 BehaviorSection(settings: settings)
+                SystemControlsSection(settings: settings)
                 QueueSection(settings: settings)
             }
         }
@@ -168,6 +169,33 @@ private struct BehaviorSection: View {
                 isOn: $settings.backgroundPlaybackEnabled
             )
 
+        }
+    }
+}
+
+// MARK: - System Controls Section
+
+/// Skip interval for the Lock Screen / Control Center seek buttons.
+private struct SystemControlsSection: View {
+    @Environment(\.appEnvironment) private var appEnvironment
+    @Bindable var settings: SettingsManager
+
+    var body: some View {
+        SettingsFormSection(
+            "settings.playback.systemControls.header",
+            footer: "settings.playback.systemControls.seek.footer"
+        ) {
+            PlatformMenuPicker(
+                String(localized: "settings.playback.systemControls.seekDuration"),
+                selection: $settings.systemControlsSeekDuration
+            ) {
+                ForEach(SystemControlsSeekDuration.allCases, id: \.self) { duration in
+                    Text(duration.displayName).tag(duration)
+                }
+            }
+        }
+        .onChange(of: settings.systemControlsSeekDuration) { _, newValue in
+            appEnvironment?.playerService.reconfigureSystemControls(duration: newValue)
         }
     }
 }

@@ -1322,7 +1322,7 @@ final class PlayerService {
     func setSettingsManager(_ manager: SettingsManager) {
         self.settingsManager = manager
         // Reconfigure remote commands now that we have settings
-        nowPlayingService.configureRemoteCommands()
+        nowPlayingService.configureRemoteCommands(duration: settingsManager?.systemControlsSeekDuration)
         // Note: preferredBackendType is now computed directly from settingsManager
     }
 
@@ -1332,7 +1332,7 @@ final class PlayerService {
         mode: SystemControlsMode? = nil,
         duration: SystemControlsSeekDuration? = nil
     ) {
-        nowPlayingService.configureRemoteCommands(mode: mode, duration: duration)
+        nowPlayingService.configureRemoteCommands(mode: mode, duration: duration ?? settingsManager?.systemControlsSeekDuration)
     }
 
     /// Observer for instance setting changes to re-apply proxy to cached streams.
@@ -1347,7 +1347,7 @@ final class PlayerService {
         nowPlayingService.playerControlsLayoutService = service
 
         // Reconfigure with the actual saved settings now that layout service is available
-        nowPlayingService.configureRemoteCommands()
+        nowPlayingService.configureRemoteCommands(duration: settingsManager?.systemControlsSeekDuration)
 
         // Observe preset changes to reconfigure system controls
         presetChangeObserver = NotificationCenter.default.addObserver(

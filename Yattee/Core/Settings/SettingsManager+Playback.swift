@@ -63,6 +63,19 @@ extension SettingsManager {
         }
     }
 
+    /// Seek interval for the Lock Screen / Control Center skip buttons.
+    var systemControlsSeekDuration: SystemControlsSeekDuration {
+        get {
+            if let cached = _systemControlsSeekDuration { return cached }
+            let raw = integer(for: .systemControlsSeekDuration, default: SystemControlsSeekDuration.tenSeconds.rawValue)
+            return SystemControlsSeekDuration(rawValue: raw) ?? .tenSeconds
+        }
+        set {
+            _systemControlsSeekDuration = newValue
+            set(newValue.rawValue, for: .systemControlsSeekDuration)
+        }
+    }
+
     var audioOnlyModeEnabled: Bool {
         get { true }
         set { set(true, for: .audioOnlyMode) }

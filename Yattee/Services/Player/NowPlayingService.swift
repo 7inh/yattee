@@ -59,7 +59,6 @@ final class NowPlayingService {
         // Publish audio metadata for Control Center and the lock screen.
         var nowPlayingInfo: [String: Any] = [
             MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyArtist: video.author.name,
             MPNowPlayingInfoPropertyIsLiveStream: isLive,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackQueueCount: 1,
@@ -299,7 +298,7 @@ final class NowPlayingService {
         duration: SystemControlsSeekDuration? = nil
     ) {
 
-        configureRemoteCommandsWithSettings(mode: .seek, duration: .tenSeconds)
+        configureRemoteCommandsWithSettings(mode: .seek, duration: duration ?? .tenSeconds)
     }
 
     /// Configures remote commands with the specified settings.

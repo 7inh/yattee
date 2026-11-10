@@ -44,6 +44,7 @@ final class SettingsManager {
     var _playerVolume: Float?
     var _resumeAction: ResumeAction?
     var _allowSoftwareDecodedFormats: Bool?
+    var _systemControlsSeekDuration: SystemControlsSeekDuration?
     var _audioOnlyModeEnabled: Bool?
 
     // SponsorBlock
@@ -416,6 +417,7 @@ final class SettingsManager {
         _playerVolume = nil
         _resumeAction = nil
         _allowSoftwareDecodedFormats = nil
+        _systemControlsSeekDuration = nil
         _audioOnlyModeEnabled = nil
         _sponsorBlockEnabled = nil
         _sponsorBlockCategories = nil
