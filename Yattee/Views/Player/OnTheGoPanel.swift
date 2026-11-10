@@ -33,6 +33,9 @@ struct OnTheGoPanel: View {
     let onClose: () -> Void
 
     @State private var scrubTime: TimeInterval?
+    /// Controls fade in when the player is presented in place by the resume
+    /// sheet's swipe, whose morph already drew the artwork and title.
+    @State private var chromeOpacity: Double?
     @State private var pendingSeekTime: TimeInterval?
     @State private var transportFeedbackTrigger = false
     @State private var showingPlayerMenu = false
@@ -140,8 +143,19 @@ struct OnTheGoPanel: View {
         return settings.hapticFeedbackEnabled && settings.hapticFeedbackIntensity != .off
     }
 
+    private var effectiveChromeOpacity: Double {
+        chromeOpacity ?? (appEnvironment?.navigationCoordinator.playerChromeFadesIn == true ? 0 : 1)
+    }
+
     var body: some View {
         panelContent
+            .onAppear {
+                guard let coordinator = appEnvironment?.navigationCoordinator,
+                      coordinator.playerChromeFadesIn else { return }
+                coordinator.playerChromeFadesIn = false
+                chromeOpacity = 0
+                withAnimation(.easeOut(duration: 0.3).delay(0.05)) { chromeOpacity = 1 }
+            }
             // System presentations use the nearer page's scheme. Visible controls
             // resolve their original colors separately so this never flips them.
             .environment(\.colorScheme, visibleLyricsProgress > 0.5 ? .dark : colorScheme)
@@ -319,9 +333,10 @@ struct OnTheGoPanel: View {
         )
     }
 
-    @ViewBuilder
+    /// Always laid out, and faded in once lyrics exist: inserting it later
+    /// shifted the artwork and controls a few points after the player opened.
     private var lyricsPageIndicator: some View {
-        if hasLyrics {
+        Group {
             HStack(spacing: 6) {
                 ForEach(0..<2) { page in
                     Circle()
@@ -345,6 +360,10 @@ struct OnTheGoPanel: View {
                 }
             }
         }
+        .opacity(hasLyrics ? 1 : 0)
+        .allowsHitTesting(hasLyrics)
+        .accessibilityHidden(!hasLyrics)
+        .animation(.easeOut(duration: 0.25), value: hasLyrics)
     }
 
     private var panelBackground: some View {
@@ -520,17 +539,19 @@ struct OnTheGoPanel: View {
             VStack(spacing: 0) {
                 lyricsPageIndicator
             }
-            .opacity(Double(1 - queueMorphProgress))
+            .opacity(Double(1 - queueMorphProgress) * effectiveChromeOpacity)
             .allowsHitTesting(queueMorphProgress == 0)
             .accessibilityHidden(queueMorphProgress > 0)
             seekTrack
                 .id(state.currentVideo?.id)
+                .opacity(effectiveChromeOpacity)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
             seekTimeLabels
-                .opacity(Double(1 - queueMorphProgress))
+                .opacity(Double(1 - queueMorphProgress) * effectiveChromeOpacity)
                 .accessibilityHidden(queueMorphProgress > 0)
             transportControls
+                .opacity(effectiveChromeOpacity)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
             VStack(alignment: .leading, spacing: 0) {
@@ -738,7 +759,7 @@ struct OnTheGoPanel: View {
     private func playerHeader(coverProgress: CGFloat, queueProgress: CGFloat) -> some View {
         ZStack {
             topBar(overlayProgress: max(visibleLyricsProgress, coverProgress))
-                .opacity(Double(1 - queueProgress))
+                .opacity(Double(1 - queueProgress) * effectiveChromeOpacity)
                 .allowsHitTesting(!isStickyPlayerVisible)
                 .accessibilityHidden(isStickyPlayerVisible)
 

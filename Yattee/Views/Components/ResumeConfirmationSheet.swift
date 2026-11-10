@@ -112,12 +112,16 @@ private struct ResumeConfirmationSheet: View {
 
     @State private var fittingHeight: CGFloat = 260
     @State private var selectedDetent: PresentationDetent = .height(260)
-    /// The sheet's top edge in screen space, live while it is dragged.
-    @State private var sheetTop: CGFloat = 0
     /// The sheet's leading edge in screen space; a large sheet is inset.
     @State private var sheetLeft: CGFloat = 0
     @State private var didHandOff = false
     @State private var handOffTask: Task<Void, Never>?
+    /// The morph as drawn: follows `progress` under the finger, and is
+    /// animated to the end when the sheet snaps up. The snap lays the content
+    /// out at its final size at once, so `progress` alone would jump there.
+    @State private var morphT: CGFloat = 0
+    /// Where the large sheet's top really stops, once seen.
+    @State private var measuredLargeTop: CGFloat?
 
     // MARK: Geometry
 
@@ -128,11 +132,6 @@ private struct ResumeConfirmationSheet: View {
         static let headerBottom: CGFloat = 20
         static let side: CGFloat = 20
         static let gap: CGFloat = 12
-        /// The expanded player's layout, relative to the safe area top.
-        static let playerSide: CGFloat = 16
-        static let playerArtworkTop: CGFloat = 97
-        static let playerTitleGap: CGFloat = 34
-        static let playerAuthorGap: CGFloat = 34
     }
 
     /// A little below where the large sheet's top stops, so the morph is
@@ -177,48 +176,80 @@ private struct ResumeConfirmationSheet: View {
                     fittingHeight = height
                     if selectedDetent != .large { selectedDetent = .height(height) }
                 }
-                .opacity(Double(max(0, 1 - progress * 2.5)))
+                .opacity(Double(max(0, 1 - morphT * 2.5)))
 
-                morphingHeader(width: width)
+                ResumeMorphHeader(
+                    video: video,
+                    t: morphT,
+                    width: width,
+                    // Targets are in screen space, measured from where the
+                    // sheet's top ends up, so the content rides the sheet.
+                    sheetFinalTop: measuredLargeTop ?? safeAreaTop + 10,
+                    sheetLeft: sheetLeft,
+                    safeAreaTop: safeAreaTop,
+                    screenWidth: keyWindow.bounds.width
+                )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onGeometryChange(for: CGRect.self) { geometry in
             geometry.frame(in: .global)
         } action: { _, frame in
-            sheetTop = frame.minY
             sheetLeft = frame.minX
             sheetHeight = frame.height
             if frame.height > 0, frame.height < (restingHeight ?? .infinity) {
                 restingHeight = frame.height
             }
-            scheduleHandOffWhenSettled()
+            if selectedDetent == .large {
+                measuredLargeTop = frame.minY
+            } else {
+                morphT = progress
+            }
         }
         .presentationDetents([.height(fittingHeight), .large], selection: $selectedDetent)
         .presentationContentInteraction(.resizes)
         .presentationDragIndicator(.visible)
-        .presentationBackground {
+        // Drawn by the content rather than `presentationBackground`, which
+        // lags behind a drag: the color moves with the finger from the first
+        // point, reaching the player's background before the top.
+        .background {
             ZStack {
                 Rectangle().fill(.regularMaterial)
-                // Reaches the player's background by the time the morph ends.
-            Color(uiColor: .systemBackground).opacity(Double(min(1, progress * 1.2)))
+                // The player's base-level background: inside a sheet
+                // `.systemBackground` resolves to the elevated gray instead.
+                Color(uiColor: UIColor { traits in
+                    UIColor.systemBackground.resolvedColor(
+                        with: traits.modifyingTraits { $0.userInterfaceLevel = .base }
+                    )
+                })
+                .opacity(Double(morphT))
             }
+            .ignoresSafeArea()
         }
-        .onChange(of: selectedDetent) { _, _ in
-            scheduleHandOffWhenSettled()
+        .presentationBackground(.clear)
+        .onChange(of: selectedDetent) { _, detent in
+            guard detent == .large else {
+                withAnimation(.smooth(duration: 0.35)) { morphT = 0 }
+                return
+            }
+            // Finish the morph alongside the system's snap, then hand off.
+            withAnimation(.smooth(duration: Self.snapDuration)) { morphT = 1 }
+            scheduleHandOff()
         }
         .accessibilityAction(named: Text(String(localized: "resume.action.continueAt \(resumeTime.formattedAsTimestamp)"))) {
             onContinue()
         }
     }
 
-    /// Hands off once the sheet has snapped to the top and stopped moving:
-    /// every frame of the snap pushes the hand-off back a little.
-    private func scheduleHandOffWhenSettled() {
+    /// Roughly the system's detent snap.
+    private static let snapDuration: TimeInterval = 0.4
+
+    /// Hands off once the morph has finished alongside the snap.
+    private func scheduleHandOff() {
         handOffTask?.cancel()
-        guard selectedDetent == .large, !didHandOff else { return }
+        guard !didHandOff else { return }
         handOffTask = Task {
-            try? await Task.sleep(for: .milliseconds(40))
+            try? await Task.sleep(for: .seconds(Self.snapDuration + 0.05))
             guard !Task.isCancelled else { return }
             handOff()
         }
@@ -228,64 +259,6 @@ private struct ResumeConfirmationSheet: View {
         guard !didHandOff, selectedDetent == .large else { return }
         didHandOff = true
         onSwipeToPlay()
-    }
-
-    // MARK: Morphing Header
-
-    private func morphingHeader(width: CGFloat) -> some View {
-        let t = progress
-        // Targets are in screen space; convert to the sheet's current frame.
-        let offsetY = -sheetTop
-        let offsetX = -sheetLeft
-        let screenWidth = keyWindow.bounds.width
-        let artSide = screenWidth - Metrics.playerSide * 2
-        let artTop = safeAreaTop + Metrics.playerArtworkTop + offsetY
-        let titleTop = artTop + artSide + Metrics.playerTitleGap
-        let authorTop = titleTop + Metrics.playerAuthorGap
-
-        let thumbX = lerp(Metrics.side, Metrics.playerSide + offsetX, t)
-        let thumbY = lerp(Metrics.headerTop, artTop, t)
-        let thumbW = lerp(Metrics.thumbWidth, artSide, t)
-        let thumbH = lerp(Metrics.thumbHeight, artSide, t)
-
-        let textStartX = Metrics.side + Metrics.thumbWidth + Metrics.gap
-        let textX = lerp(textStartX, Metrics.playerSide + offsetX, t)
-        let textW = lerp(width - textStartX - Metrics.side, artSide, t)
-        let titleY = lerp(Metrics.headerTop + 2, titleTop, t)
-        let titleLines = t > 0.5 ? 1 : 2
-        let authorY = t > 0.5 ? lerp(Metrics.headerTop + 38, authorTop, t) : Metrics.headerTop + 38
-
-        return ZStack(alignment: .topLeading) {
-            VideoThumbnailView(
-                url: video.bestThumbnail?.url,
-                fallbackURLs: video.thumbnailURLsByQuality
-            )
-            .aspectRatio(contentMode: .fill)
-            .frame(width: thumbW, height: thumbH)
-            .clipShape(RoundedRectangle(cornerRadius: lerp(6, 14, t), style: .continuous))
-            .offset(x: thumbX, y: thumbY)
-            .accessibilityHidden(true)
-
-            Text(verbatim: video.title)
-                .font(.system(size: lerp(15, 22, t), weight: t > 0.5 ? .semibold : .medium))
-                .lineLimit(titleLines)
-                .frame(width: textW, alignment: .leading)
-                .offset(x: textX, y: titleY)
-
-            Text(verbatim: video.author.name)
-                .font(.system(size: lerp(12, 17, t)))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: textW, alignment: .leading)
-                .offset(x: textX, y: authorY)
-                .opacity(t > 0.3 && t < 0.5 ? 0 : 1)
-        }
-        .accessibilityElement(children: .combine)
-        .allowsHitTesting(false)
-    }
-
-    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
-        a + (b - a) * t
     }
 
     // MARK: Actions
@@ -322,6 +295,97 @@ private struct ResumeConfirmationSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Morphing Header
+
+/// The video header, interpolated from its place in the sheet to the expanded
+/// player's artwork and title. `Animatable`, so an animated `t` lays it out
+/// afresh every frame — fonts and frames included.
+private struct ResumeMorphHeader: View, Animatable {
+    let video: Video
+    var t: CGFloat
+    let width: CGFloat
+    let sheetFinalTop: CGFloat
+    let sheetLeft: CGFloat
+    let safeAreaTop: CGFloat
+    let screenWidth: CGFloat
+
+    var animatableData: CGFloat {
+        get { t }
+        set { t = newValue }
+    }
+
+    private enum Metrics {
+        static let thumbWidth: CGFloat = 96
+        static let thumbHeight: CGFloat = 54
+        static let headerTop: CGFloat = 32
+        static let side: CGFloat = 20
+        static let gap: CGFloat = 12
+        /// The expanded player's layout, relative to the safe area top.
+        static let playerSide: CGFloat = 16
+        static let playerArtworkTop: CGFloat = 96
+        static let playerTitleGap: CGFloat = 16
+        static let playerAuthorGap: CGFloat = 34
+    }
+
+    var body: some View {
+        let offsetY = -sheetFinalTop
+        let offsetX = -sheetLeft
+        let artSide = screenWidth - Metrics.playerSide * 2
+        let artTop = safeAreaTop + Metrics.playerArtworkTop + offsetY
+        let titleGap = Metrics.playerTitleGap
+
+        let thumbX = lerp(Metrics.side, Metrics.playerSide + offsetX, t)
+        let thumbY = lerp(Metrics.headerTop, artTop, t)
+        let thumbW = lerp(Metrics.thumbWidth, artSide, t)
+        let thumbH = lerp(Metrics.thumbHeight, artSide, t)
+
+        let textStartX = Metrics.side + Metrics.thumbWidth + Metrics.gap
+        let textX = lerp(textStartX, Metrics.playerSide + offsetX, t)
+        let textW = lerp(width - textStartX - Metrics.side, artSide, t)
+        // The artwork widens over the title's column early, so the title
+        // drops below it within the first quarter, then rides under it.
+        let titleY = lerp(Metrics.headerTop + 2, thumbY + thumbH + titleGap, min(1, t * 4))
+        let authorY = titleY + lerp(36, Metrics.playerAuthorGap, t)
+
+        ZStack(alignment: .topLeading) {
+            // A fixed box with the image filling it: the thumbnail view keeps
+            // its own aspect ratio and would otherwise overflow the frame.
+            Color.clear
+                .frame(width: thumbW, height: thumbH)
+                .overlay {
+                    VideoThumbnailView(
+                        url: video.bestThumbnail?.url,
+                        fallbackURLs: video.thumbnailURLsByQuality
+                    )
+                    .aspectRatio(16 / 9, contentMode: .fill)
+                    .frame(width: max(thumbW, thumbH * 16 / 9), height: max(thumbH, thumbW * 9 / 16))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: lerp(6, 14, t), style: .continuous))
+                .offset(x: thumbX, y: thumbY)
+                .accessibilityHidden(true)
+
+            Text(verbatim: video.title)
+                .font(.system(size: lerp(15, 20, t), weight: t > 0.5 ? .bold : .medium))
+                .lineLimit(t > 0.5 ? 1 : 2)
+                .frame(width: textW, alignment: .leading)
+                .offset(x: textX, y: titleY)
+
+            Text(verbatim: video.author.name)
+                .font(.system(size: lerp(12, 15, t)))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: textW, alignment: .leading)
+                .offset(x: textX, y: authorY)
+        }
+        .accessibilityElement(children: .combine)
+        .allowsHitTesting(false)
+    }
+
+    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + (b - a) * t
     }
 }
 

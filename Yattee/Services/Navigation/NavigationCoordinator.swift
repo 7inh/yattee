@@ -90,6 +90,9 @@ final class NavigationCoordinator {
 
     /// Whether the next player expand should skip animation (for fullscreen exit).
     var skipNextPlayerExpandAnimation = false
+    /// Set with a non-animated expand from a morph that already drew the
+    /// artwork and title: the player fades its controls in once.
+    var playerChromeFadesIn = false
 
     /// Trigger for remote control fullscreen toggle (incremented when toggle is needed).
     var pendingFullscreenToggle = 0
@@ -292,6 +295,7 @@ final class NavigationCoordinator {
         if !animated || skipNextPlayerExpandAnimation {
             // Present the player in place, without its zoom-in.
             skipNextPlayerExpandAnimation = false
+            playerChromeFadesIn = true
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
