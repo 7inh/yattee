@@ -64,6 +64,13 @@ struct OnTheGoPanel: View {
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
     @State private var isPaging = false
+    @State private var queueTab = QueueTab.upNext
+
+    /// Tabs above the pull-up list. Chapters only appears when the video has them.
+    private enum QueueTab: Hashable, Sendable {
+        case upNext
+        case chapters
+    }
 
     private enum PlayerPage: Hashable, Sendable {
         case artwork
@@ -86,6 +93,8 @@ struct OnTheGoPanel: View {
         static let coverInfoSeekSpacing: CGFloat = 10
         static let seekHitHeight: CGFloat = 44
         static let transportHeight: CGFloat = 104
+        static let queueTabsHeight: CGFloat = 32
+        static let queueTabsBottomSpacing: CGFloat = 8
 
         static func contentWidth(for panelWidth: CGFloat) -> CGFloat {
             min(560, max(0, panelWidth - horizontalPadding * 2))
@@ -102,6 +111,11 @@ struct OnTheGoPanel: View {
 
     private var state: PlayerState { playerService.state }
     private var showingLyrics: Bool { selectedPage == .lyrics }
+    private var showsQueueTabs: Bool { !state.chapters.isEmpty }
+    private var visibleQueueTab: QueueTab { showsQueueTabs ? queueTab : .upNext }
+    private var queueTabsInset: CGFloat {
+        showsQueueTabs ? Layout.queueTabsHeight + Layout.queueTabsBottomSpacing : 0
+    }
     private var hasLyrics: Bool {
         lyrics.videoID == state.currentVideo?.id.videoID && !lyrics.tracks.isEmpty
     }
@@ -493,7 +507,7 @@ struct OnTheGoPanel: View {
             // Keep paging/scrubbing simultaneous. Native dismissal stays enabled
             // in A, with a release fallback if our direction-locked pan wins.
             .simultaneousGesture(panelDragGesture(
-                queueRowsTop: layout.queueRowsTop
+                queueRowsTop: layout.queueRowsTop + queueTabsInset
             ))
             .onChange(of: coverGeometry, initial: true) { _, value in
                 panelCoverGeometry = value
@@ -939,6 +953,17 @@ struct OnTheGoPanel: View {
 
             audioTrackMenuRow
 
+            if showsQueueTabs {
+                Button {
+                    dismissPlayerMenu {
+                        queueTab = .chapters
+                        settlePanel(at: .fullQueue)
+                    }
+                } label: {
+                    playerMenuRow(String(localized: "Chapters"), systemImage: "list.bullet.rectangle")
+                }
+            }
+
             Button {
                 dismissPlayerMenu { presentAppSheet(.queue()) }
             } label: {
@@ -1180,11 +1205,28 @@ struct OnTheGoPanel: View {
                     }
                 }
 
+            if showsQueueTabs {
+                Picker("List", selection: $queueTab) {
+                    Text("Up Next").tag(QueueTab.upNext)
+                    Text("Chapters").tag(QueueTab.chapters)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 560, minHeight: Layout.queueTabsHeight, maxHeight: Layout.queueTabsHeight)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, Layout.queueTabsBottomSpacing)
+            }
+
             ScrollView {
-                inlineQueueItems
-                    .frame(maxWidth: 560)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, Layout.mediumSpacing)
+                Group {
+                    if visibleQueueTab == .chapters {
+                        inlineChapterItems
+                    } else {
+                        inlineQueueItems
+                    }
+                }
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, Layout.mediumSpacing)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
@@ -1208,6 +1250,38 @@ struct OnTheGoPanel: View {
         }
         .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
         .clipped()
+        .onChange(of: visibleQueueTab) { _, tab in
+            // Pin the chapter before the playing one to the top so the playing
+            // chapter is always fully visible, whatever the viewport height is
+            // mid-animation (a .center anchor computed while the panel is still
+            // growing leaves it half hidden under the tabs).
+            let chapters = state.chapters
+            if tab == .chapters,
+               let activeIndex = chapters.firstIndex(where: { $0.id == state.activeChapterID }),
+               activeIndex > 0 {
+                queueScrollPosition.scrollTo(id: chapters[activeIndex - 1].id, anchor: .top)
+            } else {
+                queueScrollPosition.scrollTo(edge: .top)
+            }
+        }
+    }
+
+    private var inlineChapterItems: some View {
+        LazyVStack(spacing: 2) {
+            ForEach(Array(state.chapters.enumerated()), id: \.element.id) { index, chapter in
+                ChapterRow(
+                    chapter: chapter,
+                    index: index,
+                    isActive: chapter.id == state.activeChapterID,
+                    isPlaying: state.playbackState == .playing,
+                    onTap: {
+                        guard canActivateQueueRow() else { return }
+                        seek(to: chapter.startTime)
+                    }
+                )
+                .id(chapter.id)
+            }
+        }
     }
 
     private var inlineQueueItems: some View {
