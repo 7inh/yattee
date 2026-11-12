@@ -163,7 +163,7 @@ final class AppEnvironment {
             randomizePerRequest: settings.randomizeUserAgentPerRequest
         )
 
-        let instances = instancesManager ?? InstancesManager(settingsManager: settings)
+        let instances = instancesManager ?? InstancesManager(settingsManager: settings, seedsDefaultInstance: true)
         instances.setSettingsManager(settings)
         self.instancesManager = instances
 

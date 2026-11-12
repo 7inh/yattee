@@ -18,6 +18,15 @@ final class InstancesManager {
     private let ubiquitousStore = NSUbiquitousKeyValueStore.default
     private let instancesKey = "configuredInstances"
     private let activeInstanceKey = "activeInstanceID"
+    private let seededDefaultInstanceKey = "seededDefaultInstance.yt.7inh.site"
+
+    // MARK: - Default Instance
+
+    /// The public Invidious instance this fork ships with.
+    static let defaultInstanceURL = URL(string: "https://yt.7inh.site")!
+
+    /// The old Tailscale-only instance the default replaces.
+    private static let retiredInstanceHost = "100.94.63.101"
 
     // MARK: - Dependencies
 
@@ -34,12 +43,21 @@ final class InstancesManager {
     ///   written. The app's own defaults, except under test: a manager built on
     ///   the shared ones edits the list the app on that device is using, which
     ///   is how test fixtures ended up in it.
-    init(settingsManager: SettingsManager? = nil, defaults: UserDefaults = .standard) {
+    /// - Parameter seedsDefaultInstance: adds the shipped default instance once
+    ///   per device. Only the app passes true, so tests start from an empty list.
+    init(
+        settingsManager: SettingsManager? = nil,
+        defaults: UserDefaults = .standard,
+        seedsDefaultInstance: Bool = false
+    ) {
         self.settingsManager = settingsManager
         self.localDefaults = defaults
 
         loadInstances()
         loadActiveInstance()
+        if seedsDefaultInstance {
+            seedDefaultInstanceIfNeeded()
+        }
 
         // Listen for external changes from iCloud
         NotificationCenter.default.addObserver(
@@ -271,6 +289,27 @@ final class InstancesManager {
         }
 
         NotificationCenter.default.post(name: .instancesDidChange, object: nil)
+    }
+
+    /// Adds the default instance at the front of the list once, so it becomes
+    /// the active one. Points away from the retired Tailscale instance if that
+    /// was explicitly active; the user's other instances are left alone.
+    private func seedDefaultInstanceIfNeeded() {
+        guard !localDefaults.bool(forKey: seededDefaultInstanceKey) else { return }
+        localDefaults.set(true, forKey: seededDefaultInstanceKey)
+
+        guard !instances.contains(where: { $0.url.host == Self.defaultInstanceURL.host }) else { return }
+
+        instances.insert(Instance(type: .invidious, url: Self.defaultInstanceURL), at: 0)
+
+        if let id = activeInstanceID,
+           instances.first(where: { $0.id == id })?.url.host == Self.retiredInstanceHost {
+            activeInstanceID = nil
+            localDefaults.removeObject(forKey: activeInstanceKey)
+        }
+
+        saveInstances()
+        LoggingService.shared.info("Seeded default instance \(Self.defaultInstanceURL.absoluteString)", category: .general)
     }
 
     private func loadActiveInstance() {
