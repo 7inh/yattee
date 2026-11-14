@@ -245,6 +245,9 @@ struct OnTheGoPanel: View {
                 if target != .fullQueue {
                     queueScrollPosition.scrollTo(y: 0)
                 }
+                if target != .normal {
+                    showingDetails = false
+                }
             }
             .onDisappear {
                 isPaging = false
@@ -538,7 +541,8 @@ struct OnTheGoPanel: View {
                 .accessibilityHidden(!showingLyrics || queueMorphProgress > 0)
             videoInfo
                 .opacity(Double(1 - visibleLyricsProgress))
-                .allowsHitTesting(!isStickyPlayerVisible && visibleLyricsProgress < 0.5)
+                // Details belongs to the player screen only, not the pulled-up queue.
+                .allowsHitTesting(queueMorphProgress == 0 && visibleLyricsProgress < 0.5)
                 .accessibilityHidden(isStickyPlayerVisible || visibleLyricsProgress >= 0.5)
             // Cover the entire dots/timeline region, including gaps and disabled
             // controls. The controls above this barrier retain their own gestures.
