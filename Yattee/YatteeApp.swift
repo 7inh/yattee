@@ -99,6 +99,10 @@ struct YatteeApp: App {
                 .onAppear {
                     SettingsManager.applyTheme(appEnvironment.settingsManager.theme)
                     registerBackgroundTasksIfNeeded()
+                    // Show the last played video in the mini player, ready to continue.
+                    appEnvironment.playerService.restoreLastSession(
+                        from: appEnvironment.dataManager.watchHistory(limit: 1).first
+                    )
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .continueUserActivity)) { notification in
                     if let activity = notification.object as? NSUserActivity {

@@ -114,6 +114,11 @@ final class PlayerService {
     /// Current playback task - cancelled when video is closed or new video is opened.
     private var currentPlayTask: Task<Void, Never>?
 
+    /// The last session, shown in the mini player at launch but not loaded yet.
+    /// Nothing is fetched and the audio session is left alone until the user
+    /// presses play, so restoring never interrupts other apps' audio.
+    @ObservationIgnored private var restoredSession: (video: Video, startTime: TimeInterval)?
+
     /// Video ID that we're currently loading - used to ignore stale time updates from previous video.
     private var loadingVideoID: VideoID?
 
@@ -573,9 +578,49 @@ final class PlayerService {
         )
     }
 
+    // MARK: - Session Restore
+
+    /// Puts the most recently played video into the mini player, paused at
+    /// its saved position, without loading it.
+    func restoreLastSession(from entry: WatchEntry?) {
+        guard state.currentVideo == nil, let entry, !entry.isLive else { return }
+        // isFinished stays set after an earlier full watch, so judge by position:
+        // only a video stopped at its very end starts over.
+        let atEnd = entry.duration > 0 && entry.watchedSeconds >= entry.duration - 10
+        let startTime = atEnd ? 0 : entry.watchedSeconds
+        let video = entry.toVideo()
+        state.setCurrentVideo(video, stream: nil)
+        state.duration = entry.duration
+        state.currentTime = startTime
+        state.setPlaybackState(.paused)
+        // Nothing is loading, so the controls must not wait for a first frame or
+        // buffer; play() clears both again when it starts the real load.
+        state.isFirstFrameReady = true
+        state.isBufferReady = true
+        restoredSession = (video, startTime)
+        LoggingService.shared.logPlayer("Restored last session: \(video.id.id) at \(Int(startTime))s")
+    }
+
+    /// Loads the restored video at its saved position. Returns false when there is none.
+    private func startRestoredSession() -> Bool {
+        guard let session = restoredSession else { return false }
+        restoredSession = nil
+        guard state.currentVideo?.id == session.video.id else { return false }
+
+        currentPlayTask?.cancel()
+        playbackGeneration += 1
+        state.setPlaybackState(.loading)
+        let startTime = state.currentTime > 0 ? state.currentTime : session.startTime
+        currentPlayTask = Task {
+            await playPreferringDownloaded(video: session.video, startTime: startTime, forceStartTime: true)
+        }
+        return true
+    }
+
     /// Resumes playback.
     func resume() {
         state.playbackIntent.setPlaying(true)
+        if startRestoredSession() { return }
         if isPausedBySleepTimer && videoEndedNaturally {
             Task { await replayCurrentVideo() }
             return
@@ -656,7 +701,12 @@ final class PlayerService {
         currentPlayTask?.cancel()
         currentPlayTask = nil
 
-        saveProgressAndSync()
+        // A restored session never played, so there is no progress of its own to save.
+        let wasRestored = restoredSession != nil
+        restoredSession = nil
+        if !wasRestored {
+            saveProgressAndSync()
+        }
         watchHistorySyncService?.endSession()
         cleanup()
 
@@ -678,6 +728,11 @@ final class PlayerService {
     ///   - time: The time to seek to in seconds
     ///   - showLoading: If true, show loading state during seek (e.g., for early SponsorBlock skips)
     func seek(to time: TimeInterval, showLoading: Bool = false) async {
+        if restoredSession != nil {
+            // Not loaded yet: remember the position for when play is pressed.
+            state.currentTime = time
+            return
+        }
         state.isSeeking = true
         await currentBackend?.seek(to: time, showLoading: showLoading)
         state.isSeeking = false
@@ -686,6 +741,10 @@ final class PlayerService {
 
     /// Seeks forward by a duration.
     func seekForward(by seconds: TimeInterval = 10) {
+        if restoredSession != nil {
+            state.currentTime = min(state.currentTime + seconds, max(state.duration, state.currentTime))
+            return
+        }
         state.isSeeking = true
         let newTime = state.currentTime + seconds
         Task {
@@ -696,6 +755,10 @@ final class PlayerService {
 
     /// Seeks backward by a duration.
     func seekBackward(by seconds: TimeInterval = 10) {
+        if restoredSession != nil {
+            state.currentTime = max(state.currentTime - seconds, 0)
+            return
+        }
         state.isSeeking = true
         let newTime = max(state.currentTime - seconds, 0)
         Task {
@@ -856,8 +919,12 @@ final class PlayerService {
         // Check if player PiP is active - if so, don't expand the player
         let isPiPActive = false
 
+        // A restored session was never loaded, so it always takes the full load below.
+        let wasRestored = restoredSession != nil
+        restoredSession = nil
+
         // If this video is already loaded, optionally seek/resume instead of reloading.
-        if isCurrentlyPlaying(video: video) {
+        if !wasRestored, isCurrentlyPlaying(video: video) {
             LoggingService.shared.logPlayer("Video already loaded, applying seek/resume instead of reload (startTime=\(startTime ?? -1), state=\(state.playbackState))")
             if !isPiPActive {
                 navigationCoordinator?.expandPlayer()
@@ -1580,6 +1647,8 @@ final class PlayerService {
     /// Saves current progress and queues it for iCloud sync without ending playback.
     /// Called when the app enters background so the position reaches other devices.
     func syncWatchProgress() {
+        // A restored session that was never played has nothing new to save.
+        guard restoredSession == nil else { return }
         saveProgressAndSync()
     }
 
