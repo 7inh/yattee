@@ -18,15 +18,15 @@ final class InstancesManager {
     private let ubiquitousStore = NSUbiquitousKeyValueStore.default
     private let instancesKey = "configuredInstances"
     private let activeInstanceKey = "activeInstanceID"
-    private let seededDefaultInstanceKey = "seededDefaultInstance.yt.7inh.site"
+    private let seededDefaultInstanceKey = "seededDefaultInstance.maydocui"
 
     // MARK: - Default Instance
 
-    /// The public Invidious instance this fork ships with.
-    static let defaultInstanceURL = URL(string: "https://yt.7inh.site")!
+    /// The Invidious instance this fork ships with: the home server, reachable over Tailscale.
+    static let defaultInstanceURL = URL(string: "http://maydocui.taila1b96e.ts.net:3000")!
 
-    /// The old Tailscale-only instance the default replaces.
-    private static let retiredInstanceHost = "100.94.63.101"
+    /// Instances this fork shipped before that no longer exist; seeding removes them.
+    static let retiredInstanceHosts: Set<String> = ["100.94.63.101", "yt.7inh.site"]
 
     // MARK: - Dependencies
 
@@ -298,17 +298,21 @@ final class InstancesManager {
         guard !localDefaults.bool(forKey: seededDefaultInstanceKey) else { return }
         localDefaults.set(true, forKey: seededDefaultInstanceKey)
 
-        guard !instances.contains(where: { $0.url.host == Self.defaultInstanceURL.host }) else { return }
-
-        instances.insert(Instance(type: .invidious, url: Self.defaultInstanceURL), at: 0)
-
-        if let id = activeInstanceID,
-           instances.first(where: { $0.id == id })?.url.host == Self.retiredInstanceHost {
+        let retired = instances.filter { Self.retiredInstanceHosts.contains($0.url.host ?? "") }
+        if let id = activeInstanceID, retired.contains(where: { $0.id == id }) {
             activeInstanceID = nil
             localDefaults.removeObject(forKey: activeInstanceKey)
         }
+        instances.removeAll { Self.retiredInstanceHosts.contains($0.url.host ?? "") }
+
+        if !instances.contains(where: { $0.url.host == Self.defaultInstanceURL.host }) {
+            instances.insert(Instance(type: .invidious, url: Self.defaultInstanceURL), at: 0)
+        }
 
         saveInstances()
+        for instance in retired {
+            Task { await ProxyDetectionCache.shared.invalidate(instance: instance) }
+        }
         LoggingService.shared.info("Seeded default instance \(Self.defaultInstanceURL.absoluteString)", category: .general)
     }
 

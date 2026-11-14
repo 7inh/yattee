@@ -34,17 +34,25 @@ struct DefaultInstanceSeedingTests {
         #expect(second.instances.isEmpty)
     }
 
-    @Test("The default goes first and replaces the retired Tailscale instance as active")
+    @Test("Retired shipped instances are removed and the default becomes active")
     func replacesRetiredActive() throws {
         let defaults = makeDefaults()
-        let retired = Instance(type: .invidious, url: URL(string: "http://100.94.63.101:3000")!)
-        defaults.set(try JSONEncoder().encode([retired]), forKey: "configuredInstances")
-        defaults.set(retired.id.uuidString, forKey: "activeInstanceID")
+        let oldTailscale = Instance(type: .invidious, url: URL(string: "http://100.94.63.101:3000")!)
+        let oldPublic = Instance(type: .invidious, url: URL(string: "https://yt.7inh.site")!)
+        defaults.set(try JSONEncoder().encode([oldPublic, oldTailscale]), forKey: "configuredInstances")
+        defaults.set(oldPublic.id.uuidString, forKey: "activeInstanceID")
+        // A device that already seeded the previous default must still get the new one.
+        defaults.set(true, forKey: "seededDefaultInstance.yt.7inh.site")
 
         let manager = InstancesManager(defaults: defaults, seedsDefaultInstance: true)
 
-        #expect(manager.instances.map(\.url) == [InstancesManager.defaultInstanceURL, retired.url])
+        #expect(manager.instances.map(\.url) == [InstancesManager.defaultInstanceURL])
         #expect(manager.activeInstance?.url == InstancesManager.defaultInstanceURL)
+    }
+
+    @Test("The default is plain HTTP on the home server's tailnet name")
+    func defaultURL() {
+        #expect(InstancesManager.defaultInstanceURL.absoluteString == "http://maydocui.taila1b96e.ts.net:3000")
     }
 
     @Test("An explicitly chosen other instance stays active")
