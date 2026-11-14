@@ -77,10 +77,30 @@ struct CommentsView: View {
                 .font(.largeTitle.bold())
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
+            headerButtons
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 28)
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private var headerButtons: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 12) {
+                headerButtonRow
+            }
+        } else {
+            headerButtonRow
+        }
+    }
+
+    private var headerButtonRow: some View {
+        HStack(spacing: 12) {
             if let onShowDetails {
                 Button(action: onShowDetails) {
-                    Image(systemName: "info.circle")
-                        .font(.title2)
+                    Image(systemName: "info")
+                        .font(.title3.weight(.semibold))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -89,16 +109,13 @@ struct CommentsView: View {
             }
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.title2)
+                    .font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .modifier(CommentsHeaderButtonStyleModifier())
             .accessibilityLabel("Close comments")
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 28)
-        .padding(.bottom, 16)
     }
 
     private var sortChips: some View {
@@ -202,11 +219,12 @@ struct CommentsView: View {
 private struct CommentsHeaderButtonStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
+            // .buttonStyle(.glass) pads the 44pt label into a ~70pt circle that
+            // overflows its frame, so the two buttons overlapped. Apply the glass
+            // directly to the 44pt label instead.
             content
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .buttonSizing(.flexible)
-                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
         } else {
             content.buttonStyle(.plain)
         }
