@@ -103,6 +103,9 @@ struct YatteeApp: App {
                     appEnvironment.playerService.restoreLastSession(
                         from: appEnvironment.dataManager.watchHistory(limit: 1).first
                     )
+                    #if os(iOS)
+                    SleepTimerLiveActivityController.shared.start(playerService: appEnvironment.playerService)
+                    #endif
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .continueUserActivity)) { notification in
                     if let activity = notification.object as? NSUserActivity {
@@ -205,6 +208,9 @@ struct YatteeApp: App {
 
             // Handle pending notification navigation and warm cache when becoming active
             if newPhase == .active {
+                #if os(iOS)
+                SleepTimerLiveActivityController.shared.appBecameActive()
+                #endif
                 appEnvironment.notificationManager.handlePendingNavigation(
                     using: appEnvironment.navigationCoordinator
                 )
