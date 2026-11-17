@@ -16,10 +16,21 @@ final class AVAudioBackend: PlayerBackend {
 
     var rate: Float = 1 {
         didSet {
-            player.defaultRate = rate
-            if wantsToPlay { player.rate = rate }
-            LoggingService.shared.logPlayer("Audio speed selected: \(rate)x, playing=\(wantsToPlay)")
+            applyRate()
+            LoggingService.shared.logPlayer("Audio speed selected: \(rate)x, effective=\(effectiveRate)x, playing=\(wantsToPlay)")
+            startLocalCopyIfNeeded()
         }
+    }
+
+    /// iOS plays HLS above 2x silently, so the streamed (HLS) path is held at
+    /// 2x until the local copy for 2.5x/3x is ready.
+    private var effectiveRate: Float {
+        playlistResourceLoader != nil ? min(rate, 2) : rate
+    }
+
+    private func applyRate() {
+        player.defaultRate = effectiveRate
+        if wantsToPlay { player.rate = effectiveRate }
     }
     var volume: Float {
         get { player.volume }
@@ -45,10 +56,19 @@ final class AVAudioBackend: PlayerBackend {
     private var defersReady = false
     private var reportedReady = false
     private var playbackState: PlaybackState = .idle
+    /// The remote rendition behind the current HLS item, for fetching a local copy.
+    private var remoteAudio: Stream?
+    private var localCopyTask: Task<Void, Never>?
+    private let localCopies: AudioLocalCopyCache
 
-    init(player: AVPlayer = AVPlayer(), dashPlaylistLoader: DASHAudioPlaylistLoader = DASHAudioPlaylistLoader()) {
+    init(
+        player: AVPlayer = AVPlayer(),
+        dashPlaylistLoader: DASHAudioPlaylistLoader = DASHAudioPlaylistLoader(),
+        localCopies: AudioLocalCopyCache = .shared
+    ) {
         self.player = player
         self.dashPlaylistLoader = dashPlaylistLoader
+        self.localCopies = localCopies
         player.allowsExternalPlayback = true
         player.automaticallyWaitsToMinimizeStalling = true
     }
@@ -122,6 +142,11 @@ final class AVAudioBackend: PlayerBackend {
             || ["m4a", "mp4"].contains(audio.format.lowercased())
         if !audio.url.isFileURL, !audio.isLive, isMP4,
            audio.initRange != nil, audio.indexRange != nil {
+            if rate > 2, let copy = await localCopies.existingCopy(for: audio) {
+                try checkLoad(token)
+                LoggingService.shared.logPlayer("Audio: using cached local copy for \(rate)x")
+                return AVURLAsset(url: copy)
+            }
             // DASH fragments are not ordinary progressive M4A files. Successful
             // metadata/range reads do not guarantee native playback will start.
             // Always adapt remote indexed audio first, regardless of the speed;
@@ -140,6 +165,7 @@ final class AVAudioBackend: PlayerBackend {
                 let asset = AVURLAsset(url: loader.url, options: options)
                 asset.resourceLoader.setDelegate(loader, queue: .main)
                 playlistResourceLoader = loader
+                remoteAudio = audio
                 LoggingService.shared.logPlayer("Audio: using generated DASH HLS byte-range playlist")
                 return asset
             } catch {
@@ -160,7 +186,7 @@ final class AVAudioBackend: PlayerBackend {
         do {
             try activateAudioSession()
             wantsToPlay = true
-            player.defaultRate = rate
+            player.defaultRate = effectiveRate
             player.play()
         } catch {
             fail(.loadFailed(error.localizedDescription))
@@ -200,6 +226,9 @@ final class AVAudioBackend: PlayerBackend {
         player.currentItem?.cancelPendingSeeks()
         player.replaceCurrentItem(with: nil)
         playlistResourceLoader = nil
+        remoteAudio = nil
+        localCopyTask?.cancel()
+        localCopyTask = nil
         defersReady = false
         reportedReady = false
         setState(.idle)
@@ -237,6 +266,90 @@ final class AVAudioBackend: PlayerBackend {
     private func activateAudioSession() throws {
         try Self.configureAudioSession()
         try AVAudioSession.sharedInstance().setActive(true)
+    }
+
+    // MARK: - Local Copy Above 2x
+
+    private func startLocalCopyIfNeeded() {
+        guard rate > 2, localCopyTask == nil, let audio = remoteAudio,
+              playlistResourceLoader != nil, reportedReady else { return }
+        let token = generation
+        LoggingService.shared.logPlayer("Audio: fetching local copy for \(rate)x")
+        localCopyTask = Task { [weak self, localCopies] in
+            do {
+                let file = try await localCopies.localCopy(for: audio)
+                await self?.switchToLocalCopy(file, generation: token)
+            } catch {
+                guard !(error is CancellationError) else { return }
+                LoggingService.shared.logPlayerError("Audio local copy failed", error: error)
+                await MainActor.run { [weak self] in
+                    if self?.generation == token { self?.localCopyTask = nil }
+                }
+            }
+        }
+    }
+
+    /// Replaces the HLS item with the local file at the same position.
+    private func switchToLocalCopy(_ file: URL, generation token: UUID) async {
+        guard generation == token, playlistResourceLoader != nil, rate > 2,
+              let oldItem = player.currentItem else { return }
+        let position = player.currentTime()
+        let resume = wantsToPlay
+
+        let item = AVPlayerItem(asset: AVURLAsset(url: file))
+        item.audioTimePitchAlgorithm = .spectral
+        // Old observers belong to the HLS item; give the new one a fresh generation.
+        let newToken = UUID()
+        generation = newToken
+        seekGeneration = UUID()
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        notifications.forEach { NotificationCenter.default.removeObserver($0) }
+        notifications.removeAll()
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        installObservers(for: item, generation: newToken)
+        player.replaceCurrentItem(with: item)
+
+        let deadline = Date().addingTimeInterval(10)
+        while item.status != .readyToPlay {
+            if generation != newToken { return }
+            if item.status == .failed || Date() >= deadline {
+                LoggingService.shared.logPlayerError(
+                    "Audio local copy did not load; staying on HLS",
+                    error: item.error ?? BackendError.loadFailed("timeout")
+                )
+                restoreHLSItem(oldItem, at: position, resume: resume)
+                try? FileManager.default.removeItem(at: file)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        await player.seek(to: position, toleranceBefore: .zero, toleranceAfter: .zero)
+        guard generation == newToken else { return }
+        playlistResourceLoader = nil
+        remoteAudio = nil
+        applyRate()
+        if resume { player.play(); player.rate = effectiveRate }
+        publishProgress()
+        LoggingService.shared.logPlayer("Audio: switched to local copy at \(Int(position.seconds))s for \(rate)x")
+    }
+
+    private func restoreHLSItem(_ item: AVPlayerItem, at position: CMTime, resume: Bool) {
+        let token = UUID()
+        generation = token
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        notifications.forEach { NotificationCenter.default.removeObserver($0) }
+        notifications.removeAll()
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        installObservers(for: item, generation: token)
+        player.replaceCurrentItem(with: item)
+        player.seek(to: position, toleranceBefore: .zero, toleranceAfter: .zero)
+        applyRate()
+        if resume { player.play() }
+        // Don't retry this item; the copy failed once already.
     }
 
     // MARK: - Observers
@@ -318,8 +431,11 @@ final class AVAudioBackend: PlayerBackend {
     private func reportReady() {
         guard !reportedReady else { return }
         reportedReady = true
+        // The item type (HLS or local) is known now, so cap or lift the rate.
+        applyRate()
         setState(.ready)
         delegate?.backendDidBecomeReady(self)
+        startLocalCopyIfNeeded()
     }
 
     private func checkLoad(_ token: UUID) throws {
