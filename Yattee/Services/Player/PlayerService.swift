@@ -581,16 +581,30 @@ final class PlayerService {
     // MARK: - Session Restore
 
     /// Puts the most recently played video into the mini player, paused at
-    /// its saved position, without loading it.
+    /// its saved position, without loading it. The session saved when the app
+    /// last went to the background wins; watch history is the fallback, since
+    /// a briefly opened video may never have reached it.
     func restoreLastSession(from entry: WatchEntry?) {
-        guard state.currentVideo == nil, let entry, !entry.isLive else { return }
-        // isFinished stays set after an earlier full watch, so judge by position:
-        // only a video stopped at its very end starts over.
-        let atEnd = entry.duration > 0 && entry.watchedSeconds >= entry.duration - 10
-        let startTime = atEnd ? 0 : entry.watchedSeconds
-        let video = entry.toVideo()
+        guard state.currentVideo == nil else { return }
+        let saved = loadSavedSession()
+        if let saved, let video = saved.video, !video.isLive {
+            let duration = saved.duration ?? video.duration
+            showRestored(video, at: saved.currentTime ?? 0, duration: duration)
+            applySavedQueue(saved)
+        } else if let entry, !entry.isLive {
+            let video = entry.toVideo()
+            showRestored(video, at: entry.watchedSeconds, duration: entry.duration)
+            if let saved, saved.videoID == video.id { applySavedQueue(saved) }
+        }
+    }
+
+    private func showRestored(_ video: Video, at position: TimeInterval, duration: TimeInterval) {
+        // A finished flag can linger from an earlier full watch, so judge by
+        // position: only a video stopped at its very end starts over.
+        let atEnd = duration > 0 && position >= duration - 10
+        let startTime = atEnd ? 0 : position
         state.setCurrentVideo(video, stream: nil)
-        state.duration = entry.duration
+        state.duration = duration
         state.currentTime = startTime
         state.setPlaybackState(.paused)
         // Nothing is loading, so the controls must not wait for a first frame or
@@ -598,21 +612,24 @@ final class PlayerService {
         state.isFirstFrameReady = true
         state.isBufferReady = true
         restoredSession = (video, startTime)
-        restoreSavedQueue(for: video)
         LoggingService.shared.logPlayer("Restored last session: \(video.id.id) at \(Int(startTime))s")
     }
 
-    /// The queue around the current video, saved so a relaunch can bring back
-    /// the playlist it was played from, not just the video itself.
-    private struct SavedQueue: Codable {
+    /// The current video, its position and the queue around it, saved so a
+    /// relaunch brings back exactly what was playing, playlist included.
+    /// Fields added after the first version are optional so older files still decode.
+    private struct SavedSession: Codable {
         let videoID: VideoID
         let queue: [QueuedVideo]
         let history: [QueuedVideo]
         let queueSource: QueueSource?
         let queueSourceLabel: String?
+        var video: Video?
+        var currentTime: TimeInterval?
+        var duration: TimeInterval?
     }
 
-    private static var savedQueueURL: URL? {
+    private static var savedSessionURL: URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("LastSessionQueue.json")
     }
@@ -631,19 +648,22 @@ final class PlayerService {
         )
     }
 
-    /// Saves the queue around the current video for the next launch.
+    /// Saves the current video, position and queue for the next launch.
     func saveSessionQueue() {
-        guard let url = Self.savedQueueURL else { return }
-        guard let video = state.currentVideo, !state.queue.isEmpty || !state.history.isEmpty else {
+        guard let url = Self.savedSessionURL else { return }
+        guard let video = state.currentVideo, !video.isLive else {
             try? FileManager.default.removeItem(at: url)
             return
         }
-        let saved = SavedQueue(
+        let saved = SavedSession(
             videoID: video.id,
             queue: state.queue.map(Self.strippedForSaving),
             history: state.history.map(Self.strippedForSaving),
             queueSource: queueManager?.currentQueueSource,
-            queueSourceLabel: queueManager?.currentQueueSourceLabel
+            queueSourceLabel: queueManager?.currentQueueSourceLabel,
+            video: video,
+            currentTime: state.currentTime,
+            duration: state.duration > 0 ? state.duration : video.duration
         )
         do {
             try FileManager.default.createDirectory(
@@ -651,15 +671,16 @@ final class PlayerService {
             )
             try JSONEncoder().encode(saved).write(to: url, options: .atomic)
         } catch {
-            LoggingService.shared.logPlayer("Failed to save session queue: \(error.localizedDescription)")
+            LoggingService.shared.logPlayer("Failed to save session: \(error.localizedDescription)")
         }
     }
 
-    /// Brings back the saved queue when it belongs to the restored video.
-    private func restoreSavedQueue(for video: Video) {
-        guard let url = Self.savedQueueURL, let data = try? Data(contentsOf: url) else { return }
-        guard let saved = try? JSONDecoder().decode(SavedQueue.self, from: data),
-              saved.videoID == video.id else { return }
+    private func loadSavedSession() -> SavedSession? {
+        guard let url = Self.savedSessionURL, let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SavedSession.self, from: data)
+    }
+
+    private func applySavedQueue(_ saved: SavedSession) {
         state.restoreQueue(saved.queue, history: saved.history)
         queueManager?.restoreQueueSource(saved.queueSource, label: saved.queueSourceLabel)
         LoggingService.shared.logPlayer(
