@@ -660,6 +660,12 @@ final class PlayerState {
         }
     }
 
+    /// Puts back a queue and history saved from an earlier launch.
+    func restoreQueue(_ queue: [QueuedVideo], history: [QueuedVideo]) {
+        self.queue = queue
+        self.history = Array(history.suffix(maxHistorySize))
+    }
+
     /// Clears the playback history.
     func clearHistory() {
         history.removeAll()

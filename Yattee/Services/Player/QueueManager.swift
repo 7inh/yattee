@@ -138,6 +138,13 @@ final class QueueManager {
     /// Stream info provider for downloaded content or pre-resolved streams.
     typealias StreamProvider = (Video) -> (stream: Stream?, audioStream: Stream?, captions: [Caption])?
 
+    /// Restores the queue source saved with a previous session, so the queue
+    /// keeps its label and can continue loading after a relaunch.
+    func restoreQueueSource(_ source: QueueSource?, label: String?) {
+        currentQueueSource = source
+        currentQueueSourceLabel = label
+    }
+
     /// Plays a video from a list, setting up queue and history appropriately.
     /// - Parameters:
     ///   - videos: All videos in the list
