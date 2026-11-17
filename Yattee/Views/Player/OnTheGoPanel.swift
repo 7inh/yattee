@@ -61,6 +61,7 @@ struct OnTheGoPanel: View {
     @State private var selectedPage = PlayerPage.artwork
     @State private var lyricsPageProgress: CGFloat = 0
     @State private var lyricsBottomInset: CGFloat = 0
+    @State private var lyricsFrame: CGRect = .zero
     @State private var lyrics = LyricsViewModel()
     @State private var lyricsArtworkColor = LyricsArtworkColor.fallback
     @State private var isPaging = false
@@ -401,7 +402,7 @@ struct OnTheGoPanel: View {
 
     private struct PanelDrag: Sendable {
         enum Route: Equatable, Sendable {
-            case panel, queue, horizontal, dismissal
+            case panel, queue, horizontal, dismissal, lyrics
         }
 
         let start: PanelDetent
@@ -422,6 +423,10 @@ struct OnTheGoPanel: View {
                     let route: PanelDrag.Route
                     if abs(translation.height) <= abs(translation.width) || isPaging {
                         route = .horizontal
+                    } else if showingLyrics, detent == .normal, queueMorphProgress == 0,
+                              lyricsFrame.contains(value.startLocation) {
+                        // The lyrics list owns vertical drags that start on it.
+                        route = .lyrics
                     } else if detent == .fullQueue, value.startLocation.y >= queueRowsTop,
                               !(queueDragStartedAtTop ?? isQueueAtTop) || translation.height <= 0 {
                         // Lock list ownership for this entire touch. Reaching
@@ -737,7 +742,7 @@ struct OnTheGoPanel: View {
     }
 
     private func lyricsPage(topInset: CGFloat, bottomInset: CGFloat) -> some View {
-        pageViewport { size in
+        pageViewport(isLyricsViewport: true) { size in
             if hasLyrics {
                 let progress = visibleLyricsProgress
                 LyricsView(
@@ -746,7 +751,7 @@ struct OnTheGoPanel: View {
                     isSeekDisabled: isSeekDisabled,
                     isActive: progress > 0,
                     isPaging: isPaging,
-                    allowsManualScrolling: state.currentVideo == nil,
+                    allowsManualScrolling: showingLyrics && detent == .normal && queueMorphProgress == 0,
                     topInset: topInset,
                     bottomInset: bottomInset,
                     onSeek: seek
@@ -759,7 +764,7 @@ struct OnTheGoPanel: View {
         }
     }
 
-    private func pageViewport<Content: View>(@ViewBuilder content: @escaping (CGSize) -> Content) -> some View {
+    private func pageViewport<Content: View>(isLyricsViewport: Bool = false, @ViewBuilder content: @escaping (CGSize) -> Content) -> some View {
         Color.clear
             .overlay {
                 GeometryReader { geometry in
@@ -767,6 +772,11 @@ struct OnTheGoPanel: View {
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .contentShape(Rectangle())
                         .gesture(lyricsPageGesture(width: geometry.size.width))
+                        .onGeometryChange(for: CGRect.self) {
+                            $0.frame(in: .named(PanelCoordinateSpace.panel))
+                        } action: { frame in
+                            if isLyricsViewport { lyricsFrame = frame }
+                        }
                 }
             }
             .clipped()
@@ -859,7 +869,7 @@ struct OnTheGoPanel: View {
 
     private var lyricsHeaderInfo: some View {
         Button {
-            showingDetails = true
+            openDetailsFromTap()
         } label: {
             VStack(spacing: 2) {
                 Text(videoTitle)
@@ -1181,7 +1191,7 @@ struct OnTheGoPanel: View {
         guard !isDraggingPanel, panelDrag == nil, !isQueueScrolling,
               ContinuousClock.now >= queueTapSuppressedUntil else {
             LoggingService.shared.debug(
-                "Ignored queue row tap during or just after a player/queue drag",
+                "Ignored tap during or just after a player/queue drag",
                 category: .player
             )
             return false
@@ -1436,9 +1446,16 @@ struct OnTheGoPanel: View {
         return appEnvironment?.deArrowBrandingProvider.title(for: video) ?? video.title
     }
 
+    /// A swipe that starts on the title drives the panel (e.g. pulls up the
+    /// queue); its release must not also count as a tap that opens Details.
+    private func openDetailsFromTap() {
+        guard canActivateQueueRow() else { return }
+        showingDetails = true
+    }
+
     private var videoInfo: some View {
         Button {
-            showingDetails = true
+            openDetailsFromTap()
         } label: {
             videoInfoText
                 .contentShape(Rectangle())
